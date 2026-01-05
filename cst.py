@@ -9,6 +9,7 @@ top_count = config.getint('global', 'top_count')
 time_gap_do_it = config.getint('global', 'time_gap_do_it')
 bot_token = config.get('global', 'bot_token')
 chat_id = config.get('global', 'chat_id')
+prefix_channel = config.get('global', 'prefix_channel', fallback='')
 
 key_name = config.get('global', 'key_name')
 key_binance = config.get('global', 'key_binance')

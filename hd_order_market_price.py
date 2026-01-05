@@ -185,7 +185,7 @@ def cancel_all_open_orders(symbol):
             cancel_result = exchange.cancel_order(order_id, symbol)
             print(f"Hủy lệnh {order_id} kết quả: {cancel_result}", flush=True)
             msg = f"Đã Hủy lệnh Chờ: {order['symbol']}"
-            telegram_factory.send_tele(msg,cst.chat_id, True , True)
+            telegram_factory.send_tele(format_telegram_message(msg), cst.chat_id, True, True)
     else:
         print(f"Không có lệnh mở nào cho {symbol}", flush=True)
 
@@ -387,6 +387,19 @@ def is_number(s):
         return True
     except ValueError:
         return False
+
+def format_telegram_message(msg):
+    """
+    Thêm prefix_channel vào đầu message nếu có
+    """
+    if cst.prefix_channel and cst.prefix_channel.strip():
+        prefix = cst.prefix_channel.strip()
+        # Nếu message đã có HTML tags, thêm prefix vào đầu với HTML format
+        if msg.startswith('<b>') or msg.startswith('✅') or msg.startswith('🛑'):
+            return f"<b>[{prefix}]</b>\n\n{msg}"
+        else:
+            return f"[{prefix}]\n\n{msg}"
+    return msg
     
 STATE_STOP = "STOP"
 STATE_SHORT = "SHORT"
@@ -444,7 +457,7 @@ def do_it():
   if state_value == STATE_STOP:
     logger.warning("🛑 LỆNH STOP ĐƯỢC KÍCH HOẠT!")
     msg = "🛑 <b>LỆNH STOP KÍCH HOẠT</b>\n\n<b>Trạng thái:</b> Đang xử lý..."
-    telegram_factory.send_tele(msg, cst.chat_id, True, True)
+    telegram_factory.send_tele(format_telegram_message(msg), cst.chat_id, True, True)
     
     # Đóng tất cả vị thế
     positions = exchange.fetch_positions()
@@ -478,7 +491,7 @@ def do_it():
                 logger.error(f"Lỗi hủy lệnh {order['id']}: {e}")
         
         msg = f"✅ <b>HOÀN TẤT STOP</b>\n\n<b>Vị thế đã đóng:</b> {closed_positions}\n<b>Lệnh đã hủy:</b> {cancelled_orders}\n<b>Thời gian:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-        telegram_factory.send_tele(msg, cst.chat_id, True, True)
+        telegram_factory.send_tele(format_telegram_message(msg), cst.chat_id, True, True)
         logger.warning("✅ Hoàn tất lệnh STOP")
     except Exception as e:
         logger.critical(f"🔴 Lỗi nghiêm trọng khi thực hiện STOP: {e}")
@@ -499,13 +512,13 @@ def do_it():
                 logger.error(f"Lỗi hủy lệnh {order['id']}: {e}")
         
         msg = f"✅ <b>ĐÃ HỦY TẤT CẢ LỆNH CHỜ</b>\n\n<b>Số lệnh đã hủy:</b> {cancelled_count}\n<b>Vị thế:</b> Giữ nguyên\n<b>Thời gian:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-        telegram_factory.send_tele(msg, cst.chat_id, True, True)
+        telegram_factory.send_tele(format_telegram_message(msg), cst.chat_id, True, True)
         logger.info(f"✅ Đã hủy {cancelled_count} lệnh chờ")
         
     except Exception as e:
         logger.error(f"❌ Lỗi khi thực hiện XÓA CHỜ: {e}")
         msg = f"🚨 <b>LỖI XÓA CHỜ</b>\n\n<b>Lỗi:</b> {str(e)}"
-        telegram_factory.send_tele(msg, cst.chat_id, True, True)
+        telegram_factory.send_tele(format_telegram_message(msg), cst.chat_id, True, True)
 
   elif state_value == "XÓA VỊ THẾ":
     logger.info("🔄 Thực hiện lệnh XÓA VỊ THẾ - Đóng tất cả positions, giữ lệnh chờ")
@@ -531,13 +544,13 @@ def do_it():
                     logger.error(f"Lỗi đóng vị thế {symbol}: {e}")
         
         msg = f"✅ <b>ĐÃ ĐÓNG TẤT CẢ VỊ THẾ</b>\n\n<b>Số vị thế đã đóng:</b> {closed_count}\n<b>Lệnh chờ:</b> Giữ nguyên\n<b>Thời gian:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-        telegram_factory.send_tele(msg, cst.chat_id, True, True)
+        telegram_factory.send_tele(format_telegram_message(msg), cst.chat_id, True, True)
         logger.info(f"✅ Đã đóng {closed_count} vị thế")
         
     except Exception as e:
         logger.error(f"❌ Lỗi khi thực hiện XÓA VỊ THẾ: {e}")
         msg = f"🚨 <b>LỖI XÓA VỊ THẾ</b>\n\n<b>Lỗi:</b> {str(e)}"
-        telegram_factory.send_tele(msg, cst.chat_id, True, True)
+        telegram_factory.send_tele(format_telegram_message(msg), cst.chat_id, True, True)
 
   elif state_value == STATE_CHO:
     print("💤 Trạng thái CHỜ - Không làm gì...", flush=True)
@@ -805,7 +818,7 @@ def do_it():
             printf(symbol, order)
             print(f"✅ Đã tạo lệnh TRAILING_STOP (MARKET PRICE) cho {symbol}", flush=True)
             logger.info(f"✅ Lệnh TRAILING_STOP (MARKET PRICE) đã được tạo thành công cho {symbol} (Order ID: {order.get('id', 'N/A')})")
-            telegram_factory.send_tele(msg, cst.chat_id, True, True)
+            telegram_factory.send_tele(format_telegram_message(msg), cst.chat_id, True, True)
 
         except Exception as e:
             print(f"❌ Lỗi xử lý dòng {row_count} (symbol: {sym if 'sym' in locals() else 'N/A'}): {e}", flush=True)
