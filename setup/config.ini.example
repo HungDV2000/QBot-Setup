@@ -1,0 +1,52 @@
+[global]
+
+max_increase_decrease_4h_day_count = 60
+
+
+lenh2_rate_long = 0.3
+lenh2_rate_short = 0.3
+lenh3_rate_long = 0.6
+lenh3_rate_short = 0.6
+
+;thêm biến
+lenh3_callback_rate =1
+cancel_orders_minutes = 1
+
+is_print_mode = false
+top_count= 50
+time_gap_do_it = 0
+bot_token = 8431813976:AAHtvnWT3ZTLvtgqlaqYOgyQW-l0bVBwqbI
+chat_id =  -4654774917
+
+;Chỉnh sửa các config cho binance phía dưới sau đó thì lưu file lại
+key_name = MAXBirkinCatwin1Pub
+;key_binance = SDhDjNRaEjxCR9HPYQvBZJo3rTZMgndomLmQgweeIVrp3N0CSmy5GKQxoIFHZJc0
+;secret_binance = jstDThPRBZvUmPdLNwgnqYkSeFwvYfaQchUaam2y9B2iiRsncAzTIY9pR5cSTwE8
+key_binance = MQ1XTP7gLaWZfxbB2juPg5OUT2E5ADhgJMKL8FtkJuPPbgCC5jcfMHNG2mRAnQ66
+secret_binance = 72PcBrF09A6Hs5l5YZ4ST3J5GkACcwCoJBBm7jA2tb4Q8Y1zImRFSueZ4GDTIHEG
+
+; file gốc
+spreadsheet_id = 1rqh8FoE_9BR4SQsxv5aSOJwLqujeV7s8yYptlIWvnCc
+; 12Jm6lPdYcLysR6ZyrdFVaPZz3y1sS7nniNLHDdeXtaQ (test)
+; 1JCWoxl8UQZrjWGBCTTswxdZMw0xqSbIKCiaDB1bKs38 (production)
+
+;để true nếu không muốn vào lệnh thật mà chỉ in ra (true hoặc false)
+test_mode = false
+
+tab_dat_lenh = ĐẶT LỆNH (100 MÃ)
+; tab_dat_lenh = test
+
+; Cấu trúc cột FIXED: A=Symbol, B=Leverage, C=Callback, D=Activation, H=Capital
+; Chỉ hỗ trợ TRAILING_STOP (theo quy trình thực tế)
+
+delay_vao_lenh = 60
+delay_vao_lenh_123 = 300
+delay_cho_va_khop = 600
+delay_calert_possition_and_open_order = 120
+delay_update_price = 120
+delay_update_all = 120
+
+# Phase 3: Data Collection & Phase 4: Notifications
+delay_track_30_prices = 60
+delay_periodic_report = 300
+

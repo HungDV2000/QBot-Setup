@@ -1,0 +1,58 @@
+# ============================================================================
+# QBot v2.0 - Python Dependencies (All-in-One)
+# ============================================================================
+# Install all:     pip install -r requirements.txt
+# Update all:      pip install -r requirements.txt --upgrade
+# Skip build:      pip install -r requirements.txt --no-deps pyinstaller pyinstaller-hooks-contrib
+# ============================================================================
+
+# ============================================================================
+# BINANCE & CRYPTO EXCHANGE
+# ============================================================================
+ccxt>=4.0.0                     # Binance API wrapper (trading, market data)
+
+# ============================================================================
+# GOOGLE SERVICES (Sheets API)
+# ============================================================================
+google-api-python-client>=2.100.0   # Google API client library
+google-auth-httplib2>=0.1.1         # Google Auth HTTP library
+google-auth-oauthlib>=1.1.0         # Google OAuth library
+google-auth>=2.23.0                 # Google authentication
+gspread>=5.11.0                     # Google Sheets API wrapper
+oauth2client>=4.1.3                 # OAuth 2.0 client (legacy, for compatibility)
+
+# ============================================================================
+# DATA PROCESSING
+# ============================================================================
+pandas>=2.0.0                   # Data manipulation and analysis
+numpy>=1.24.0                   # Numerical computing
+
+# ============================================================================
+# TELEGRAM BOT
+# ============================================================================
+python-telegram-bot>=20.0       # Telegram bot API
+
+# ============================================================================
+# HTTP & NETWORKING
+# ============================================================================
+requests>=2.31.0                # HTTP library for API calls
+
+# ============================================================================
+# UTILITIES
+# ============================================================================
+pytz>=2023.3                    # Timezone handling
+python-dateutil>=2.8.2          # Date utilities (pandas dependency)
+
+# ============================================================================
+# BUILD TOOLS (Optional - chỉ cần khi build .exe)
+# ============================================================================
+pyinstaller>=6.0.0              # Python to EXE converter
+pyinstaller-hooks-contrib>=2024.0   # Additional hooks for PyInstaller
+
+# ============================================================================
+# NOTES
+# ============================================================================
+# - Người dùng cuối: Cài tất cả (bao gồm cả build tools)
+# - Developer: Cài tất cả để có thể build .exe
+# - Total: 15 packages (~200MB)
+# ============================================================================
