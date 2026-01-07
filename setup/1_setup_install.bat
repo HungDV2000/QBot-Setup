@@ -976,10 +976,8 @@ pause
 exit /b 0
 
 REM ============================================================================
-REM STEP LABELS (for jumping from menu options)
+REM HELPER FUNCTIONS
 REM ============================================================================
-
-:Step1_CheckPython
 
 :RefreshPath
 REM Refresh environment PATH without restarting CMD
