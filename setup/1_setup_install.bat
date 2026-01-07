@@ -17,31 +17,52 @@ set "VERBOSE=1"
 REM ============================================================================
 REM KHỞI TẠO LOGGING
 REM ============================================================================
-set "INFO_LOG=info.txt"
-set "ERROR_LOG=error.txt"
+REM Tạo log files trong thư mục cha (qbot_setup/) để tránh lỗi quyền
+set "INFO_LOG=..\setup_info.txt"
+set "ERROR_LOG=..\setup_error.txt"
 
 REM Clear log files (với error handling)
 if "%VERBOSE%"=="1" (
-    echo [DEBUG] Creating log files...
-)
-echo. > "%INFO_LOG%" 2>nul
-if errorlevel 1 (
-    echo CRITICAL ERROR: Cannot create info.txt
-    echo Check if you have write permission in this folder
-    pause
-    exit /b 1
+    echo [DEBUG] Creating log files in parent directory...
+    echo [DEBUG] INFO_LOG: %INFO_LOG%
+    echo [DEBUG] ERROR_LOG: %ERROR_LOG%
 )
 
-echo. > "%ERROR_LOG%" 2>nul
+REM Try to create log files with better error handling
+echo. > "%INFO_LOG%" 2>nul
 if errorlevel 1 (
-    echo CRITICAL ERROR: Cannot create error.txt
-    echo Check if you have write permission in this folder
-    pause
-    exit /b 1
+    echo ⚠️  CẢNH BÁO: Không thể tạo log file trong thư mục cha
+    echo 💡 Thử tạo log trong thư mục hiện tại...
+    set "INFO_LOG=setup_info.txt"
+    set "ERROR_LOG=setup_error.txt"
+    echo. > "%INFO_LOG%" 2>nul
+    if errorlevel 1 (
+        echo ⚠️  CẢNH BÁO: Không thể tạo log files!
+        echo 📌 Script sẽ tiếp tục nhưng KHÔNG CÓ LOG.
+        echo.
+        set "LOGGING_DISABLED=1"
+        REM Không exit, chỉ disable logging
+    ) else (
+        echo ✅ Log sẽ được lưu trong: %CD%
+        set "LOGGING_DISABLED=0"
+    )
+) else (
+    set "LOGGING_DISABLED=0"
+)
+
+if "%LOGGING_DISABLED%"=="0" (
+    echo. > "%ERROR_LOG%" 2>nul
+    if errorlevel 1 (
+        echo ⚠️  Không thể tạo error.txt, chỉ dùng info.txt
+    )
 )
 
 if "%VERBOSE%"=="1" (
-    echo [DEBUG] Log files created successfully
+    if "%LOGGING_DISABLED%"=="0" (
+        echo [DEBUG] Log files created successfully
+    ) else (
+        echo [DEBUG] Logging disabled due to write permission error
+    )
 )
 
 REM Helper function để ghi log với timestamp
@@ -739,8 +760,15 @@ echo       📌 Chạy file: 3_qbot_manager.bat
 echo.
 echo ═══════════════════════════════════════════════════════════════════════
 echo.
-echo 💡 TIP: Xem log chi tiết tại: %INFO_LOG% và %ERROR_LOG%
-echo.
+if "%LOGGING_DISABLED%"=="0" (
+    echo 💡 TIP: Xem log chi tiết tại:
+    echo    • %INFO_LOG%
+    echo    • %ERROR_LOG%
+    echo.
+) else (
+    echo ⚠️  LƯU Ý: Logging bị tắt do lỗi quyền ghi file
+    echo.
+)
 echo 📝 VERBOSE MODE: %VERBOSE% (Đổi thành 0 trong script để ẩn output chi tiết)
 echo.
 echo.
@@ -975,19 +1003,17 @@ goto :eof
 
 :LogInfo
 REM Log information with timestamp to info.txt
+if "%LOGGING_DISABLED%"=="1" goto :eof
 set "TIMESTAMP=%date% %time%"
 echo [%TIMESTAMP%] [INFO] %~1 >> "%INFO_LOG%" 2>nul
-if errorlevel 1 (
-    echo ERROR: Cannot write to %INFO_LOG%
-)
+REM Không hiển thị error nữa vì đã cảnh báo ở đầu
 goto :eof
 
 :LogError
 REM Log error with timestamp to error.txt
+if "%LOGGING_DISABLED%"=="1" goto :eof
 set "TIMESTAMP=%date% %time%"
 echo [%TIMESTAMP%] [ERROR] %~1 >> "%ERROR_LOG%" 2>nul
 echo [%TIMESTAMP%] [ERROR] %~1 >> "%INFO_LOG%" 2>nul
-if errorlevel 1 (
-    echo ERROR: Cannot write to log files
-)
+REM Không hiển thị error nữa vì đã cảnh báo ở đầu
 goto :eof
