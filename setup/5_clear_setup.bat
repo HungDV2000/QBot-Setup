@@ -44,16 +44,17 @@ REM CẢNH BÁO
 REM ============================================================================
 echo ⚠️  CẢNH BÁO: Script này sẽ XÓA:
 echo.
-echo    ❌ Tất cả thư viện Python đã cài (từ requirements.txt)
+echo    ❌ Tất cả thư viện Python trong requirements.txt
 echo    ❌ Virtual environment (nếu có)
 echo    ❌ File config.ini (sẽ backup trước)
-echo    ❌ Tất cả file log
 echo    ❌ Cache files (__pycache__, *.pyc)
 echo    ❌ Temp files
 echo.
-echo ⚠️  TÙY CHỌN XÓA:
+echo ⚠️  TÙY CHỌN XÓA (sẽ hỏi sau):
 echo.
-echo    ❓ Python (sẽ hỏi sau)
+echo    ❓ Python
+echo    ❓ Log files
+echo    ❓ Config backup files
 echo.
 echo ✅ KHÔNG XÓA:
 echo.
@@ -187,101 +188,35 @@ REM ============================================================================
 REM BƯỚC 3: GỠ CÀI ĐẶT THƯ VIỆN PYTHON
 REM ============================================================================
 echo [3/8] Đang gỡ cài đặt thư viện Python...
-call :LogInfo "[STEP 3/8] Uninstalling Python libraries"
+call :LogInfo "[STEP 3/8] Uninstalling Python libraries from requirements.txt"
 
 python --version >nul 2>&1
 if not errorlevel 1 (
-    echo.
-    echo    💡 Chọn phương thức gỡ thư viện:
-    echo.
-    echo       [1] GỠ CHỈ CÁC THƯ VIỆN TRONG requirements.txt (Nhanh)
-    echo       [2] GỠ TOÀN BỘ THƯ VIỆN PYTHON (Khuyến nghị - Chậm hơn)
-    echo.
-    
-    :AskUninstallMethod
-    set /p UNINSTALL_METHOD="    👉 Chọn phương thức (1/2): "
-    
-    REM Validate input
-    if "!UNINSTALL_METHOD!"=="" (
-        echo    ⚠️  Bạn chưa nhập gì! Vui lòng chọn 1 hoặc 2
-        goto :AskUninstallMethod
-    )
-    if not "!UNINSTALL_METHOD!"=="1" if not "!UNINSTALL_METHOD!"=="2" (
-        echo    ⚠️  Lựa chọn không hợp lệ! Vui lòng chọn 1 hoặc 2
-        goto :AskUninstallMethod
-    )
-    
-    call :LogInfo "User selected uninstall method: !UNINSTALL_METHOD!"
-    echo.
-    
-    if "!UNINSTALL_METHOD!"=="2" (
-        REM Phương pháp 2: Xóa TOÀN BỘ packages (trừ pip, setuptools, wheel)
-        call :LogInfo "Method 2: Uninstalling ALL Python packages"
-        echo    🔄 Đang lấy danh sách tất cả packages đã cài...
+    if exist ../requirements.txt (
+        echo    🔄 Đang gỡ các packages từ requirements.txt...
+        echo.
         
-        REM Tạo file temp chứa danh sách packages
-        python -m pip freeze > pip_freeze_temp.txt 2>nul
-        
-        if exist pip_freeze_temp.txt (
-            REM Đếm số packages
-            set PKG_COUNT=0
-            for /f %%l in (pip_freeze_temp.txt) do set /a PKG_COUNT+=1
-            call :LogInfo "Found !PKG_COUNT! packages to uninstall"
-            echo    📦 Tìm thấy !PKG_COUNT! package(s) đã cài
-            echo    🗑️  Đang gỡ TOÀN BỘ packages (có thể mất 2-3 phút)...
-            echo.
-            
-            REM Gỡ tất cả packages (trừ pip, setuptools, wheel)
-            python -m pip freeze ^| findstr /v /i "pip setuptools wheel" > pip_uninstall_temp.txt 2>nul
-            
-            if exist pip_uninstall_temp.txt (
-                REM Uninstall từng package một để tránh lỗi dependencies
-                for /f "tokens=1 delims==" %%p in (pip_uninstall_temp.txt) do (
+        REM Đọc từng dòng từ requirements.txt và uninstall
+        for /f "usebackq tokens=1 delims==" %%p in ("../requirements.txt") do (
+            set "LINE=%%p"
+            REM Bỏ qua dòng comment (bắt đầu bằng #) và dòng trống
+            if not "!LINE!"=="" (
+                echo !LINE! | findstr /r "^#" >nul 2>&1
+                if errorlevel 1 (
+                    REM Không phải comment, xóa package
                     echo       Gỡ: %%p...
                     call :LogInfo "Uninstalling package: %%p"
                     python -m pip uninstall %%p -y >nul 2>&1
                 )
-                
-                REM Cleanup temp files
-                del pip_uninstall_temp.txt >nul 2>&1
             )
-            
-            del pip_freeze_temp.txt >nul 2>&1
-            
-            call :LogInfo "All Python packages uninstalled successfully"
-            echo.
-            echo    ✅ Đã gỡ TOÀN BỘ thư viện Python
-        ) else (
-            call :LogError "Failed to get pip freeze output"
-            echo    ⚠️  Không thể lấy danh sách packages
         )
         
+        call :LogInfo "Packages from requirements.txt uninstalled"
+        echo.
+        echo    ✅ Đã gỡ các thư viện từ requirements.txt
     ) else (
-        REM Phương pháp 1: Chỉ xóa packages trong requirements.txt
-        call :LogInfo "Method 1: Uninstalling packages from requirements.txt"
-        
-        if exist ../requirements.txt (
-            echo    🔄 Đang gỡ các packages từ requirements.txt...
-            echo.
-            
-            REM Đọc từng dòng từ requirements.txt và uninstall
-            for /f "tokens=1 delims==" %%p in (../requirements.txt) do (
-                REM Bỏ qua dòng comment và dòng trống
-                echo %%p | findstr /r "^[^#]" >nul
-                if not errorlevel 1 (
-                    echo       Gỡ: %%p...
-                    call :LogInfo "Uninstalling package: %%p"
-                    python -m pip uninstall %%p -y >nul 2>&1
-                )
-            )
-            
-            call :LogInfo "Packages from requirements.txt uninstalled"
-            echo.
-            echo    ✅ Đã gỡ các thư viện từ requirements.txt
-        ) else (
-            call :LogError "requirements.txt not found"
-            echo    ⚠️  requirements.txt không tồn tại
-        )
+        call :LogError "requirements.txt not found"
+        echo    ⚠️  requirements.txt không tồn tại
     )
 ) else (
     call :LogInfo "Python not available, skipping library uninstall"
@@ -387,14 +322,6 @@ if exist pip_install.tmp (
 if exist download_error.tmp (
     del download_error.tmp >nul 2>&1
     call :LogInfo "Removed download_error.tmp"
-)
-if exist pip_freeze_temp.txt (
-    del pip_freeze_temp.txt >nul 2>&1
-    call :LogInfo "Removed pip_freeze_temp.txt"
-)
-if exist pip_uninstall_temp.txt (
-    del pip_uninstall_temp.txt >nul 2>&1
-    call :LogInfo "Removed pip_uninstall_temp.txt"
 )
 
 REM Xóa setup log files từ install script (cả 2 vị trí)
@@ -542,11 +469,7 @@ if /i "!DELETE_PYTHON!"=="Y" (
 if not "!BACKUP_NAME!"=="" (
     call :LogInfo "- Config backup: !BACKUP_NAME!"
 )
-if "!UNINSTALL_METHOD!"=="2" (
-    call :LogInfo "- Python libraries: ALL UNINSTALLED (Method 2)"
-) else (
-    call :LogInfo "- Python libraries: requirements.txt UNINSTALLED (Method 1)"
-)
+call :LogInfo "- Python libraries: requirements.txt UNINSTALLED"
 call :LogInfo "- Virtual environment: REMOVED"
 call :LogInfo "- config.ini: REMOVED"
 call :LogInfo "- config.template.ini: REMOVED"
@@ -579,11 +502,7 @@ if /i "!DELETE_PYTHON!"=="Y" (
 if not "!BACKUP_NAME!"=="" (
     echo    ✅ Backup config.ini: !BACKUP_NAME!
 )
-if "!UNINSTALL_METHOD!"=="2" (
-    echo    ✅ Gỡ cài đặt TOÀN BỘ thư viện Python (Method 2)
-) else (
-    echo    ✅ Gỡ cài đặt thư viện từ requirements.txt (Method 1)
-)
+echo    ✅ Gỡ cài đặt thư viện từ requirements.txt
 echo    ✅ Xóa virtual environment
 echo    ✅ Xóa config.ini
 echo    ✅ Xóa config.template.ini
