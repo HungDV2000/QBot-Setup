@@ -17,7 +17,7 @@ top_count= 50
 time_gap_do_it = 0
 bot_token = 8431813976:AAHtvnWT3ZTLvtgqlaqYOgyQW-l0bVBwqbI
 chat_id =  -4654774917
-prefix_channel = 'TESTING'
+prefix_channel = 'BOT TEST'
 
 ;Chỉnh sửa các config cho binance phía dưới sau đó thì lưu file lại
 key_name = MAXBirkinCatwin1Pub
