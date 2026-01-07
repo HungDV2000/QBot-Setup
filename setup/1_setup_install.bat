@@ -60,6 +60,82 @@ echo ╚════════════════════════
 echo.
 
 REM ============================================================================
+REM MENU LỰA CHỌN CÀI ĐẶT
+REM ============================================================================
+:MainMenu
+call :LogInfo "Displaying main menu"
+echo.
+echo ═══════════════════════════════════════════════════════════════════════
+echo 📋 MENU CÀI ĐẶT - Vui lòng chọn tác vụ:
+echo ═══════════════════════════════════════════════════════════════════════
+echo.
+echo    [1] 🚀 CÀI ĐẶT TOÀN BỘ (Khuyến nghị)
+echo        └─ Cài Python + Thư viện + Config + Kiểm tra files
+echo.
+echo    [2] 🐍 CHỈ CÀI PYTHON
+echo        └─ Tự động tải và cài đặt Python 3.11
+echo.
+echo    [3] 📦 CHỈ CÀI THƯ VIỆN PYTHON
+echo        └─ Cài các thư viện từ requirements.txt
+echo.
+echo    [4] 📝 CHỈ TẠO FILE CONFIG
+echo        └─ Tạo config.ini mẫu
+echo.
+echo    [5] 🔍 CHỈ KIỂM TRA FILES
+echo        └─ Kiểm tra các file source code cần thiết
+echo.
+echo    [6] ✅ KIỂM TRA MÔI TRƯỜNG
+echo        └─ Kiểm tra Python, pip, libraries đã cài chưa
+echo.
+echo    [0] ❌ THOÁT
+echo.
+echo ═══════════════════════════════════════════════════════════════════════
+echo.
+set /p MENU_CHOICE="👉 Nhập lựa chọn của bạn (0-6): "
+
+call :LogInfo "User selected menu option: %MENU_CHOICE%"
+
+if "%MENU_CHOICE%"=="1" goto :FullInstall
+if "%MENU_CHOICE%"=="2" goto :InstallPythonOnly
+if "%MENU_CHOICE%"=="3" goto :InstallLibrariesOnly
+if "%MENU_CHOICE%"=="4" goto :CreateConfigOnly
+if "%MENU_CHOICE%"=="5" goto :CheckFilesOnly
+if "%MENU_CHOICE%"=="6" goto :CheckEnvironment
+if "%MENU_CHOICE%"=="0" goto :ExitScript
+
+echo.
+echo ❌ Lựa chọn không hợp lệ! Vui lòng chọn từ 0-6.
+echo.
+pause
+cls
+goto :MainMenu
+
+REM ============================================================================
+REM OPTION 1: CÀI ĐẶT TOÀN BỘ
+REM ============================================================================
+:FullInstall
+call :LogInfo "Starting full installation"
+cls
+echo.
+echo ╔════════════════════════════════════════════════════════════════════════╗
+echo ║                      CÀI ĐẶT TOÀN BỘ                                  ║
+echo ╚════════════════════════════════════════════════════════════════════════╝
+echo.
+echo 📦 Các bước sẽ thực hiện:
+echo    ✓ Kiểm tra và cài đặt Python 3.11
+echo    ✓ Cài đặt pip và nâng cấp
+echo    ✓ Cài đặt tất cả thư viện Python
+echo    ✓ Tạo file config.ini mẫu
+echo    ✓ Kiểm tra các file source code
+echo.
+set /p CONFIRM_FULL="👉 Bạn có chắc muốn tiếp tục? (Y/N): "
+if /i not "%CONFIRM_FULL%"=="Y" (
+    call :LogInfo "User cancelled full installation"
+    goto :MainMenu
+)
+echo.
+
+REM ============================================================================
 REM KIỂM TRA PATH VÀ CẤU TRÚC THƯ MỤC
 REM ============================================================================
 call :LogInfo "Checking directory structure..."
@@ -89,6 +165,7 @@ echo.
 REM ============================================================================
 REM BƯỚC 1: KIỂM TRA VÀ CÀI ĐẶT PYTHON TỰ ĐỘNG
 REM ============================================================================
+:Step1_CheckPython
 echo [1/6] Đang kiểm tra Python...
 call :LogInfo "[STEP 1/6] Checking Python installation"
 
@@ -277,9 +354,21 @@ call :LogInfo "Python version: %PYTHON_VERSION%"
 echo ✅ Python version: %PYTHON_VERSION%
 echo.
 
+REM If called from Option 2 (Python only), return to menu
+if "%MENU_CHOICE%"=="2" (
+    echo.
+    echo ═══════════════════════════════════════════════════════════════════════
+    echo ✅ HOÀN TẤT CÀI ĐẶT PYTHON!
+    echo ═══════════════════════════════════════════════════════════════════════
+    echo.
+    pause
+    goto :MainMenu
+)
+
 REM ============================================================================
 REM BƯỚC 2: KIỂM TRA PIP
 REM ============================================================================
+:Step2_CheckPip
 echo [2/6] Đang kiểm tra pip (Python package manager)...
 call :LogInfo "[STEP 2/6] Checking pip"
 
@@ -307,6 +396,7 @@ echo.
 REM ============================================================================
 REM BƯỚC 3: CÀI ĐẶT THƯ VIỆN
 REM ============================================================================
+:Step3_InstallLibraries
 echo [3/6] Đang cài đặt thư viện Python...
 call :LogInfo "[STEP 3/6] Installing Python libraries"
 echo.
@@ -363,9 +453,21 @@ echo.
 echo ✅ Cài đặt thư viện thành công!
 echo.
 
+REM If called from Option 3 (Libraries only), return to menu
+if "%MENU_CHOICE%"=="3" (
+    echo.
+    echo ═══════════════════════════════════════════════════════════════════════
+    echo ✅ HOÀN TẤT CÀI ĐẶT THƯ VIỆN!
+    echo ═══════════════════════════════════════════════════════════════════════
+    echo.
+    pause
+    goto :MainMenu
+)
+
 REM ============================================================================
 REM BƯỚC 4: TẠO CONFIG FILE (NẾU CHƯA CÓ)
 REM ============================================================================
+:Step4_CreateConfig
 echo [4/6] Đang kiểm tra file config...
 call :LogInfo "[STEP 4/6] Checking config.ini"
 echo.
@@ -407,6 +509,7 @@ if exist ../config.ini (
         echo ; === TELEGRAM ===
         echo bot_token = YOUR_TELEGRAM_BOT_TOKEN
         echo chat_id = YOUR_TELEGRAM_CHAT_ID
+        echo prefix_channel = TEST BOT
         echo.
         echo ; === BINANCE API ===
         echo key_name = YOUR_KEY_NAME
@@ -435,9 +538,21 @@ if exist ../config.ini (
 
 echo.
 
+REM If called from Option 4 (Config only), return to menu
+if "%MENU_CHOICE%"=="4" (
+    echo.
+    echo ═══════════════════════════════════════════════════════════════════════
+    echo ✅ HOÀN TẤT TẠO CONFIG!
+    echo ═══════════════════════════════════════════════════════════════════════
+    echo.
+    pause
+    goto :MainMenu
+)
+
 REM ============================================================================
 REM BƯỚC 5: KIỂM TRA CÁC FILE CẦN THIẾT
 REM ============================================================================
+:Step5_CheckFiles
 echo [5/6] Đang kiểm tra các file cần thiết...
 call :LogInfo "[STEP 5/6] Checking required files"
 echo.
@@ -453,6 +568,33 @@ if not exist ../hd_order.py (
 if not exist ../hd_order_123.py (
     call :LogError "Missing CRITICAL file: hd_order_123.py"
     echo ❌ THIẾU: hd_order_123.py ^(CRITICAL^)
+    set MISSING_FILES=1
+)
+if not exist ../hd_order_market_price.py (
+    call :LogError "Missing file: hd_order_market_price.py"
+    echo ❌ THIẾU: hd_order_market_price.py
+    set MISSING_FILES=1
+)
+
+REM Helper modules (CRITICAL)
+if not exist ../cst.py (
+    call :LogError "Missing CRITICAL file: cst.py"
+    echo ❌ THIẾU: cst.py ^(CRITICAL - Config loader^)
+    set MISSING_FILES=1
+)
+if not exist ../binance_order_helper.py (
+    call :LogError "Missing file: binance_order_helper.py"
+    echo ❌ THIẾU: binance_order_helper.py
+    set MISSING_FILES=1
+)
+if not exist ../utils.py (
+    call :LogError "Missing file: utils.py"
+    echo ❌ THIẾU: utils.py
+    set MISSING_FILES=1
+)
+if not exist ../binance_utils.py (
+    call :LogError "Missing file: binance_utils.py"
+    echo ❌ THIẾU: binance_utils.py
     set MISSING_FILES=1
 )
 
@@ -510,9 +652,21 @@ if %MISSING_FILES%==1 (
 
 echo.
 
+REM If called from Option 5 (Check files only), return to menu
+if "%MENU_CHOICE%"=="5" (
+    echo.
+    echo ═══════════════════════════════════════════════════════════════════════
+    echo ✅ HOÀN TẤT KIỂM TRA FILES!
+    echo ═══════════════════════════════════════════════════════════════════════
+    echo.
+    pause
+    goto :MainMenu
+)
+
 REM ============================================================================
 REM BƯỚC 6: TÓM TẮT VÀ HƯỚNG DẪN TIẾP THEO
 REM ============================================================================
+:Step6_Summary
 echo.
 echo ╔════════════════════════════════════════════════════════════════════════╗
 echo ║                        CÀI ĐẶT HOÀN TẤT!                              ║
@@ -556,11 +710,18 @@ echo    1️⃣  CẤU HÌNH FILE config.ini
 echo.
 echo       📌 Mở file: ..\config.ini
 echo       📌 Điền các thông tin:
-echo          - bot_token          (Telegram bot token)
-echo          - chat_id            (Telegram chat ID)
-echo          - key_binance        (Binance API key)
-echo          - secret_binance     (Binance secret key)
-echo          - spreadsheet_id     (Google Sheets ID)
+echo.
+echo          [TELEGRAM]
+echo          • bot_token       - Token từ @BotFather
+echo          • chat_id         - ID chat/group nhận thông báo
+echo          • prefix_channel  - Prefix phân biệt bot (VD: "TEST BOT")
+echo.
+echo          [BINANCE]
+echo          • key_binance     - API Key từ Binance
+echo          • secret_binance  - Secret Key từ Binance
+echo.
+echo          [GOOGLE SHEETS]
+echo          • spreadsheet_id  - ID của Google Sheet (trong URL)
 echo.
 echo    2️⃣  BỔ SUNG FILE credentials.json
 echo.
@@ -582,18 +743,231 @@ echo 💡 TIP: Xem log chi tiết tại: %INFO_LOG% và %ERROR_LOG%
 echo.
 echo 📝 VERBOSE MODE: %VERBOSE% (Đổi thành 0 trong script để ẩn output chi tiết)
 echo.
+echo.
+echo ═══════════════════════════════════════════════════════════════════════
+set /p RETURN_MENU="👉 Quay lại menu chính? (Y/N): "
+if /i "%RETURN_MENU%"=="Y" (
+    cls
+    goto :MainMenu
+)
+goto :ExitScript
+
+REM ============================================================================
+REM OPTION 2: CHỈ CÀI PYTHON
+REM ============================================================================
+:InstallPythonOnly
+call :LogInfo "Starting Python-only installation"
+cls
+echo.
+echo ╔════════════════════════════════════════════════════════════════════════╗
+echo ║                      CÀI ĐẶT PYTHON 3.11                              ║
+echo ╚════════════════════════════════════════════════════════════════════════╝
+echo.
+set /p CONFIRM_PYTHON="👉 Xác nhận cài đặt Python? (Y/N): "
+if /i not "%CONFIRM_PYTHON%"=="Y" (
+    call :LogInfo "User cancelled Python installation"
+    goto :MainMenu
+)
+echo.
+
+REM Jump to Python installation step
+goto :Step1_CheckPython
+
+REM ============================================================================
+REM OPTION 3: CHỈ CÀI THƯ VIỆN
+REM ============================================================================
+:InstallLibrariesOnly
+call :LogInfo "Starting libraries-only installation"
+cls
+echo.
+echo ╔════════════════════════════════════════════════════════════════════════╗
+echo ║                      CÀI ĐẶT THƯ VIỆN PYTHON                          ║
+echo ╚════════════════════════════════════════════════════════════════════════╝
+echo.
+
+REM Check if Python exists
+python --version >nul 2>&1
+if errorlevel 1 (
+    echo ❌ LỖI: Python chưa được cài đặt!
+    echo.
+    echo 💡 Vui lòng cài Python trước (chọn Option 2 hoặc Option 1)
+    echo.
+    pause
+    goto :MainMenu
+)
+
+for /f "tokens=2" %%i in ('python --version 2^>^&1') do set PYTHON_VERSION=%%i
+echo ✅ Đã phát hiện Python %PYTHON_VERSION%
+echo.
+
+set /p CONFIRM_LIB="👉 Xác nhận cài đặt thư viện? (Y/N): "
+if /i not "%CONFIRM_LIB%"=="Y" (
+    call :LogInfo "User cancelled library installation"
+    goto :MainMenu
+)
+echo.
+
+REM Jump to library installation step
+goto :Step3_InstallLibraries
+
+REM ============================================================================
+REM OPTION 4: CHỈ TẠO CONFIG
+REM ============================================================================
+:CreateConfigOnly
+call :LogInfo "Starting config creation only"
+cls
+echo.
+echo ╔════════════════════════════════════════════════════════════════════════╗
+echo ║                      TẠO FILE CONFIG.INI                              ║
+echo ╚════════════════════════════════════════════════════════════════════════╝
+echo.
+
+REM Jump to config creation step
+goto :Step4_CreateConfig
+
+REM ============================================================================
+REM OPTION 5: CHỈ KIỂM TRA FILES
+REM ============================================================================
+:CheckFilesOnly
+call :LogInfo "Starting file check only"
+cls
+echo.
+echo ╔════════════════════════════════════════════════════════════════════════╗
+echo ║                      KIỂM TRA FILES SOURCE CODE                       ║
+echo ╚════════════════════════════════════════════════════════════════════════╝
+echo.
+
+REM Jump to file check step
+goto :Step5_CheckFiles
+
+REM ============================================================================
+REM OPTION 6: KIỂM TRA MÔI TRƯỜNG
+REM ============================================================================
+:CheckEnvironment
+call :LogInfo "Starting environment check"
+cls
+echo.
+echo ╔════════════════════════════════════════════════════════════════════════╗
+echo ║                      KIỂM TRA MÔI TRƯỜNG                              ║
+echo ╚════════════════════════════════════════════════════════════════════════╝
+echo.
+
+set ENV_OK=1
+
+REM Check Python
+echo [1/4] Kiểm tra Python...
+python --version >nul 2>&1
+if errorlevel 1 (
+    echo    ❌ Python: CHƯA CÀI
+    set ENV_OK=0
+) else (
+    for /f "tokens=2" %%i in ('python --version 2^>^&1') do set PYTHON_VERSION=%%i
+    echo    ✅ Python: %PYTHON_VERSION%
+)
+echo.
+
+REM Check pip
+echo [2/4] Kiểm tra pip...
+python -m pip --version >nul 2>&1
+if errorlevel 1 (
+    echo    ❌ pip: CHƯA CÀI
+    set ENV_OK=0
+) else (
+    for /f "tokens=2" %%i in ('python -m pip --version 2^>^&1') do set PIP_VERSION=%%i
+    echo    ✅ pip: %PIP_VERSION%
+)
+echo.
+
+REM Check critical libraries
+echo [3/4] Kiểm tra thư viện quan trọng...
+python -c "import ccxt" 2>nul
+if errorlevel 1 (
+    echo    ❌ ccxt: CHƯA CÀI
+    set ENV_OK=0
+) else (
+    echo    ✅ ccxt: OK
+)
+
+python -c "import telegram" 2>nul
+if errorlevel 1 (
+    echo    ❌ python-telegram-bot: CHƯA CÀI
+    set ENV_OK=0
+) else (
+    echo    ✅ python-telegram-bot: OK
+)
+
+python -c "import gspread" 2>nul
+if errorlevel 1 (
+    echo    ❌ gspread: CHƯA CÀI
+    set ENV_OK=0
+) else (
+    echo    ✅ gspread: OK
+)
+
+python -c "import pandas" 2>nul
+if errorlevel 1 (
+    echo    ❌ pandas: CHƯA CÀI
+    set ENV_OK=0
+) else (
+    echo    ✅ pandas: OK
+)
+echo.
+
+REM Check config.ini
+echo [4/4] Kiểm tra file config...
+if exist ../config.ini (
+    echo    ✅ config.ini: TỒN TẠI
+) else (
+    echo    ❌ config.ini: CHƯA TẠO
+    set ENV_OK=0
+)
+echo.
+
+echo ═══════════════════════════════════════════════════════════════════════
+if %ENV_OK%==1 (
+    echo ✅ TẤT CẢ ĐỀU SẴN SÀNG! Bot có thể chạy được.
+) else (
+    echo ⚠️  MÔI TRƯỜNG CHƯA ĐẦY ĐỦ! Vui lòng cài đặt các phần còn thiếu.
+    echo.
+    echo 💡 Gợi ý: Chọn Option 1 (Cài đặt toàn bộ) từ menu chính.
+)
+echo ═══════════════════════════════════════════════════════════════════════
+echo.
+pause
+goto :MainMenu
+
+REM ============================================================================
+REM EXIT SCRIPT
+REM ============================================================================
+:ExitScript
+call :LogInfo "User exited the script"
+echo.
+echo 👋 Cảm ơn bạn đã sử dụng QBot Setup!
+echo.
 pause
 exit /b 0
 
 REM ============================================================================
-REM HELPER FUNCTIONS
+REM STEP LABELS (for jumping from menu options)
 REM ============================================================================
+
+:Step1_CheckPython
 
 :RefreshPath
 REM Refresh environment PATH without restarting CMD
 call :LogInfo "Refreshing PATH..."
 for /f "tokens=2*" %%a in ('reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v Path 2^>nul') do set "SYS_PATH=%%b"
 for /f "tokens=2*" %%a in ('reg query "HKCU\Environment" /v Path 2^>nul') do set "USER_PATH=%%b"
+
+REM Check if paths were retrieved
+if "%SYS_PATH%"=="" (
+    call :LogError "Cannot retrieve system PATH from registry"
+    echo ⚠️  CẢNH BÁO: Không đọc được System PATH từ registry
+)
+if "%USER_PATH%"=="" (
+    call :LogInfo "User PATH not found in registry (this is OK)"
+)
+
 set "PATH=%SYS_PATH%;%USER_PATH%"
 call :LogInfo "PATH refreshed"
 echo ✅ PATH đã được refresh
