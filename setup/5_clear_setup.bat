@@ -1,4 +1,5 @@
 @echo off
+setlocal enabledelayedexpansion
 chcp 65001 >nul
 REM ============================================================================
 REM QBot v2.1 - Clear Setup & Reset Environment with Logging
@@ -76,7 +77,7 @@ if /i not "%CONFIRM%"=="YES" (
 call :LogInfo "User confirmed clear setup with YES"
 echo.
 set /p DELETE_PYTHON="   Bạn có muốn GỠ PYTHON khỏi máy không? (Y/N): "
-call :LogInfo "Delete Python choice: %DELETE_PYTHON%"
+call :LogInfo "Delete Python choice: !DELETE_PYTHON!"
 
 echo.
 echo ═══════════════════════════════════════════════════════════════════════
@@ -87,7 +88,7 @@ echo.
 REM ============================================================================
 REM BƯỚC 1: GỠ PYTHON (NẾU CHỌN)
 REM ============================================================================
-if /i "%DELETE_PYTHON%"=="Y" (
+if /i "!DELETE_PYTHON!"=="Y" (
     echo [1/8] Đang gỡ cài đặt Python...
     call :LogInfo "[STEP 1/8] Uninstalling Python (user chose Y)"
     echo.
@@ -166,11 +167,11 @@ call :LogInfo "[STEP 2/8] Backing up config.ini"
 
 if exist ../config.ini (
     set BACKUP_NAME=config.backup_%date:~-4,4%%date:~-10,2%%date:~-7,2%_%time:~0,2%%time:~3,2%%time:~6,2%.ini
-    set BACKUP_NAME=%BACKUP_NAME: =0%
-    copy ../config.ini "../%BACKUP_NAME%" >nul 2>&1
+    set BACKUP_NAME=!BACKUP_NAME: =0!
+    copy ../config.ini "../!BACKUP_NAME!" >nul 2>&1
     if not errorlevel 1 (
-        call :LogInfo "config.ini backed up as: %BACKUP_NAME%"
-        echo    ✅ Đã backup: %BACKUP_NAME%
+        call :LogInfo "config.ini backed up as: !BACKUP_NAME!"
+        echo    ✅ Đã backup: !BACKUP_NAME!
     ) else (
         call :LogError "Failed to backup config.ini"
         echo    ⚠️  Không thể backup config.ini
@@ -196,11 +197,24 @@ if not errorlevel 1 (
     echo       [1] GỠ CHỈ CÁC THƯ VIỆN TRONG requirements.txt (Nhanh)
     echo       [2] GỠ TOÀN BỘ THƯ VIỆN PYTHON (Khuyến nghị - Chậm hơn)
     echo.
+    
+    :AskUninstallMethod
     set /p UNINSTALL_METHOD="    👉 Chọn phương thức (1/2): "
-    call :LogInfo "User selected uninstall method: %UNINSTALL_METHOD%"
+    
+    REM Validate input
+    if "!UNINSTALL_METHOD!"=="" (
+        echo    ⚠️  Bạn chưa nhập gì! Vui lòng chọn 1 hoặc 2
+        goto :AskUninstallMethod
+    )
+    if not "!UNINSTALL_METHOD!"=="1" if not "!UNINSTALL_METHOD!"=="2" (
+        echo    ⚠️  Lựa chọn không hợp lệ! Vui lòng chọn 1 hoặc 2
+        goto :AskUninstallMethod
+    )
+    
+    call :LogInfo "User selected uninstall method: !UNINSTALL_METHOD!"
     echo.
     
-    if "%UNINSTALL_METHOD%"=="2" (
+    if "!UNINSTALL_METHOD!"=="2" (
         REM Phương pháp 2: Xóa TOÀN BỘ packages (trừ pip, setuptools, wheel)
         call :LogInfo "Method 2: Uninstalling ALL Python packages"
         echo    🔄 Đang lấy danh sách tất cả packages đã cài...
@@ -212,8 +226,8 @@ if not errorlevel 1 (
             REM Đếm số packages
             set PKG_COUNT=0
             for /f %%l in (pip_freeze_temp.txt) do set /a PKG_COUNT+=1
-            call :LogInfo "Found %PKG_COUNT% packages to uninstall"
-            echo    📦 Tìm thấy %PKG_COUNT% package(s) đã cài
+            call :LogInfo "Found !PKG_COUNT! packages to uninstall"
+            echo    📦 Tìm thấy !PKG_COUNT! package(s) đã cài
             echo    🗑️  Đang gỡ TOÀN BỘ packages (có thể mất 2-3 phút)...
             echo.
             
@@ -337,7 +351,7 @@ for /d /r .. %%d in (__pycache__) do @if exist "%%d" (
     rmdir /s /q "%%d" 2>nul
     set /a PYCACHE_COUNT+=1
 )
-call :LogInfo "Removed %PYCACHE_COUNT% __pycache__ folders"
+call :LogInfo "Removed !PYCACHE_COUNT! __pycache__ folders"
 
 REM Xóa .pyc files
 echo    🗑️  Đang xóa *.pyc files...
@@ -439,14 +453,14 @@ call :LogInfo "[STEP 7/8] Removing log files"
 set /p DELETE_LOGS="   Bạn có muốn XÓA TẤT CẢ FILE LOG không? (Y/N): "
 call :LogInfo "Delete logs choice: %DELETE_LOGS%"
 
-if /i "%DELETE_LOGS%"=="Y" (
+if /i "!DELETE_LOGS!"=="Y" (
     call :LogInfo "User chose to delete log files"
     echo    🗑️  Đang xóa log files...
     
     REM Count log files
     set LOG_COUNT=0
     for %%f in (../*.log) do set /a LOG_COUNT+=1
-    call :LogInfo "Found %LOG_COUNT% log files in root"
+    call :LogInfo "Found !LOG_COUNT! log files in root"
     
     REM Xóa log files trong folder gốc
     del ../*.log >nul 2>&1
@@ -478,13 +492,13 @@ for %%f in (../config.backup_*.ini) do (
     if exist "%%f" set /a BACKUP_COUNT+=1
 )
 
-if %BACKUP_COUNT% GTR 0 (
-    echo    📦 Tìm thấy %BACKUP_COUNT% file(s) backup config
+if !BACKUP_COUNT! GTR 0 (
+    echo    📦 Tìm thấy !BACKUP_COUNT! file(s) backup config
     echo.
     set /p DELETE_BACKUPS="   Bạn có muốn XÓA CÁC FILE BACKUP CŨ không? (Y/N): "
-    call :LogInfo "Delete backups choice: %DELETE_BACKUPS%"
+    call :LogInfo "Delete backups choice: !DELETE_BACKUPS!"
     
-    if /i "%DELETE_BACKUPS%"=="Y" (
+    if /i "!DELETE_BACKUPS!"=="Y" (
         call :LogInfo "User chose to delete backup files"
         echo    🗑️  Đang xóa backup files...
         
@@ -520,15 +534,15 @@ echo.
 
 call :LogInfo "Clear setup completed successfully"
 call :LogInfo "Summary:"
-if /i "%DELETE_PYTHON%"=="Y" (
+if /i "!DELETE_PYTHON!"=="Y" (
     call :LogInfo "- Python: UNINSTALLED"
 ) else (
     call :LogInfo "- Python: KEPT"
 )
-if not "%BACKUP_NAME%"=="" (
-    call :LogInfo "- Config backup: %BACKUP_NAME%"
+if not "!BACKUP_NAME!"=="" (
+    call :LogInfo "- Config backup: !BACKUP_NAME!"
 )
-if "%UNINSTALL_METHOD%"=="2" (
+if "!UNINSTALL_METHOD!"=="2" (
     call :LogInfo "- Python libraries: ALL UNINSTALLED (Method 2)"
 ) else (
     call :LogInfo "- Python libraries: requirements.txt UNINSTALLED (Method 1)"
@@ -539,13 +553,13 @@ call :LogInfo "- config.template.ini: REMOVED"
 call :LogInfo "- Cache files: REMOVED"
 call :LogInfo "- Setup log files: REMOVED"
 call :LogInfo "- Temp files: REMOVED"
-if /i "%DELETE_LOGS%"=="Y" (
+if /i "!DELETE_LOGS!"=="Y" (
     call :LogInfo "- Bot log files: REMOVED"
 ) else (
     call :LogInfo "- Bot log files: KEPT"
 )
-if %BACKUP_COUNT% GTR 0 (
-    if /i "%DELETE_BACKUPS%"=="Y" (
+if !BACKUP_COUNT! GTR 0 (
+    if /i "!DELETE_BACKUPS!"=="Y" (
         call :LogInfo "- Config backup files: REMOVED"
     ) else (
         call :LogInfo "- Config backup files: KEPT"
@@ -557,15 +571,15 @@ call :LogInfo "=========================================="
 
 echo 📊 ĐÃ THỰC HIỆN:
 echo.
-if /i "%DELETE_PYTHON%"=="Y" (
+if /i "!DELETE_PYTHON!"=="Y" (
     echo    ✅ Gỡ cài đặt Python
 ) else (
     echo    ℹ️  Giữ nguyên Python
 )
-if not "%BACKUP_NAME%"=="" (
-    echo    ✅ Backup config.ini: %BACKUP_NAME%
+if not "!BACKUP_NAME!"=="" (
+    echo    ✅ Backup config.ini: !BACKUP_NAME!
 )
-if "%UNINSTALL_METHOD%"=="2" (
+if "!UNINSTALL_METHOD!"=="2" (
     echo    ✅ Gỡ cài đặt TOÀN BỘ thư viện Python (Method 2)
 ) else (
     echo    ✅ Gỡ cài đặt thư viện từ requirements.txt (Method 1)
@@ -576,16 +590,16 @@ echo    ✅ Xóa config.template.ini
 echo    ✅ Xóa cache và temp files
 echo    ✅ Xóa setup log files (setup_info.txt, setup_error.txt)
 echo    ✅ Xóa Python installers
-if /i "%DELETE_LOGS%"=="Y" (
+if /i "!DELETE_LOGS!"=="Y" (
     echo    ✅ Xóa bot log files
 ) else (
     echo    ℹ️  Giữ nguyên bot log files
 )
-if %BACKUP_COUNT% GTR 0 (
-    if /i "%DELETE_BACKUPS%"=="Y" (
-        echo    ✅ Xóa %BACKUP_COUNT% config backup file(s)
+if !BACKUP_COUNT! GTR 0 (
+    if /i "!DELETE_BACKUPS!"=="Y" (
+        echo    ✅ Xóa !BACKUP_COUNT! config backup file(s)
     ) else (
-        echo    ℹ️  Giữ lại %BACKUP_COUNT% config backup file(s)
+        echo    ℹ️  Giữ lại !BACKUP_COUNT! config backup file(s)
     )
 )
 echo.
@@ -598,10 +612,10 @@ echo.
 echo       📌 Chạy file: 1_setup_install.bat
 echo       📌 Làm theo hướng dẫn
 echo.
-if not "%BACKUP_NAME%"=="" (
+if not "!BACKUP_NAME!"=="" (
     echo    2️⃣  KHÔI PHỤC CONFIG (NẾU CẦN)
     echo.
-    echo       📌 File backup: %BACKUP_NAME%
+    echo       📌 File backup: !BACKUP_NAME!
     echo       📌 Đổi tên thành: config.ini
     echo.
 )
@@ -609,12 +623,12 @@ echo ═════════════════════════
 echo.
 echo 💡 LƯU Ý:
 echo.
-if /i not "%DELETE_PYTHON%"=="Y" (
+if /i not "!DELETE_PYTHON!"=="Y" (
     echo    - Python vẫn còn trên máy (chưa bị xóa)
 )
 echo    - Source code (.py) vẫn còn nguyên
 echo    - credentials.json vẫn còn nguyên (nếu có)
-if /i "%DELETE_PYTHON%"=="Y" (
+if /i "!DELETE_PYTHON!"=="Y" (
     echo    - ⚠️  Python đã bị gỡ - cần cài lại khi chạy setup
     echo    - 💡 Có thể cần khởi động lại máy
 )
@@ -629,15 +643,15 @@ echo 🧹 Dọn dẹp log files của clear script...
 
 REM Cleanup own log files after user reads the summary
 set /p CLEANUP_CLEAR_LOGS="👉 Bạn có muốn XÓA LOG FILES của clear script này không? (Y/N): "
-if /i "%CLEANUP_CLEAR_LOGS%"=="Y" (
+if /i "!CLEANUP_CLEAR_LOGS!"=="Y" (
     echo.
     echo 🗑️  Đang xóa clear log files...
     REM Save log location before deleting
-    set TEMP_INFO_LOG=%INFO_LOG%
-    set TEMP_ERROR_LOG=%ERROR_LOG%
+    set TEMP_INFO_LOG=!INFO_LOG!
+    set TEMP_ERROR_LOG=!ERROR_LOG!
     
-    if exist "%TEMP_INFO_LOG%" del "%TEMP_INFO_LOG%" >nul 2>&1
-    if exist "%TEMP_ERROR_LOG%" del "%TEMP_ERROR_LOG%" >nul 2>&1
+    if exist "!TEMP_INFO_LOG!" del "!TEMP_INFO_LOG!" >nul 2>&1
+    if exist "!TEMP_ERROR_LOG!" del "!TEMP_ERROR_LOG!" >nul 2>&1
     
     echo ✅ Đã xóa clear_info.txt và clear_error.txt
     echo.
