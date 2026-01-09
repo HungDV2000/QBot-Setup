@@ -254,39 +254,21 @@ def test_get_top_symbols(exchange):
         tickers = exchange.fetch_tickers()
         logger.log(f"✅ Lấy được {len(tickers)} tickers")
         
-        # Lấy whitelist từ Google Sheets
-        logger.log("\n2️⃣  Đang lấy whitelist từ Google Sheets...")
-        white_list = set(gg_sheet_factory.get_white_list())
-        logger.log(f"✅ Whitelist có {len(white_list)} mã")
-        logger.log(f"   📝 Nội dung whitelist: {list(white_list)}")
+        # Lọc symbols (BỎ QUA WHITELIST cho test - lấy tất cả mã)
+        logger.log("\n2️⃣  Đang lọc symbols Futures USDT...")
         
-        # Lọc symbols
-        logger.log("\n3️⃣  Đang lọc symbols Futures USDT...")
-        
-        # Bước 3a: Lấy tất cả futures USDT
-        all_futures_usdt = [
+        # Lấy tất cả futures USDT (KHÔNG DÙNG WHITELIST)
+        futures_symbols = [
             symbol for symbol in tickers.keys()
             if '/USDT' in symbol 
             and "-" not in symbol
             and tickers[symbol].get('percentage') is not None
         ]
-        logger.log(f"   📊 Tổng số futures USDT: {len(all_futures_usdt)}")
-        
-        # Bước 3b: Lọc theo whitelist
-        futures_symbols = [
-            symbol for symbol in all_futures_usdt
-            if symbol in white_list
-        ]
-        logger.log(f"✅ Sau khi lọc whitelist: {len(futures_symbols)} mã")
-        
-        if len(futures_symbols) == 0 and len(white_list) > 0:
-            logger.log(f"   ⚠️  KHÔNG CÓ MÃ NÀO TRONG WHITELIST MATCH VỚI BINANCE!")
-            logger.log(f"   💡 Có thể mã trong whitelist không tồn tại hoặc format sai")
-            # Show một vài mã ví dụ từ Binance
-            logger.log(f"   📝 Ví dụ 5 mã trên Binance: {all_futures_usdt[:5]}")
+        logger.log(f"✅ Tổng số futures USDT trên Binance: {len(futures_symbols)}")
+        logger.log(f"   💡 Test này BỎ QUA whitelist - lấy trực tiếp từ Binance")
         
         # Lấy top 50 giảm
-        logger.log("\n4️⃣  Đang lấy top 50 giảm...")
+        logger.log("\n3️⃣  Đang lấy top 50 giảm...")
         list_giam_nhieu_nhat = sorted(futures_symbols, key=lambda x: tickers[x]['percentage'])[:50]
         logger.log(f"✅ Top 50 giảm:")
         for i, symbol in enumerate(list_giam_nhieu_nhat[:5], 1):  # Log 5 mã đầu
@@ -294,7 +276,7 @@ def test_get_top_symbols(exchange):
         logger.log(f"   ... (và {len(list_giam_nhieu_nhat) - 5} mã khác)")
         
         # Lấy top 50 tăng
-        logger.log("\n5️⃣  Đang lấy top 50 tăng...")
+        logger.log("\n4️⃣  Đang lấy top 50 tăng...")
         list_tang_nhieu_nhat = sorted(futures_symbols, reverse=True, key=lambda x: tickers[x]['percentage'])[:50]
         logger.log(f"✅ Top 50 tăng:")
         for i, symbol in enumerate(list_tang_nhieu_nhat[:5], 1):  # Log 5 mã đầu
@@ -501,36 +483,42 @@ def test_get_all_symbols_data(exchange, tickers, list_giam, list_tang):
         # Khởi tạo data collector
         data_collector = get_data_collector(exchange)
         
-        # Test với 3 mã mẫu từ mỗi danh sách
-        test_symbols_giam = list_giam[:3] if len(list_giam) >= 3 else list_giam
-        test_symbols_tang = list_tang[:3] if len(list_tang) >= 3 else list_tang
+        # Test với 1 mã mẫu từ mỗi danh sách (để kiểm tra nhanh)
+        test_symbols_giam = [list_giam[0]] if len(list_giam) > 0 else []
+        test_symbols_tang = [list_tang[0]] if len(list_tang) > 0 else []
         
         logger.log(f"\n📝 Test với {len(test_symbols_giam)} mã giảm và {len(test_symbols_tang)} mã tăng")
-        logger.log(f"   (Để test nhanh, không test hết 100 mã)")
+        logger.log(f"   (Chỉ test 1 mã từ mỗi top để kiểm tra cấu trúc dữ liệu)")
         
         all_results = []
         success_count = 0
         fail_count = 0
         
         # Test mã giảm
-        logger.log("\n📉 TESTING TOP GIẢM:")
-        for symbol in test_symbols_giam:
-            result, success = test_get_symbol_data(exchange, symbol, tickers, data_collector)
-            all_results.append(result)
-            if success:
-                success_count += 1
-            else:
-                fail_count += 1
+        if test_symbols_giam:
+            logger.log(f"\n📉 TESTING TOP GIẢM: {test_symbols_giam[0]}")
+            for symbol in test_symbols_giam:
+                result, success = test_get_symbol_data(exchange, symbol, tickers, data_collector)
+                all_results.append(result)
+                if success:
+                    success_count += 1
+                else:
+                    fail_count += 1
+        else:
+            logger.log("\n📉 TESTING TOP GIẢM: Không có mã nào")
         
         # Test mã tăng
-        logger.log("\n📈 TESTING TOP TĂNG:")
-        for symbol in test_symbols_tang:
-            result, success = test_get_symbol_data(exchange, symbol, tickers, data_collector)
-            all_results.append(result)
-            if success:
-                success_count += 1
-            else:
-                fail_count += 1
+        if test_symbols_tang:
+            logger.log(f"\n📈 TESTING TOP TĂNG: {test_symbols_tang[0]}")
+            for symbol in test_symbols_tang:
+                result, success = test_get_symbol_data(exchange, symbol, tickers, data_collector)
+                all_results.append(result)
+                if success:
+                    success_count += 1
+                else:
+                    fail_count += 1
+        else:
+            logger.log("\n📈 TESTING TOP TĂNG: Không có mã nào")
         
         elapsed = time.time() - start_time
         
@@ -546,7 +534,11 @@ def test_get_all_symbols_data(exchange, tickers, list_giam, list_tang):
         else:
             logger.log(f"   ⚠️  Không có symbol nào để test!")
         
-        if fail_count == 0:
+        # Kiểm tra kết quả
+        if success_count + fail_count == 0:
+            logger.log(f"\n❌ Test 2: FAILED (Không có mã nào để test)")
+            return False
+        elif fail_count == 0:
             logger.log(f"\n✅ Test 2: PASS")
             return True
         else:
@@ -752,7 +744,9 @@ def main():
     logger.log("\n💡 LƯU Ý:")
     logger.log("   - File này chỉ test logic lấy dữ liệu")
     logger.log("   - KHÔNG ghi dữ liệu vào Google Sheets")
-    logger.log("   - Để ghi vào sheet, chạy: python hd_update_all.py")
+    logger.log("   - Test BỎ QUA whitelist - lấy trực tiếp từ Binance")
+    logger.log("   - Chỉ test 1 mã giảm + 1 mã tăng để kiểm tra nhanh")
+    logger.log("   - Để chạy thật với whitelist: python hd_update_all.py")
     logger.separator('=')
     
     logger.close()
