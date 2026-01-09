@@ -443,19 +443,31 @@ def do_it():
     
 
     white_list = set(gg_sheet_factory.get_white_list())  
-    print(f"Danh sách whitelist từ sheet (tổng {len(white_list)} mã):", flush=True)
-    print(white_list, flush=True)
+    print(f"📝 Danh sách whitelist từ sheet (tổng {len(white_list)} mã):", flush=True)
+    print(f"   Nội dung: {list(white_list)[:10]}", flush=True)  # In tối đa 10 mã đầu
     
-    # Fix: Lọc chỉ lấy các mã có trong whitelist VÀ đang được giao dịch trên Binance
-    futures_symbols=  [
+    # Bước 1: Lấy tất cả futures USDT
+    all_futures_usdt = [
         symbol for symbol in tickers.keys()
         if '/USDT' in symbol 
         and "-" not in symbol
         and tickers[symbol].get('percentage') is not None
-        and symbol in white_list  # Chỉ lấy mã có trong whitelist
+    ]
+    print(f"📊 Tổng số futures USDT trên Binance: {len(all_futures_usdt)}", flush=True)
+    
+    # Bước 2: Lọc theo whitelist
+    futures_symbols = [
+        symbol for symbol in all_futures_usdt
+        if symbol in white_list
     ]
     
-    print(f"Số mã sau khi lọc whitelist: {len(futures_symbols)}", flush=True)
+    print(f"✅ Số mã sau khi lọc whitelist: {len(futures_symbols)}", flush=True)
+    
+    # Warning nếu không có mã nào match
+    if len(futures_symbols) == 0 and len(white_list) > 0:
+        print(f"⚠️  CẢNH BÁO: Không có mã nào trong whitelist match với Binance!", flush=True)
+        print(f"   💡 Kiểm tra lại sheet 'list' - có thể mã không tồn tại hoặc format sai", flush=True)
+        print(f"   📝 Ví dụ 5 mã đúng trên Binance: {all_futures_usdt[:5]}", flush=True)
 
     
 

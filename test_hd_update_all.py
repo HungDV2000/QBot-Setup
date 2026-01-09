@@ -258,17 +258,32 @@ def test_get_top_symbols(exchange):
         logger.log("\n2️⃣  Đang lấy whitelist từ Google Sheets...")
         white_list = set(gg_sheet_factory.get_white_list())
         logger.log(f"✅ Whitelist có {len(white_list)} mã")
+        logger.log(f"   📝 Nội dung whitelist: {list(white_list)}")
         
         # Lọc symbols
         logger.log("\n3️⃣  Đang lọc symbols Futures USDT...")
-        futures_symbols = [
+        
+        # Bước 3a: Lấy tất cả futures USDT
+        all_futures_usdt = [
             symbol for symbol in tickers.keys()
             if '/USDT' in symbol 
             and "-" not in symbol
             and tickers[symbol].get('percentage') is not None
-            and symbol in white_list
         ]
-        logger.log(f"✅ Sau khi lọc: {len(futures_symbols)} mã")
+        logger.log(f"   📊 Tổng số futures USDT: {len(all_futures_usdt)}")
+        
+        # Bước 3b: Lọc theo whitelist
+        futures_symbols = [
+            symbol for symbol in all_futures_usdt
+            if symbol in white_list
+        ]
+        logger.log(f"✅ Sau khi lọc whitelist: {len(futures_symbols)} mã")
+        
+        if len(futures_symbols) == 0 and len(white_list) > 0:
+            logger.log(f"   ⚠️  KHÔNG CÓ MÃ NÀO TRONG WHITELIST MATCH VỚI BINANCE!")
+            logger.log(f"   💡 Có thể mã trong whitelist không tồn tại hoặc format sai")
+            # Show một vài mã ví dụ từ Binance
+            logger.log(f"   📝 Ví dụ 5 mã trên Binance: {all_futures_usdt[:5]}")
         
         # Lấy top 50 giảm
         logger.log("\n4️⃣  Đang lấy top 50 giảm...")
@@ -526,7 +541,10 @@ def test_get_all_symbols_data(exchange, tickers, list_giam, list_tang):
         logger.log(f"   ✅ Thành công: {success_count}")
         logger.log(f"   ❌ Thất bại: {fail_count}")
         logger.log(f"   ⏱️  Thời gian: {elapsed:.2f}s")
-        logger.log(f"   ⏱️  Trung bình: {elapsed/(success_count + fail_count):.2f}s/symbol")
+        if (success_count + fail_count) > 0:
+            logger.log(f"   ⏱️  Trung bình: {elapsed/(success_count + fail_count):.2f}s/symbol")
+        else:
+            logger.log(f"   ⚠️  Không có symbol nào để test!")
         
         if fail_count == 0:
             logger.log(f"\n✅ Test 2: PASS")
