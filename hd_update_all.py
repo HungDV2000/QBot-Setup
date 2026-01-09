@@ -457,12 +457,12 @@ def is_valid_for_trading(symbol, tickers):
         
         # Check 3: High/Low 40 ngày phải khác nhau (có biến động)
         try:
-            high_40d, low_40d = calculate_high_low_30d(symbol, num_days=40)
+            high_40d, low_40d = calculate_high_low_30d(pair, timeframe='1d')  # ✅ FIX: dùng pair
             # Nếu High ≈ Low (sai số < 0.01%) → mới listing, chưa dao động
             if abs(high_40d - low_40d) < (high_40d * 0.0001):
                 return False, "Mã mới listing (High 40d ≈ Low 40d)"
-        except:
-            return False, "Lỗi lấy High/Low 40d (có thể mã mới)"
+        except Exception as e:
+            return False, f"Lỗi lấy High/Low 40d: {str(e)}"
         
         return True, "OK"
         
