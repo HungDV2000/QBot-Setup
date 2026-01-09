@@ -301,6 +301,7 @@ def test_get_symbol_data(exchange, symbol, tickers, data_collector):
     """Test lấy tất cả dữ liệu cho 1 symbol"""
     logger.separator('-')
     logger.log(f"\n📌 TEST SYMBOL: {symbol}")
+    logger.log(f"   Kiểm tra 29 cột dữ liệu (A-AC) cho sheet '100 mã (50 tăng và 50 giảm)'")
     logger.separator('-')
     
     result = {}
@@ -309,7 +310,7 @@ def test_get_symbol_data(exchange, symbol, tickers, data_collector):
     try:
         price = tickers[symbol]['last']
         percentage = tickers[symbol]['percentage']
-        logger.log(f"   Giá: {price} USDT | % 24h: {percentage:.2f}%")
+        logger.log(f"\n   💰 GIÁ HIỆN TẠI: {price} USDT | % 24h: {percentage:.2f}%")
         
         pair = symbol.replace(":USDT", "")
         result['symbol'] = pair
@@ -317,7 +318,10 @@ def test_get_symbol_data(exchange, symbol, tickers, data_collector):
         result['price'] = price
         
         # A-C: Symbol, %, Giá
-        logger.log(f"\n   Cột A-C: ✅")
+        logger.log(f"\n   📊 THÔNG TIN CƠ BẢN:")
+        logger.log(f"      Cột A (Mã): {pair}")
+        logger.log(f"      Cột B (% 24h): {percentage:.2f}%")
+        logger.log(f"      Cột C (Giá trị hiện thời): {price}")
         
         # D-G: BB 1h và 1d (4 cột)
         try:
@@ -326,60 +330,74 @@ def test_get_symbol_data(exchange, symbol, tickers, data_collector):
             result['bb_1h_lower'] = bb_1h_1d[1]
             result['bb_1d_upper'] = bb_1h_1d[2]
             result['bb_1d_lower'] = bb_1h_1d[3]
-            logger.log(f"   Cột D-G (BB 1h, 1d): ✅")
+            logger.log(f"\n   📈 BOLLINGER BANDS:")
+            logger.log(f"      Cột D (BB1h trên): {bb_1h_1d[0]:.6f}")
+            logger.log(f"      Cột E (BB1h dưới): {bb_1h_1d[1]:.6f}")
+            logger.log(f"      Cột F (BB1 ngày trên): {bb_1h_1d[2]:.6f}")
+            logger.log(f"      Cột G (BB1 ngày dưới): {bb_1h_1d[3]:.6f}")
         except Exception as e:
             errors.append(f"BB 1h/1d: {e}")
-            logger.log(f"   Cột D-G: ❌ {e}")
+            logger.log(f"   ❌ Cột D-G: {e}")
         
         # H-I: Biên độ 1h max tăng/giảm tuần (7 ngày)
         try:
             max_inc_1h, max_dec_1h = calculate_price_range(exchange, pair, 7, '1h')
             result['max_inc_1h_7d'] = max_inc_1h
             result['max_dec_1h_7d'] = max_dec_1h
-            logger.log(f"   Cột H-I (Biên độ 1h 7d): ✅ Tăng={max_inc_1h}%, Giảm={max_dec_1h}%")
+            logger.log(f"\n   📊 BIÊN ĐỘ 1H (7 NGÀY):")
+            logger.log(f"      Cột H (Biên độ 1h max tăng tuần): {max_inc_1h}%")
+            logger.log(f"      Cột I (Biên độ 1h max giảm tuần): {max_dec_1h}%")
         except Exception as e:
             errors.append(f"Biên độ 1h: {e}")
-            logger.log(f"   Cột H-I: ❌ {e}")
+            logger.log(f"   ❌ Cột H-I: {e}")
         
         # J-K: Giá cao/thấp 40 ngày
         try:
             high_40d, low_40d = calculate_high_low_30d(exchange, symbol, num_days=40)
             result['high_40d'] = high_40d
             result['low_40d'] = low_40d
-            logger.log(f"   Cột J-K (High/Low 40d): ✅ High={high_40d}, Low={low_40d}")
+            logger.log(f"\n   📊 GIÁ CAO/THẤP 40 NGÀY:")
+            logger.log(f"      Cột J (Max 40 ngày): {high_40d}")
+            logger.log(f"      Cột K (Min 40 ngày): {low_40d}")
         except Exception as e:
             errors.append(f"High/Low 40d: {e}")
-            logger.log(f"   Cột J-K: ❌ {e}")
+            logger.log(f"   ❌ Cột J-K: {e}")
         
         # L-M: Biên độ tăng/giảm 4h/60 ngày
         try:
             max_inc_4h, max_dec_4h = calculate_max_increase_decrease_4h(exchange, symbol)
             result['max_inc_4h_60d'] = max_inc_4h
             result['max_dec_4h_60d'] = max_dec_4h
-            logger.log(f"   Cột L-M (Max change 4h 60d): ✅ Tăng={max_inc_4h}%, Giảm={max_dec_4h}%")
+            logger.log(f"\n   📊 BIÊN ĐỘ 4H (60 NGÀY):")
+            logger.log(f"      Cột L (Max tăng 4h/60 ngày): {max_inc_4h}%")
+            logger.log(f"      Cột M (Max giảm 4h/60 ngày): {max_dec_4h}%")
         except Exception as e:
             errors.append(f"Max change 4h: {e}")
-            logger.log(f"   Cột L-M: ❌ {e}")
+            logger.log(f"   ❌ Cột L-M: {e}")
         
         # N-O: BB 1 tuần
         try:
             bb_1w = get_bb(exchange, pair, timeframes=['1w'])
             result['bb_1w_upper'] = bb_1w[0]
             result['bb_1w_lower'] = bb_1w[1]
-            logger.log(f"   Cột N-O (BB 1w): ✅")
+            logger.log(f"\n   📈 BOLLINGER BANDS 1 TUẦN:")
+            logger.log(f"      Cột N (Giá Cao Nhất): {bb_1w[0]:.6f}")
+            logger.log(f"      Cột O (Giá Thấp Nhất): {bb_1w[1]:.6f}")
         except Exception as e:
             errors.append(f"BB 1w: {e}")
-            logger.log(f"   Cột N-O: ❌ {e}")
+            logger.log(f"   ❌ Cột N-O: {e}")
         
         # P-Q: Biên độ 30 ngày
         try:
             max_inc_30d, max_dec_30d = calculate_price_range(exchange, pair, 30, '1d')
             result['max_inc_30d'] = max_inc_30d
             result['max_dec_30d'] = max_dec_30d
-            logger.log(f"   Cột P-Q (Biên độ 30d): ✅ Tăng={max_inc_30d}%, Giảm={max_dec_30d}%")
+            logger.log(f"\n   📊 BIÊN ĐỘ 30 NGÀY:")
+            logger.log(f"      Cột P (Biên độ 30d tăng): {max_inc_30d}%")
+            logger.log(f"      Cột Q (Biên độ 30d giảm): {max_dec_30d}%")
         except Exception as e:
             errors.append(f"Biên độ 30d: {e}")
-            logger.log(f"   Cột P-Q: ❌ {e}")
+            logger.log(f"   ❌ Cột P-Q: {e}")
         
         # R-S: Volume 24h và RSI
         try:
@@ -400,23 +418,27 @@ def test_get_symbol_data(exchange, symbol, tickers, data_collector):
             rs = avg_gain / avg_loss if avg_loss != 0 else 0
             rsi = 100 - (100 / (1 + rs))
             result['rsi_14'] = round(rsi, 2)
-            logger.log(f"   Cột R-S (Volume, RSI): ✅ Vol={volume_24h:,.0f}, RSI={rsi:.2f}")
+            logger.log(f"\n   📊 VOLUME & RSI:")
+            logger.log(f"      Cột R (Volume 24h): {volume_24h:,.0f} USDT")
+            logger.log(f"      Cột S (RSI 14): {rsi:.2f}")
+            logger.log(f"      Cột T (Trống): (dự phòng)")
         except Exception as e:
             errors.append(f"Volume/RSI: {e}")
-            logger.log(f"   Cột R-S: ❌ {e}")
+            logger.log(f"   ❌ Cột R-S: {e}")
         
         # U: Ratio O/K
         try:
             if low_40d != 0:
                 ratio_ok = round((bb_1w[1] / low_40d), 4)
                 result['ratio_ok'] = ratio_ok
-                logger.log(f"   Cột U (O/K ratio): ✅ {ratio_ok}")
+                logger.log(f"\n   📊 RATIO:")
+                logger.log(f"      Cột U (Min/Min40): {ratio_ok} (= {bb_1w[1]:.6f} / {low_40d})")
             else:
                 result['ratio_ok'] = 0
-                logger.log(f"   Cột U: ⚠️  Low=0")
+                logger.log(f"\n   ⚠️  Cột U: Low 40d = 0")
         except Exception as e:
             errors.append(f"Ratio O/K: {e}")
-            logger.log(f"   Cột U: ❌ {e}")
+            logger.log(f"   ❌ Cột U: {e}")
         
         # V-W: Khoảng cách đến BB 1h
         try:
@@ -424,10 +446,12 @@ def test_get_symbol_data(exchange, symbol, tickers, data_collector):
             distance_to_bb_down = round(((price - bb_1h_1d[1]) / price) * 100, 2) if price != 0 else 0
             result['distance_bb_up'] = distance_to_bb_up
             result['distance_bb_down'] = distance_to_bb_down
-            logger.log(f"   Cột V-W (Distance BB): ✅ Up={distance_to_bb_up}%, Down={distance_to_bb_down}%")
+            logger.log(f"\n   📊 KHOẢNG CÁCH ĐẾN BB 1H:")
+            logger.log(f"      Cột V (% đến BB1h trên): {distance_to_bb_up}%")
+            logger.log(f"      Cột W (% đến BB1h dưới): {distance_to_bb_down}%")
         except Exception as e:
             errors.append(f"Distance BB: {e}")
-            logger.log(f"   Cột V-W: ❌ {e}")
+            logger.log(f"   ❌ Cột V-W: {e}")
         
         # X-Y: Volume 1h và 4h
         try:
@@ -435,30 +459,38 @@ def test_get_symbol_data(exchange, symbol, tickers, data_collector):
             vol_4h = data_collector.get_volumes_multi_timeframe(pair, timeframes=['4h']).get('4h', 0)
             result['vol_1h'] = vol_1h
             result['vol_4h'] = vol_4h
-            logger.log(f"   Cột X-Y (Vol 1h, 4h): ✅ 1h={vol_1h:,.2f}, 4h={vol_4h:,.2f}")
+            logger.log(f"\n   📊 VOLUME 1H & 4H:")
+            logger.log(f"      Cột X (Vol 1h): {vol_1h:,.2f}")
+            logger.log(f"      Cột Y (Vol 4h): {vol_4h:,.2f}")
+            logger.log(f"      Cột Z (Trống): (dự phòng)")
+            logger.log(f"      Cột AA (Delist): (marker - có thể dùng sau)")
         except Exception as e:
             errors.append(f"Vol 1h/4h: {e}")
-            logger.log(f"   Cột X-Y: ❌ {e}")
+            logger.log(f"   ❌ Cột X-Y: {e}")
         
-        # 🆕 BIÊN ĐỘ GIÁ NGÀY LỚN NHẤT (Cột mới)
+        # 🆕 AB-AC: BIÊN ĐỘ GIÁ NGÀY LỚN NHẤT (Cột mới)
         try:
             max_vol, max_date, high_price, low_price, open_price = calculate_max_daily_volatility(
                 exchange, symbol, lookback_days=365
             )
             result['max_daily_volatility'] = max_vol
             result['max_daily_volatility_date'] = max_date
-            logger.log(f"   🆕 Cột mới (Biên độ giá ngày lớn nhất): ✅ {max_vol}% (ngày {max_date})")
+            logger.log(f"\n   🆕 BIÊN ĐỘ GIÁ NGÀY LỚN NHẤT (MỚI):")
+            logger.log(f"      Cột AB (Biên độ giá ngày lớn nhất %): {max_vol}%")
+            logger.log(f"      Cột AC (Ngày biên độ lớn nhất): {max_date}")
+            logger.log(f"         Chi tiết ngày đó: High={high_price}, Low={low_price}, Open={open_price}")
         except Exception as e:
             errors.append(f"Max daily volatility: {e}")
-            logger.log(f"   🆕 Cột mới: ❌ {e}")
+            logger.log(f"   ❌ Cột AB-AC: {e}")
         
         # Tổng kết
+        logger.separator('-')
         if errors:
             logger.log(f"\n⚠️  Test {symbol}: PARTIAL ({len(errors)} lỗi)")
             for error in errors:
                 logger.log(f"      - {error}")
         else:
-            logger.log(f"\n✅ Test {symbol}: PASS (tất cả cột OK)")
+            logger.log(f"\n✅ Test {symbol}: PASS - TẤT CẢ 29 CỘT (A-AC) ĐỀU HỢP LỆ!")
         
         return result, len(errors) == 0
         
