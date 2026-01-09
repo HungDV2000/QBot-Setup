@@ -484,10 +484,6 @@ def do_it():
     
     
 
-    white_list = set(gg_sheet_factory.get_white_list())  
-    print(f"📝 Danh sách whitelist từ sheet (tổng {len(white_list)} mã):", flush=True)
-    print(f"   Nội dung: {list(white_list)[:10]}", flush=True)  # In tối đa 10 mã đầu
-    
     # Bước 1: Lấy tất cả futures USDT
     all_futures_usdt = [
         symbol for symbol in tickers.keys()
@@ -497,21 +493,38 @@ def do_it():
     ]
     print(f"📊 Tổng số futures USDT trên Binance: {len(all_futures_usdt)}", flush=True)
     
-    # Bước 2: Lọc theo whitelist
-    futures_symbols = [
-        symbol for symbol in all_futures_usdt
-        if symbol in white_list
-    ]
+    # Bước 2: Đọc whitelist (với error handling)
+    try:
+        white_list = set(gg_sheet_factory.get_white_list())
+        print(f"📝 Whitelist từ sheet 'list': {len(white_list)} mã", flush=True)
+        if white_list:
+            print(f"   Nội dung (10 mã đầu): {list(white_list)[:10]}", flush=True)
+    except Exception as e:
+        print(f"⚠️  Không đọc được whitelist từ sheet 'list': {e}", flush=True)
+        print(f"   💡 Sẽ sử dụng TẤT CẢ MÃ từ Binance", flush=True)
+        white_list = set()  # Whitelist rỗng = lấy tất cả
     
-    print(f"✅ Số mã sau khi lọc whitelist: {len(futures_symbols)}", flush=True)
+    # Bước 3: Lọc theo whitelist (nếu có)
+    if white_list:
+        futures_symbols = [
+            symbol for symbol in all_futures_usdt
+            if symbol in white_list
+        ]
+        print(f"✅ Số mã sau khi lọc whitelist: {len(futures_symbols)}", flush=True)
+        
+        # Warning nếu không có mã nào match
+        if len(futures_symbols) == 0:
+            print(f"⚠️  CẢNH BÁO: Không có mã nào trong whitelist match với Binance!", flush=True)
+            print(f"   💡 Kiểm tra lại sheet 'list' - có thể mã không tồn tại hoặc format sai", flush=True)
+            print(f"   📝 Ví dụ 5 mã đúng trên Binance: {all_futures_usdt[:5]}", flush=True)
+            print(f"   🔄 Chuyển sang dùng TẤT CẢ MÃ...", flush=True)
+            futures_symbols = all_futures_usdt  # Fallback: dùng tất cả mã
+    else:
+        # Whitelist trống → dùng tất cả mã
+        print(f"💡 Whitelist trống → Sử dụng TẤT CẢ {len(all_futures_usdt)} mã từ Binance", flush=True)
+        futures_symbols = all_futures_usdt
     
-    # Warning nếu không có mã nào match
-    if len(futures_symbols) == 0 and len(white_list) > 0:
-        print(f"⚠️  CẢNH BÁO: Không có mã nào trong whitelist match với Binance!", flush=True)
-        print(f"   💡 Kiểm tra lại sheet 'list' - có thể mã không tồn tại hoặc format sai", flush=True)
-        print(f"   📝 Ví dụ 5 mã đúng trên Binance: {all_futures_usdt[:5]}", flush=True)
-    
-    # Bước 3: Lọc các mã hợp lệ (loại bỏ mã mới listing/không đủ data)
+    # Bước 4: Lọc các mã hợp lệ (loại bỏ mã mới listing/không đủ data)
     print(f"🔍 Đang kiểm tra tính hợp lệ của {len(futures_symbols)} mã...", flush=True)
     valid_symbols = []
     invalid_symbols = []
