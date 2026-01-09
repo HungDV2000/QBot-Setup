@@ -13,11 +13,12 @@
 3. [Yêu cầu hệ thống](#yêu-cầu-hệ-thống)
 4. [Cài đặt](#cài-đặt)
 5. [Cấu hình](#cấu-hình)
-6. [Cách sử dụng](#cách-sử-dụng)
-7. [Cấu trúc dự án](#cấu-trúc-dự-án)
-8. [Modules](#modules)
-9. [Troubleshooting](#troubleshooting)
-10. [Changelog](#changelog)
+6. [Hướng dẫn chi tiết](#hướng-dẫn-chi-tiết)
+7. [Cách sử dụng](#cách-sử-dụng)
+8. [Cấu trúc dự án](#cấu-trúc-dự-án)
+9. [Modules](#modules)
+10. [Troubleshooting](#troubleshooting)
+11. [Changelog](#changelog)
 
 ---
 
@@ -192,6 +193,59 @@ top_count = 50
 - Đổi `test_mode = true` khi test lần đầu
 - Kiểm tra kỹ API keys trước khi chạy
 - Backup config gốc trước khi chỉnh sửa
+
+---
+
+## 📚 HƯỚNG DẪN CHI TIẾT
+
+Bot cung cấp hướng dẫn chi tiết trong thư mục `guides/`:
+
+### **🔑 Tạo credentials.json & Cấp quyền Google Sheets**
+
+**Chọn hướng dẫn phù hợp với bạn:**
+
+| File | Mô tả | Thời gian | Độ chi tiết |
+|------|-------|-----------|-------------|
+| **[HUONG_DAN_TAO_CREDENTIALS_GOOGLE_SHEETS.md](./guides/HUONG_DAN_TAO_CREDENTIALS_GOOGLE_SHEETS.md)** | Hướng dẫn chi tiết từng bước | 10-15 phút | ⭐⭐⭐⭐⭐ |
+| **[QUICK_START_CREDENTIALS.md](./guides/QUICK_START_CREDENTIALS.md)** | Hướng dẫn nhanh dạng checklist | 5-7 phút | ⭐⭐⭐ |
+| **[VISUAL_GUIDE_CREDENTIALS.md](./guides/VISUAL_GUIDE_CREDENTIALS.md)** | Hướng dẫn trực quan với ASCII screenshots | 10 phút | ⭐⭐⭐⭐ |
+
+**Nội dung bao gồm:**
+- ✅ Cách tạo Google Cloud Project
+- ✅ Bật Google Sheets API
+- ✅ Tạo Service Account
+- ✅ Download credentials.json
+- ✅ Chia sẻ Google Sheet với bot
+- ✅ Test kết nối
+- ✅ Xử lý 8 lỗi thường gặp
+
+**📌 Lưu ý:** File `credentials.json` là **BẮT BUỘC** để bot có thể đọc/ghi dữ liệu từ Google Sheets.
+
+### **📂 Xem tất cả hướng dẫn**
+
+```bash
+cd guides
+```
+
+Hoặc truy cập: [`guides/README.md`](./guides/README.md)
+
+---
+
+## 🧪 TEST DỮ LIỆU
+
+### **Test HD Update All (Sheet 100 mã)**
+
+Test dữ liệu lấy từ Binance cho sheet "100 mã (50 tăng và 50 giảm)":
+
+```bash
+python test_hd_update_all.py
+```
+
+**Kết quả:**
+- ✅ Log lưu trong: `logs/test_hd_update_all_TIMESTAMP.txt`
+- ✅ Test: Top 50 tăng/giảm, Dữ liệu 29 cột (A-AC), Validation
+- ✅ **Bổ sung cột mới:** Biên độ giá ngày lớn nhất (%) và Ngày
+- ✅ **KHÔNG ghi vào sheet** - chỉ test và log kết quả
 
 ---
 

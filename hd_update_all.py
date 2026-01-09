@@ -228,6 +228,51 @@ def calculate_high_low_30d(pair, timeframe='1d'):
 
     return highest_price, lowest_price
 
+def calculate_max_daily_volatility(pair, lookback_days=365):
+    """
+    Tính biên độ giá ngày lớn nhất trong lịch sử
+    
+    Args:
+        pair: Cặp giao dịch (VD: BTC/USDT:USDT)
+        lookback_days: Số ngày nhìn lại (mặc định 365)
+    
+    Returns:
+        Tuple (max_volatility_percent, max_volatility_date)
+    """
+    try:
+        # Lấy dữ liệu nến 1d
+        now = exchange.milliseconds()
+        start_time = now - (lookback_days * 24 * 60 * 60 * 1000)
+        
+        ohlcv = exchange.fetch_ohlcv(
+            pair,
+            timeframe='1d',
+            since=start_time,
+            limit=lookback_days + 10
+        )
+        
+        if not ohlcv or len(ohlcv) == 0:
+            return 0.0, "N/A"
+        
+        # Chuyển sang DataFrame
+        df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        
+        # Tính biên độ % = (High - Low) / Open * 100
+        df['volatility_percent'] = ((df['high'] - df['low']) / df['open']) * 100
+        
+        # Tìm ngày có biên độ lớn nhất
+        max_idx = df['volatility_percent'].idxmax()
+        max_row = df.loc[max_idx]
+        
+        max_volatility = round(max_row['volatility_percent'], 2)
+        max_date = datetime.fromtimestamp(max_row['timestamp'] / 1000).strftime('%Y-%m-%d')
+        
+        return max_volatility, max_date
+        
+    except Exception as e:
+        logger.error(f"Lỗi tính biên độ giá ngày lớn nhất cho {pair}: {e}", exc_info=True)
+        return 0.0, "ERROR"
+
 
 def get_bien_do_max(pair):
     res = []
@@ -531,6 +576,14 @@ def do_it():
         
         # AA: Marker (trống - có thể dùng sau)
         row.append("")
+        
+        # AB-AC: Biên độ giá ngày lớn nhất (MỚI)
+        try:
+            max_vol, max_date = calculate_max_daily_volatility(symbol, lookback_days=365)
+            row.append(max_vol)   # AB: Biên độ % lớn nhất
+            row.append(max_date)  # AC: Ngày có biên độ lớn nhất
+        except:
+            row.extend([0, "N/A"])
 
         return row
 
@@ -639,7 +692,9 @@ def do_it():
         "Vol 1h",                       # X
         "Vol 4h",                       # Y
         "",                             # Z: Trống
-        "Delist"                        # AA
+        "Delist",                       # AA
+        "Biên độ giá ngày lớn nhất (%)", # AB: Mới
+        "Ngày biên độ lớn nhất"        # AC: Mới
     ]
     
     # Thêm header vào đầu array
