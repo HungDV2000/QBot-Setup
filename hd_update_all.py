@@ -426,6 +426,48 @@ def get_volumes(symbol):
         }
 
     return volumes
+
+def is_valid_for_trading(symbol, tickers):
+    """
+    Kiểm tra mã có đủ dữ liệu lịch sử để giao dịch (loại bỏ mã mới listing hoặc không hoạt động)
+    
+    Args:
+        symbol: Symbol cần kiểm tra (VD: BTC/USDT:USDT)
+        tickers: Dict tickers từ exchange.fetch_tickers()
+    
+    Returns:
+        Tuple (is_valid: bool, reason: str)
+    """
+    try:
+        pair = symbol.replace(":USDT", "")
+        
+        # Check 1: Volume 24h phải > 100k USDT (thanh khoản tối thiểu)
+        vol_24h = tickers[symbol].get('quoteVolume', 0)
+        if vol_24h < 100000:
+            return False, f"Volume 24h quá thấp ({vol_24h:,.0f} USDT < 100k)"
+        
+        # Check 2: BB 1h không được trùng nhau (phải có đủ 20 nến historical)
+        try:
+            bb_1h = get_bb(pair, timeframes=['1h'])
+            # Nếu BB upper ≈ BB lower (sai số < 0.01%) → không có đủ data
+            if abs(bb_1h[0] - bb_1h[1]) < (bb_1h[0] * 0.0001):
+                return False, "Không có đủ historical data (BB1h trùng nhau)"
+        except:
+            return False, "Lỗi lấy BB (có thể mã mới listing)"
+        
+        # Check 3: High/Low 40 ngày phải khác nhau (có biến động)
+        try:
+            high_40d, low_40d = calculate_high_low_30d(symbol, num_days=40)
+            # Nếu High ≈ Low (sai số < 0.01%) → mới listing, chưa dao động
+            if abs(high_40d - low_40d) < (high_40d * 0.0001):
+                return False, "Mã mới listing (High 40d ≈ Low 40d)"
+        except:
+            return False, "Lỗi lấy High/Low 40d (có thể mã mới)"
+        
+        return True, "OK"
+        
+    except Exception as e:
+        return False, f"Lỗi kiểm tra: {e}"
     
 
     
@@ -468,6 +510,30 @@ def do_it():
         print(f"⚠️  CẢNH BÁO: Không có mã nào trong whitelist match với Binance!", flush=True)
         print(f"   💡 Kiểm tra lại sheet 'list' - có thể mã không tồn tại hoặc format sai", flush=True)
         print(f"   📝 Ví dụ 5 mã đúng trên Binance: {all_futures_usdt[:5]}", flush=True)
+    
+    # Bước 3: Lọc các mã hợp lệ (loại bỏ mã mới listing/không đủ data)
+    print(f"🔍 Đang kiểm tra tính hợp lệ của {len(futures_symbols)} mã...", flush=True)
+    valid_symbols = []
+    invalid_symbols = []
+    
+    for symbol in futures_symbols:
+        is_valid, reason = is_valid_for_trading(symbol, tickers)
+        if is_valid:
+            valid_symbols.append(symbol)
+        else:
+            invalid_symbols.append((symbol, reason))
+    
+    print(f"✅ Số mã hợp lệ: {len(valid_symbols)}", flush=True)
+    if invalid_symbols:
+        print(f"⚠️  Số mã bị loại: {len(invalid_symbols)}", flush=True)
+        # Log tối đa 10 mã bị loại để không làm rối log
+        for symbol, reason in invalid_symbols[:10]:
+            print(f"   ❌ {symbol}: {reason}", flush=True)
+        if len(invalid_symbols) > 10:
+            print(f"   ... và {len(invalid_symbols) - 10} mã khác", flush=True)
+    
+    # Cập nhật danh sách symbols thành danh sách hợp lệ
+    futures_symbols = valid_symbols
 
     
 

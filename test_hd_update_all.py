@@ -237,6 +237,49 @@ def get_bb(exchange, pair, timeframes):
         logger.log(f"   ⚠️  Lỗi get_bb: {e}")
         return [0.0] * (len(timeframes) * 2)
 
+def is_valid_for_trading(exchange, symbol, tickers):
+    """
+    Kiểm tra mã có đủ dữ liệu lịch sử để giao dịch (loại bỏ mã mới listing hoặc không hoạt động)
+    
+    Args:
+        exchange: CCXT exchange instance
+        symbol: Symbol cần kiểm tra (VD: BTC/USDT:USDT)
+        tickers: Dict tickers từ exchange.fetch_tickers()
+    
+    Returns:
+        Tuple (is_valid: bool, reason: str)
+    """
+    try:
+        pair = symbol.replace(":USDT", "")
+        
+        # Check 1: Volume 24h phải > 100k USDT (thanh khoản tối thiểu)
+        vol_24h = tickers[symbol].get('quoteVolume', 0)
+        if vol_24h < 100000:
+            return False, f"Vol 24h < 100k ({vol_24h:,.0f})"
+        
+        # Check 2: BB 1h không được trùng nhau (phải có đủ 20 nến historical)
+        try:
+            bb_1h = get_bb(exchange, pair, timeframes=['1h'])
+            # Nếu BB upper ≈ BB lower (sai số < 0.01%) → không có đủ data
+            if abs(bb_1h[0] - bb_1h[1]) < (bb_1h[0] * 0.0001):
+                return False, "BB1h trùng nhau (không đủ data)"
+        except:
+            return False, "Lỗi lấy BB (mã mới?)"
+        
+        # Check 3: High/Low 40 ngày phải khác nhau (có biến động)
+        try:
+            high_40d, low_40d = calculate_high_low_30d(exchange, symbol, num_days=40)
+            # Nếu High ≈ Low (sai số < 0.01%) → mới listing, chưa dao động
+            if abs(high_40d - low_40d) < (high_40d * 0.0001):
+                return False, "High 40d ≈ Low 40d (mới listing)"
+        except:
+            return False, "Lỗi lấy High/Low 40d"
+        
+        return True, "OK"
+        
+    except Exception as e:
+        return False, f"Lỗi: {e}"
+
 # ============================================================================
 # TEST 1: LẤY TOP 50 TĂNG VÀ GIẢM
 # ============================================================================
@@ -267,8 +310,32 @@ def test_get_top_symbols(exchange):
         logger.log(f"✅ Tổng số futures USDT trên Binance: {len(futures_symbols)}")
         logger.log(f"   💡 Test này BỎ QUA whitelist - lấy trực tiếp từ Binance")
         
+        # Lọc các mã hợp lệ (loại bỏ mã mới listing/không đủ data)
+        logger.log("\n3️⃣  Đang kiểm tra tính hợp lệ của symbols...")
+        valid_symbols = []
+        invalid_symbols = []
+        
+        for symbol in futures_symbols:
+            is_valid, reason = is_valid_for_trading(exchange, symbol, tickers)
+            if is_valid:
+                valid_symbols.append(symbol)
+            else:
+                invalid_symbols.append((symbol, reason))
+        
+        logger.log(f"✅ Số mã hợp lệ: {len(valid_symbols)}")
+        if invalid_symbols:
+            logger.log(f"⚠️  Số mã bị loại: {len(invalid_symbols)}")
+            # Log tối đa 10 mã bị loại
+            for symbol, reason in invalid_symbols[:10]:
+                logger.log(f"   ❌ {symbol}: {reason}")
+            if len(invalid_symbols) > 10:
+                logger.log(f"   ... và {len(invalid_symbols) - 10} mã khác")
+        
+        # Cập nhật danh sách thành mã hợp lệ
+        futures_symbols = valid_symbols
+        
         # Lấy top 50 giảm
-        logger.log("\n3️⃣  Đang lấy top 50 giảm...")
+        logger.log("\n4️⃣  Đang lấy top 50 giảm...")
         list_giam_nhieu_nhat = sorted(futures_symbols, key=lambda x: tickers[x]['percentage'])[:50]
         logger.log(f"✅ Top 50 giảm:")
         for i, symbol in enumerate(list_giam_nhieu_nhat[:5], 1):  # Log 5 mã đầu
@@ -276,7 +343,7 @@ def test_get_top_symbols(exchange):
         logger.log(f"   ... (và {len(list_giam_nhieu_nhat) - 5} mã khác)")
         
         # Lấy top 50 tăng
-        logger.log("\n4️⃣  Đang lấy top 50 tăng...")
+        logger.log("\n5️⃣  Đang lấy top 50 tăng...")
         list_tang_nhieu_nhat = sorted(futures_symbols, reverse=True, key=lambda x: tickers[x]['percentage'])[:50]
         logger.log(f"✅ Top 50 tăng:")
         for i, symbol in enumerate(list_tang_nhieu_nhat[:5], 1):  # Log 5 mã đầu
