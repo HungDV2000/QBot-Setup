@@ -24,19 +24,32 @@ os.system(f"title {file_name} - {cst.key_name}")
 logs_dir = Path('logs')
 logs_dir.mkdir(exist_ok=True)
 
-# Chỉ log ERROR vào logs/error.log
+# Tạo tên file log với timestamp: hd_update_all_dd_mm_yyyy_h_m_s.log
+log_timestamp = datetime.now().strftime('%d_%m_%Y_%H_%M_%S')
+log_filename = logs_dir / f'hd_update_all_{log_timestamp}.log'
+
+# Cải thiện logging với timestamp và UTF-8 encoding
 logging.basicConfig(
-    level=logging.ERROR,  # Chỉ log ERROR
+    level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+    datefmt='%Y-%m-%d %H:%M:%S',
+    encoding='utf-8'
 )
 logger = logging.getLogger(__name__)
-# Thêm file handler cho error.log
+
+# Tạo file handler với tên file động
+file_handler = logging.FileHandler(log_filename, encoding='utf-8')
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
+file_handler.setLevel(logging.INFO)
+logger.addHandler(file_handler)
+
+# Thêm file handler cho error.log (giữ lại cho tương thích)
 error_log_path = logs_dir / 'error.log'
 error_handler = logging.FileHandler(error_log_path, encoding='utf-8')
 error_handler.setLevel(logging.ERROR)
 error_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(name)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
 logger.addHandler(error_handler)
+
 is_test_mode = False
 
 calculate_high_low_day_total = 40
@@ -474,17 +487,24 @@ def is_valid_for_trading(symbol, tickers):
 
 def do_it():
     print(f"-------------------------------start scan all: {datetime.now()}-------------------------------------", flush=True)
+    logger.info("========================================")
+    logger.info("BẮT ĐẦU CẬP NHẬT DỮ LIỆU SHEET 100 MÃ")
+    logger.info("========================================")
     start_time = time.time()
 
     # Fix: Khởi tạo data_collector ngay đầu hàm
     data_collector = get_data_collector(exchange)
+    logger.info("Đã khởi tạo data_collector")
     
+    logger.info("Đang lấy tickers từ Binance...")
     tickers = exchange.fetch_tickers()
+    logger.info(f"Đã lấy {len(tickers)} tickers từ Binance")
 
     
     
 
     # Bước 1: Lấy tất cả futures USDT
+    logger.info("Bước 1: Lọc symbols Futures USDT...")
     all_futures_usdt = [
         symbol for symbol in tickers.keys()
         if '/USDT' in symbol 
@@ -492,25 +512,33 @@ def do_it():
         and tickers[symbol].get('percentage') is not None
     ]
     print(f"📊 Tổng số futures USDT trên Binance: {len(all_futures_usdt)}", flush=True)
+    logger.info(f"Tổng số futures USDT trên Binance: {len(all_futures_usdt)}")
     
     # Bước 2: Đọc whitelist (với error handling)
+    logger.info("Bước 2: Đọc whitelist từ sheet 'list'...")
     try:
         white_list = set(gg_sheet_factory.get_white_list())
         print(f"📝 Whitelist từ sheet 'list': {len(white_list)} mã", flush=True)
+        logger.info(f"Whitelist từ sheet 'list': {len(white_list)} mã")
         if white_list:
             print(f"   Nội dung (10 mã đầu): {list(white_list)[:10]}", flush=True)
+            logger.info(f"Nội dung whitelist (10 mã đầu): {list(white_list)[:10]}")
     except Exception as e:
         print(f"⚠️  Không đọc được whitelist từ sheet 'list': {e}", flush=True)
         print(f"   💡 Sẽ sử dụng TẤT CẢ MÃ từ Binance", flush=True)
+        logger.warning(f"Không đọc được whitelist từ sheet 'list': {e}")
+        logger.info("Sẽ sử dụng TẤT CẢ MÃ từ Binance")
         white_list = set()  # Whitelist rỗng = lấy tất cả
     
     # Bước 3: Lọc theo whitelist (nếu có)
+    logger.info("Bước 3: Lọc theo whitelist...")
     if white_list:
         futures_symbols = [
             symbol for symbol in all_futures_usdt
             if symbol in white_list
         ]
         print(f"✅ Số mã sau khi lọc whitelist: {len(futures_symbols)}", flush=True)
+        logger.info(f"Số mã sau khi lọc whitelist: {len(futures_symbols)}")
         
         # Warning nếu không có mã nào match
         if len(futures_symbols) == 0:
@@ -518,13 +546,16 @@ def do_it():
             print(f"   💡 Kiểm tra lại sheet 'list' - có thể mã không tồn tại hoặc format sai", flush=True)
             print(f"   📝 Ví dụ 5 mã đúng trên Binance: {all_futures_usdt[:5]}", flush=True)
             print(f"   🔄 Chuyển sang dùng TẤT CẢ MÃ...", flush=True)
+            logger.warning("Không có mã nào trong whitelist match với Binance - chuyển sang dùng TẤT CẢ MÃ")
             futures_symbols = all_futures_usdt  # Fallback: dùng tất cả mã
     else:
         # Whitelist trống → dùng tất cả mã
         print(f"💡 Whitelist trống → Sử dụng TẤT CẢ {len(all_futures_usdt)} mã từ Binance", flush=True)
+        logger.info(f"Whitelist trống → Sử dụng TẤT CẢ {len(all_futures_usdt)} mã từ Binance")
         futures_symbols = all_futures_usdt
     
     # Bước 4: Lọc các mã hợp lệ (loại bỏ mã mới listing/không đủ data)
+    logger.info(f"Bước 4: Kiểm tra tính hợp lệ của {len(futures_symbols)} mã...")
     print(f"🔍 Đang kiểm tra tính hợp lệ của {len(futures_symbols)} mã...", flush=True)
     valid_symbols = []
     invalid_symbols = []
@@ -537,16 +568,21 @@ def do_it():
             invalid_symbols.append((symbol, reason))
     
     print(f"✅ Số mã hợp lệ: {len(valid_symbols)}", flush=True)
+    logger.info(f"Số mã hợp lệ: {len(valid_symbols)}")
     if invalid_symbols:
         print(f"⚠️  Số mã bị loại: {len(invalid_symbols)}", flush=True)
+        logger.info(f"Số mã bị loại: {len(invalid_symbols)}")
         # Log tối đa 10 mã bị loại để không làm rối log
         for symbol, reason in invalid_symbols[:10]:
             print(f"   ❌ {symbol}: {reason}", flush=True)
+            logger.debug(f"Mã bị loại: {symbol} - {reason}")
         if len(invalid_symbols) > 10:
             print(f"   ... và {len(invalid_symbols) - 10} mã khác", flush=True)
+            logger.info(f"Và {len(invalid_symbols) - 10} mã khác bị loại")
     
     # Cập nhật danh sách symbols thành danh sách hợp lệ
     futures_symbols = valid_symbols
+    logger.info(f"Tiếp tục xử lý với {len(futures_symbols)} mã hợp lệ")
 
     
 
@@ -680,7 +716,7 @@ def do_it():
 
 
     list_them = ["BTC/USDT:USDT", "BTCDOM/USDT:USDT"]
-    
+    logger.info("Bước 5: Tạo top lists...")
 
     tab_100_ma_2d_arr = []
     title1 = f"Top {cst.top_count} có % giảm giá nhiều nhất trong 24h"
@@ -690,6 +726,7 @@ def do_it():
     
     list_giam_nhieu_nhat = sorted(futures_symbols, key=lambda x: tickers[x]['percentage'])[:cst.top_count]
     list_tang_nhieu_nhat = sorted(futures_symbols, reverse=True, key=lambda x: tickers[x]['percentage'])[0:cst.top_count]
+    logger.info(f"Đã tạo top {cst.top_count} giảm và top {cst.top_count} tăng")
 
     # Bỏ tính toán Top 50 gần đỉnh/đáy (không cần trong bản đơn giản)
 
@@ -705,9 +742,11 @@ def do_it():
         json.dump(list_all, file)
 
 
-    
+    logger.info("Bước 6: Lấy dữ liệu cho từng symbol...")
     tab_100_ma_2d_arr.append([title1])
-    for symbol in list_giam_nhieu_nhat:
+    logger.info(f"Đang lấy dữ liệu cho {len(list_giam_nhieu_nhat)} mã giảm...")
+    for idx, symbol in enumerate(list_giam_nhieu_nhat, 1):
+        logger.debug(f"[{idx}/{len(list_giam_nhieu_nhat)}] Đang xử lý {symbol}")
         tab_100_ma_2d_arr.append(get_row_result(symbol))
         
         if is_test_mode:
@@ -715,28 +754,32 @@ def do_it():
 
     tab_100_ma_2d_arr.append([title2])
     index = 0
-
+    logger.info(f"Đang lấy dữ liệu cho {len(list_tang_nhieu_nhat)} mã tăng...")
     
     for symbol in  list_tang_nhieu_nhat:
         if is_test_mode:
             break
         index +=1
-        
+        logger.debug(f"[{index}/{len(list_tang_nhieu_nhat)}] Đang xử lý {symbol}")
         
         tab_100_ma_2d_arr.append(get_row_result(symbol))
     
-
+    logger.info("Hoàn thành lấy dữ liệu cho top lists")
 
     
 
+    logger.info("Đang lấy dữ liệu cho BTC và BTCDOM...")
     for symbol in list_them:
+        logger.debug(f"Đang xử lý {symbol}")
         tab_100_ma_2d_arr =  [get_row_result(symbol)]  + tab_100_ma_2d_arr
 
     # Lấy thông tin tài khoản (data_collector đã được khởi tạo ở đầu hàm)
+    logger.info("Đang lấy thông tin tài khoản...")
     balance = exchange.fetch_balance()
     totalMarginBalance= round(float(balance["info"]["totalMarginBalance"]),4)
     totalCrossUnPnl= round(float(balance["info"]["totalCrossUnPnl"]),4)
     totalWalletBalance= round(float(balance["info"]["totalWalletBalance"]),4)
+    logger.info(f"Margin: {totalMarginBalance}, Wallet: {totalWalletBalance}, PnL: {totalCrossUnPnl}")
     
     # Không cần Funding Rate trong bản đơn giản
 
@@ -796,24 +839,39 @@ def do_it():
     time_string = current_time.strftime("%Y-%m-%d %H:%M:%S")
     
     print(f"Tổng số dòng dữ liệu: {len(tab_100_ma_2d_arr)}", flush=True)
+    logger.info(f"Tổng số dòng dữ liệu: {len(tab_100_ma_2d_arr)}")
     
     # Ghi tất cả dữ liệu từ hàng 1
+    logger.info("Bước 7: Ghi dữ liệu vào Google Sheet...")
     gg_sheet_factory.update_multi(gg_sheet_factory.tab_list_all_ma, -1, tab_100_ma_2d_arr, "A")
+    logger.info("Đã ghi dữ liệu vào sheet")
     
     # Ghi timestamp vào A1 (ghi đè lên header)
     gg_sheet_factory.update_single_value(gg_sheet_factory.tab_list_all_ma, "A1", time_string)
+    logger.info(f"Đã ghi timestamp vào A1: {time_string}")
 
     
 
     end_time = time.time()
     execution_time = end_time - start_time
     print("Thời gian thực thi:", execution_time, "giây", flush=True)
+    logger.info("========================================")
+    logger.info(f"HOÀN TẤT CẬP NHẬT - Thời gian: {execution_time:.2f} giây")
+    logger.info(f"Tổng số mã đã xử lý: {len(list_giam_nhieu_nhat) + len(list_tang_nhieu_nhat) + len(list_them)}")
+    logger.info("========================================")
  
 
 gg_sheet_factory.init_sheet_api()
 
-
-
+# Log thông tin khởi động
+logger.info("╔════════════════════════════════════════════════════════════════╗")
+logger.info("║         HD_UPDATE_ALL - BOT CẬP NHẬT SHEET 100 MÃ             ║")
+logger.info("╚════════════════════════════════════════════════════════════════╝")
+logger.info(f"Log file: {log_filename}")
+logger.info(f"Delay giữa các lần cập nhật: {cst.delay_update_all} giây")
+logger.info(f"Top count: {cst.top_count}")
+logger.info(f"Test mode: {is_test_mode}")
+logger.info("")
 
 
 
@@ -833,7 +891,11 @@ while True:
         traceback.print_exc()
 
     if is_test_mode:
+        logger.info("Test mode - Dừng bot")
         break
+    
+    logger.info(f"Chờ {cst.delay_update_all} giây trước lần cập nhật tiếp theo...")
+    logger.info("")
     time.sleep(cst.delay_update_all)
 
 
