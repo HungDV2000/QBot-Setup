@@ -779,7 +779,9 @@ def do_it():
     print(f"📉 BẮT ĐẦU XỬ LÝ {len(list_giam_nhieu_nhat)} MÃ GIẢM GIÁ", flush=True)
     print(f"{'='*60}\n", flush=True)
     
-    tab_100_ma_2d_arr.append([title1])  # Dòng 3: Tiêu đề
+    # Dòng 3: Title GIẢM (cột A) + 28 cột trống (B-AC)
+    title_row_giam = [title1] + [""] * 28  # 1 title + 28 empty = 29 cột
+    tab_100_ma_2d_arr.append(title_row_giam)
     logger.info(f"Đang lấy dữ liệu cho {len(list_giam_nhieu_nhat)} mã giảm...")
     
     giam_data = []
@@ -812,7 +814,9 @@ def do_it():
     print(f"📈 BẮT ĐẦU XỬ LÝ {len(list_tang_nhieu_nhat)} MÃ TĂNG GIÁ", flush=True)
     print(f"{'='*60}\n", flush=True)
     
-    tab_100_ma_2d_arr.append([title2])  # Dòng 54: Tiêu đề
+    # Dòng 54: Title TĂNG (cột A) + 28 cột trống (B-AC)
+    title_row_tang = [title2] + [""] * 28  # 1 title + 28 empty = 29 cột
+    tab_100_ma_2d_arr.append(title_row_tang)
     logger.info(f"Đang lấy dữ liệu cho {len(list_tang_nhieu_nhat)} mã tăng...")
     
     tang_data = []
