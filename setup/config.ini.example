@@ -17,18 +17,15 @@ top_count= 50
 time_gap_do_it = 0
 bot_token = 8431813976:AAHtvnWT3ZTLvtgqlaqYOgyQW-l0bVBwqbI
 chat_id =  -4654774917
+prefix_channel = 'QBOT'
 
 ;Chỉnh sửa các config cho binance phía dưới sau đó thì lưu file lại
-key_name = MAXBirkinCatwin1Pub
-;key_binance = SDhDjNRaEjxCR9HPYQvBZJo3rTZMgndomLmQgweeIVrp3N0CSmy5GKQxoIFHZJc0
-;secret_binance = jstDThPRBZvUmPdLNwgnqYkSeFwvYfaQchUaam2y9B2iiRsncAzTIY9pR5cSTwE8
+key_name = QBOt
 key_binance = MQ1XTP7gLaWZfxbB2juPg5OUT2E5ADhgJMKL8FtkJuPPbgCC5jcfMHNG2mRAnQ66
 secret_binance = 72PcBrF09A6Hs5l5YZ4ST3J5GkACcwCoJBBm7jA2tb4Q8Y1zImRFSueZ4GDTIHEG
 
 ; file gốc
-spreadsheet_id = 1rqh8FoE_9BR4SQsxv5aSOJwLqujeV7s8yYptlIWvnCc
-; 12Jm6lPdYcLysR6ZyrdFVaPZz3y1sS7nniNLHDdeXtaQ (test)
-; 1JCWoxl8UQZrjWGBCTTswxdZMw0xqSbIKCiaDB1bKs38 (production)
+spreadsheet_id = 1Xbbbe0bWjCIqnqZpdRJvOckF8XYYUv2oxVPdSVMttHM
 
 ;để true nếu không muốn vào lệnh thật mà chỉ in ra (true hoặc false)
 test_mode = false
