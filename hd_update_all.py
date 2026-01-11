@@ -706,7 +706,7 @@ def do_it():
         
         # AB-AC: Biên độ giá ngày lớn nhất (MỚI)
         try:
-            max_vol, max_date = calculate_max_daily_volatility(symbol, lookback_days=365)
+            max_vol, max_date = calculate_max_daily_volatility(pair, lookback_days=365)  # ✅ FIX: dùng pair thay vì symbol
             row.append(max_vol)   # AB: Biên độ % lớn nhất
             row.append(max_date)  # AC: Ngày có biên độ lớn nhất
         except:
