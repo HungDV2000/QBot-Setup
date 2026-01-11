@@ -486,7 +486,10 @@ def is_valid_for_trading(symbol, tickers):
     
 
 def do_it():
-    print(f"-------------------------------start scan all: {datetime.now()}-------------------------------------", flush=True)
+    print(f"\n{'='*80}", flush=True)
+    print(f"🚀 BẮT ĐẦU CẬP NHẬT SHEET 100 MÃ - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", flush=True)
+    print(f"{'='*80}\n", flush=True)
+    
     logger.info("========================================")
     logger.info("BẮT ĐẦU CẬP NHẬT DỮ LIỆU SHEET 100 MÃ")
     logger.info("========================================")
@@ -607,7 +610,7 @@ def do_it():
         
         price = tickers[symbol]['last']
 
-        print(symbol, tickers[symbol]['percentage'], price, flush=True)
+        print(f"🔄 {symbol} - %24h: {tickers[symbol]['percentage']:.2f}%, giá: {price}", flush=True)
         pair= symbol.replace(":USDT", "")
         row = [pair, tickers[symbol]['percentage'], price]
         
@@ -706,10 +709,15 @@ def do_it():
         
         # AB-AC: Biên độ giá ngày lớn nhất (MỚI)
         try:
-            max_vol, max_date = calculate_max_daily_volatility(pair, lookback_days=365)  # ✅ FIX: dùng pair thay vì symbol
+            logger.debug(f"[{pair}] Đang tính biên độ giá ngày lớn nhất...")
+            max_vol, max_date = calculate_max_daily_volatility(pair, lookback_days=365)
+            logger.info(f"✅ [{pair}] Biên độ lớn nhất: {max_vol}% vào {max_date}")
+            print(f"   └─ AB={max_vol}%, AC={max_date}", flush=True)
             row.append(max_vol)   # AB: Biên độ % lớn nhất
             row.append(max_date)  # AC: Ngày có biên độ lớn nhất
-        except:
+        except Exception as e:
+            logger.error(f"❌ [{pair}] Lỗi tính biên độ giá ngày: {e}", exc_info=True)
+            print(f"   └─ ❌ Lỗi AB-AC: {e}", flush=True)
             row.extend([0, "N/A"])
 
         return row
@@ -723,10 +731,32 @@ def do_it():
     title2 = f"Top {cst.top_count} có % tăng giá nhiều nhất trong 24h"
 
     
+    # Lọc RIÊNG các mã giảm (% âm) và mã tăng (% dương)
+    giam_symbols = [s for s in futures_symbols if tickers[s]['percentage'] < 0]
+    tang_symbols = [s for s in futures_symbols if tickers[s]['percentage'] > 0]
     
-    list_giam_nhieu_nhat = sorted(futures_symbols, key=lambda x: tickers[x]['percentage'])[:cst.top_count]
-    list_tang_nhieu_nhat = sorted(futures_symbols, reverse=True, key=lambda x: tickers[x]['percentage'])[0:cst.top_count]
-    logger.info(f"Đã tạo top {cst.top_count} giảm và top {cst.top_count} tăng")
+    print(f"📊 Phân loại: {len(giam_symbols)} mã giảm, {len(tang_symbols)} mã tăng", flush=True)
+    logger.info(f"Phân loại: {len(giam_symbols)} mã giảm, {len(tang_symbols)} mã tăng")
+    
+    # Top GIẢM: Sort % tăng dần (% âm nhất lên trước), lấy tối đa 50
+    list_giam_nhieu_nhat = sorted(giam_symbols, key=lambda x: tickers[x]['percentage'])[:cst.top_count]
+    
+    # Top TĂNG: Sort % giảm dần (% dương nhất lên trước), lấy tối đa 50
+    list_tang_nhieu_nhat = sorted(tang_symbols, reverse=True, key=lambda x: tickers[x]['percentage'])[:cst.top_count]
+    
+    # Log range với error handling
+    if len(list_giam_nhieu_nhat) > 0:
+        print(f"✅ Top giảm: {len(list_giam_nhieu_nhat)} mã (từ {tickers[list_giam_nhieu_nhat[0]]['percentage']:.2f}% đến {tickers[list_giam_nhieu_nhat[-1]]['percentage']:.2f}%)", flush=True)
+    else:
+        print(f"⚠️  Không có mã giảm giá!", flush=True)
+    
+    if len(list_tang_nhieu_nhat) > 0:
+        print(f"✅ Top tăng: {len(list_tang_nhieu_nhat)} mã (từ {tickers[list_tang_nhieu_nhat[0]]['percentage']:.2f}% đến {tickers[list_tang_nhieu_nhat[-1]]['percentage']:.2f}%)", flush=True)
+    else:
+        print(f"⚠️  Không có mã tăng giá!", flush=True)
+    
+    logger.info(f"Top giảm: {len(list_giam_nhieu_nhat)} mã")
+    logger.info(f"Top tăng: {len(list_tang_nhieu_nhat)} mã")
 
     # Bỏ tính toán Top 50 gần đỉnh/đáy (không cần trong bản đơn giản)
 
@@ -743,35 +773,73 @@ def do_it():
 
 
     logger.info("Bước 6: Lấy dữ liệu cho từng symbol...")
-    tab_100_ma_2d_arr.append([title1])
+    
+    # PHẦN 1: TOP 50 GIẢM (dòng 3-53)
+    print(f"\n{'='*60}", flush=True)
+    print(f"📉 BẮT ĐẦU XỬ LÝ {len(list_giam_nhieu_nhat)} MÃ GIẢM GIÁ", flush=True)
+    print(f"{'='*60}\n", flush=True)
+    
+    tab_100_ma_2d_arr.append([title1])  # Dòng 3: Tiêu đề
     logger.info(f"Đang lấy dữ liệu cho {len(list_giam_nhieu_nhat)} mã giảm...")
+    
+    giam_data = []
     for idx, symbol in enumerate(list_giam_nhieu_nhat, 1):
+        print(f"📉 [{idx}/{len(list_giam_nhieu_nhat)}] Xử lý mã giảm: {symbol}", flush=True)
         logger.debug(f"[{idx}/{len(list_giam_nhieu_nhat)}] Đang xử lý {symbol}")
-        tab_100_ma_2d_arr.append(get_row_result(symbol))
+        giam_data.append(get_row_result(symbol))
         
         if is_test_mode:
             break
-
-    tab_100_ma_2d_arr.append([title2])
-    index = 0
+    
+    # Thêm data giảm vào array
+    tab_100_ma_2d_arr.extend(giam_data)
+    print(f"✅ Đã lấy {len(giam_data)} mã giảm", flush=True)
+    
+    # PADDING: Thêm dòng trống để đủ 50 dòng (dòng 4-53)
+    empty_row = [""] * 29  # 29 cột (A-AC)
+    rows_to_pad = cst.top_count - len(giam_data)
+    if rows_to_pad > 0:
+        if len(giam_data) < cst.top_count:
+            print(f"⚠️  Chỉ có {len(giam_data)}/{cst.top_count} mã giảm trên thị trường", flush=True)
+            logger.warning(f"Chỉ có {len(giam_data)}/{cst.top_count} mã giảm")
+        print(f"   └─ Padding {rows_to_pad} dòng trống để cố định vị trí (dòng {4+len(giam_data)} → 53)", flush=True)
+        logger.info(f"Padding {rows_to_pad} dòng trống cho phần giảm")
+        for _ in range(rows_to_pad):
+            tab_100_ma_2d_arr.append(empty_row)
+    
+    # PHẦN 2: TOP 50 TĂNG (dòng 54-104)
+    print(f"\n{'='*60}", flush=True)
+    print(f"📈 BẮT ĐẦU XỬ LÝ {len(list_tang_nhieu_nhat)} MÃ TĂNG GIÁ", flush=True)
+    print(f"{'='*60}\n", flush=True)
+    
+    tab_100_ma_2d_arr.append([title2])  # Dòng 54: Tiêu đề
     logger.info(f"Đang lấy dữ liệu cho {len(list_tang_nhieu_nhat)} mã tăng...")
     
-    for symbol in  list_tang_nhieu_nhat:
+    tang_data = []
+    for idx, symbol in enumerate(list_tang_nhieu_nhat, 1):
         if is_test_mode:
             break
-        index +=1
-        logger.debug(f"[{index}/{len(list_tang_nhieu_nhat)}] Đang xử lý {symbol}")
-        
-        tab_100_ma_2d_arr.append(get_row_result(symbol))
+        print(f"📈 [{idx}/{len(list_tang_nhieu_nhat)}] Xử lý mã tăng: {symbol}", flush=True)
+        logger.debug(f"[{idx}/{len(list_tang_nhieu_nhat)}] Đang xử lý {symbol}")
+        tang_data.append(get_row_result(symbol))
+    
+    # Thêm data tăng vào array
+    tab_100_ma_2d_arr.extend(tang_data)
+    print(f"✅ Đã lấy {len(tang_data)} mã tăng", flush=True)
+    
+    # PADDING: Thêm dòng trống để đủ 50 dòng (dòng 55-104)
+    rows_to_pad = cst.top_count - len(tang_data)
+    if rows_to_pad > 0:
+        if len(tang_data) < cst.top_count:
+            print(f"⚠️  Chỉ có {len(tang_data)}/{cst.top_count} mã tăng trên thị trường", flush=True)
+            logger.warning(f"Chỉ có {len(tang_data)}/{cst.top_count} mã tăng")
+        print(f"   └─ Padding {rows_to_pad} dòng trống để cố định vị trí (dòng {55+len(tang_data)} → 104)", flush=True)
+        logger.info(f"Padding {rows_to_pad} dòng trống cho phần tăng")
+        for _ in range(rows_to_pad):
+            tab_100_ma_2d_arr.append(empty_row)
     
     logger.info("Hoàn thành lấy dữ liệu cho top lists")
-
-    
-
-    logger.info("Đang lấy dữ liệu cho BTC và BTCDOM...")
-    for symbol in list_them:
-        logger.debug(f"Đang xử lý {symbol}")
-        tab_100_ma_2d_arr =  [get_row_result(symbol)]  + tab_100_ma_2d_arr
+    logger.info(f"Tổng số dòng sau khi padding: {len(tab_100_ma_2d_arr)} (mong đợi: 2 title + 100 data = 102 dòng)")
 
     # Lấy thông tin tài khoản (data_collector đã được khởi tạo ở đầu hàm)
     logger.info("Đang lấy thông tin tài khoản...")
@@ -838,15 +906,18 @@ def do_it():
     current_time = datetime.now()
     time_string = current_time.strftime("%Y-%m-%d %H:%M:%S")
     
-    print(f"Tổng số dòng dữ liệu: {len(tab_100_ma_2d_arr)}", flush=True)
+    print(f"📊 Tổng số dòng dữ liệu: {len(tab_100_ma_2d_arr)}", flush=True)
     logger.info(f"Tổng số dòng dữ liệu: {len(tab_100_ma_2d_arr)}")
     
     # Ghi tất cả dữ liệu từ hàng 1
+    print(f"💾 Đang ghi {len(tab_100_ma_2d_arr)} dòng vào Google Sheet...", flush=True)
     logger.info("Bước 7: Ghi dữ liệu vào Google Sheet...")
     gg_sheet_factory.update_multi(gg_sheet_factory.tab_list_all_ma, -1, tab_100_ma_2d_arr, "A")
+    print(f"✅ Đã ghi xong dữ liệu vào sheet!", flush=True)
     logger.info("Đã ghi dữ liệu vào sheet")
     
     # Ghi timestamp vào A1 (ghi đè lên header)
+    print(f"🕐 Ghi timestamp {time_string} vào A1...", flush=True)
     gg_sheet_factory.update_single_value(gg_sheet_factory.tab_list_all_ma, "A1", time_string)
     logger.info(f"Đã ghi timestamp vào A1: {time_string}")
 
@@ -854,14 +925,29 @@ def do_it():
 
     end_time = time.time()
     execution_time = end_time - start_time
-    print("Thời gian thực thi:", execution_time, "giây", flush=True)
+    print("=" * 80, flush=True)
+    print(f"✅ HOÀN TẤT CẬP NHẬT - Thời gian: {execution_time:.2f} giây", flush=True)
+    print(f"📊 Tổng số mã đã xử lý: {len(giam_data)} giảm + {len(tang_data)} tăng = {len(giam_data) + len(tang_data)} mã", flush=True)
+    print("=" * 80, flush=True)
     logger.info("========================================")
     logger.info(f"HOÀN TẤT CẬP NHẬT - Thời gian: {execution_time:.2f} giây")
-    logger.info(f"Tổng số mã đã xử lý: {len(list_giam_nhieu_nhat) + len(list_tang_nhieu_nhat) + len(list_them)}")
+    logger.info(f"Tổng số mã đã xử lý: {len(giam_data)} giảm + {len(tang_data)} tăng")
     logger.info("========================================")
  
 
 gg_sheet_factory.init_sheet_api()
+
+# Banner khởi động
+print("\n" + "="*80, flush=True)
+print("║" + " "*78 + "║", flush=True)
+print("║" + "  HD_UPDATE_ALL - BOT CẬP NHẬT SHEET 100 MÃ".center(78) + "║", flush=True)
+print("║" + " "*78 + "║", flush=True)
+print("="*80, flush=True)
+print(f"📄 Log file: {log_filename}", flush=True)
+print(f"⏱️  Delay: {cst.delay_update_all}s giữa các lần cập nhật", flush=True)
+print(f"🔢 Top count: {cst.top_count} mã giảm + {cst.top_count} mã tăng", flush=True)
+print(f"🧪 Test mode: {'BẬT' if is_test_mode else 'TẮT'}", flush=True)
+print("="*80 + "\n", flush=True)
 
 # Log thông tin khởi động
 logger.info("╔════════════════════════════════════════════════════════════════╗")
@@ -894,9 +980,22 @@ while True:
         logger.info("Test mode - Dừng bot")
         break
     
+    # Countdown với output realtime
+    print(f"\n⏳ Chờ {cst.delay_update_all} giây trước lần cập nhật tiếp theo...", flush=True)
     logger.info(f"Chờ {cst.delay_update_all} giây trước lần cập nhật tiếp theo...")
+    
+    # Hiển thị countdown mỗi 30s
+    remaining = cst.delay_update_all
+    while remaining > 0:
+        if remaining % 30 == 0 or remaining <= 10:
+            print(f"   ⏱️  Còn {remaining}s...", flush=True)
+        time.sleep(1)
+        remaining -= 1
+    
+    print(f"\n{'='*80}", flush=True)
+    print(f"🔄 BẮT ĐẦU SCAN MỚI...", flush=True)
+    print(f"{'='*80}\n", flush=True)
     logger.info("")
-    time.sleep(cst.delay_update_all)
 
 
 
