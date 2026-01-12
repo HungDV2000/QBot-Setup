@@ -1,24 +1,23 @@
 import gg_sheet_factory
 import ccxt 
 import time
-import datetime
-from enum import Enum
-import numpy as np
 from datetime import datetime, timedelta
-import cst
-import time
-import logging
-import pandas as pd
-import ctypes
-import utils
 import numpy as np
-import json
-
+import cst
+import logging
+import ctypes
+import platform
 import os
 from pathlib import Path
 
-file_name = os.path.basename(os.path.abspath(__file__))  
-os.system(f"title {file_name} - {cst.key_name}")
+file_name = os.path.basename(os.path.abspath(__file__))
+
+# Set title theo OS (Windows/macOS/Linux)
+if platform.system() == "Windows":
+    os.system(f"title {file_name} - {cst.key_name}")
+else:
+    # macOS/Linux: set terminal title bằng ANSI escape codes
+    print(f"\033]0;{file_name} - {cst.key_name}\007", end='', flush=True)
 
 # Tạo thư mục logs/ nếu chưa có
 logs_dir = Path('logs')
@@ -31,15 +30,13 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 logger = logging.getLogger(__name__)
+
 # Thêm file handler cho error.log
 error_log_path = logs_dir / 'error.log'
 error_handler = logging.FileHandler(error_log_path, encoding='utf-8')
 error_handler.setLevel(logging.ERROR)
 error_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(name)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
 logger.addHandler(error_handler)
-
-def set_cmd_title(title):
-    ctypes.windll.kernel32.SetConsoleTitleW(title)
 
 exchange_id = 'binance'
 exchange_class = getattr(ccxt, exchange_id)
@@ -52,7 +49,6 @@ exchange = exchange_class({
     }
 })
 exchange.setSandboxMode(False)
-   
 
 def do_it():
     print(f"-------------------------------start scan giá: {datetime.now()}-------------------------------------", flush=True)
@@ -81,65 +77,76 @@ def do_it():
         print("Không thể lấy dữ liệu tickers, bỏ qua lần này", flush=True)
         return
 
-    
-    
-    
-    
     list_all = []
-
     sheet_dat_lenh = gg_sheet_factory.get_100_ma(f"A3:A500")
     
     for d in sheet_dat_lenh:
         try:
-            sym = d[0]
+            if not d or not d[0]:  # Kiểm tra dòng trống hoặc cell trống
+                continue  # Bỏ qua dòng trống nhưng TIẾP TỤC scan (không break)
             
-            if sym:
-                list_all.append(sym+":USDT")
-                print(sym, flush=True)
-            else:
-                break
+            sym = d[0].strip()
             
+            # Chuẩn hóa symbol format
+            if not sym.endswith(":USDT"):
+                if sym.endswith("/USDT"):
+                    sym = sym + ":USDT"
+                elif not "/" in sym:
+                    # Giả sử format BTCUSDT -> BTC/USDT:USDT
+                    if sym.endswith("USDT"):
+                        base = sym[:-4]
+                        sym = f"{base}/USDT:USDT"
+                    else:
+                        sym = f"{sym}/USDT:USDT"
+            
+            list_all.append(sym)
+            print(sym, flush=True)
 
         except Exception as e:
-            print(f"Lỗi:getLenh23Rate : {e}", flush=True)
+            print(f"Lỗi xử lý symbol tại dòng {d}: {e}", flush=True)
             logger.error(f"Lỗi xử lý symbol: {e}", exc_info=True)
+            continue
 
     tab_100_ma_2d_arr = []
-
     not_symbol_contain = "trong 24h"
     
     for symbol in list_all:
-        if not not_symbol_contain in symbol:
+        # Logic dễ đọc hơn: nếu KHÔNG CHỨA text "trong 24h"
+        if not_symbol_contain not in symbol:
             print(symbol, flush=True)
             
-            print(symbol, tickers[symbol]['last'], flush=True)
-            pair= symbol.replace(":USDT", "")
+            # Kiểm tra symbol có tồn tại trong tickers không
+            if symbol not in tickers:
+                print(f"⚠️  {symbol} không tìm thấy trong tickers, bỏ qua", flush=True)
+                tab_100_ma_2d_arr.append([])  # Thêm dòng trống để giữ đúng vị trí
+                continue
             
-            row = [ tickers[symbol]['last']]
-            tab_100_ma_2d_arr.append(row)
+            try:
+                last_price = tickers[symbol]['last']
+                print(f"{symbol}: {last_price}", flush=True)
+                row = [last_price]
+                tab_100_ma_2d_arr.append(row)
+            except KeyError as e:
+                print(f"⚠️  Lỗi lấy giá cho {symbol}: {e}", flush=True)
+                logger.error(f"Lỗi lấy giá cho {symbol}: {e}", exc_info=True)
+                tab_100_ma_2d_arr.append([])
         else:
-            print("---------------", flush=True)
+            # Dòng title (chứa "trong 24h")
+            print(f"[TITLE] {symbol}", flush=True)
             tab_100_ma_2d_arr.append([])
 
-    
-    
-    
-    
-    print(tab_100_ma_2d_arr, flush=True)
+    print(f"\n📊 Cập nhật {len(tab_100_ma_2d_arr)} dòng vào sheet...", flush=True)
     gg_sheet_factory.update_multi(gg_sheet_factory.tab_list_all_ma, 1, tab_100_ma_2d_arr, "Y")
 
     end_time = time.time()
     execution_time = end_time - start_time
-    print(f"Thời gian thực thi: {execution_time} giây", flush=True)
- 
+    print(f"✅ Thời gian thực thi: {execution_time:.2f} giây", flush=True)
 
 while True:
     try:
         do_it()
-        
-        
     except Exception as e:
-        print(f"Tổng Lỗi: {e}", flush=True)
+        print(f"❌ Tổng Lỗi: {e}", flush=True)
         logger.error(f"Tổng lỗi: {e}", exc_info=True)
         import traceback
         traceback.print_exc()
