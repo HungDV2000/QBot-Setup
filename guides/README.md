@@ -21,6 +21,23 @@
   - ⏱️ **Thời gian:** 5-7 phút
   - 📊 **Độ chi tiết:** ⭐⭐⭐
 
+### 📊 **2. Check & Verify Dữ Liệu** ⭐ **MỚI**
+
+- **[HUONG_DAN_CHECK_DU_LIEU_SHEET_100_MA.md](./HUONG_DAN_CHECK_DU_LIEU_SHEET_100_MA.md)**
+  - Giải thích chi tiết từng cột trong sheet "100 mã"
+  - Hướng dẫn cách check dữ liệu trên Binance/TradingView
+  - Ví dụ cụ thể cho từng loại dữ liệu
+  - Troubleshooting & FAQ
+  - ⏱️ **Thời gian:** 5-10 phút
+  - 📊 **Độ chi tiết:** ⭐⭐⭐⭐⭐
+
+- **[QUICK_CHECK_SHEET_100MA.md](./QUICK_CHECK_SHEET_100MA.md)**
+  - Bảng tra cứu nhanh các cột
+  - 3 bước check nhanh (2 phút)
+  - Checklist để verify bot hoạt động đúng
+  - ⏱️ **Thời gian:** 1-2 phút
+  - 📊 **Độ chi tiết:** ⭐⭐
+
 ---
 
 ## 🎯 HƯỚNG DẪN SỬ DỤNG
@@ -90,7 +107,9 @@ qbot_setup/
 ├── guides/                                    ← BẠN ĐANG Ở ĐÂY
 │   ├── README.md                             ← File này
 │   ├── HUONG_DAN_TAO_CREDENTIALS_GOOGLE_SHEETS.md
-│   └── QUICK_START_CREDENTIALS.md
+│   ├── QUICK_START_CREDENTIALS.md
+│   ├── HUONG_DAN_CHECK_DU_LIEU_SHEET_100_MA.md  ⭐ MỚI
+│   └── QUICK_CHECK_SHEET_100MA.md            ⭐ MỚI
 ├── setup/
 │   ├── 0_HUONG_DAN_CAI_DAT_NHANH.md
 │   ├── 1_setup_install.bat
@@ -98,6 +117,7 @@ qbot_setup/
 ├── credentials.json                          ← Đặt file vào đây
 ├── config.ini                                ← Cấu hình bot
 ├── hd_order.py                               ← Bot chính
+├── hd_update_all.py                          ← Bot cập nhật sheet 100 mã
 ├── hd_order_123.py
 ├── hd_order_market_price.py
 └── ...

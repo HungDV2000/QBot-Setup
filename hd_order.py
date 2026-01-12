@@ -18,6 +18,7 @@ import requests
 import hmac
 import hashlib
 import urllib.parse
+from googleapiclient.errors import HttpError  # ✅ Thêm import HttpError để handle lỗi Google API
 
 # Cấu hình stdout để output realtime (unbuffered)
 sys.stdout.reconfigure(line_buffering=True) if hasattr(sys.stdout, 'reconfigure') else None
@@ -394,9 +395,31 @@ def get_current_state():
   Returns: (state_value, timestamp)
   """
   try:
-    state_value = gg_sheet_factory.get_dat_lenh("B2:B2")[0][0].strip().upper()
+    result = gg_sheet_factory.get_dat_lenh("B2:B2")
+    
+    # Kiểm tra result có data hợp lệ không
+    if not result or len(result) == 0:
+      logger.warning("B2 trống hoặc không có dữ liệu")
+      return STATE_CHO, datetime.now()
+    
+    if len(result[0]) == 0:
+      logger.warning("B2 không có giá trị")
+      return STATE_CHO, datetime.now()
+    
+    state_value = result[0][0].strip().upper()
     return state_value, datetime.now()
-  except (IndexError, KeyError):
+    
+  except HttpError as e:
+    logger.error(f"HttpError khi đọc trạng thái từ B2: {e}", exc_info=True)
+    print(f"❌ Lỗi Google Sheets API khi đọc B2: {e}", flush=True)
+    return STATE_CHO, datetime.now()
+  except (IndexError, KeyError, AttributeError) as e:
+    logger.error(f"Lỗi parse dữ liệu B2: {e}", exc_info=True)
+    print(f"❌ Lỗi parse dữ liệu B2: {e}", flush=True)
+    return STATE_CHO, datetime.now()
+  except Exception as e:
+    logger.error(f"Lỗi không xác định khi đọc B2: {e}", exc_info=True)
+    print(f"❌ Lỗi không xác định khi đọc B2: {e}", flush=True)
     return STATE_CHO, datetime.now()
 
 def get_current_capital():
@@ -405,14 +428,37 @@ def get_current_capital():
   Returns: (e2_value, has_error)
   """
   try:
-    e2_value = gg_sheet_factory.get_dat_lenh("E2:E2")[0][0].strip()
+    result = gg_sheet_factory.get_dat_lenh("E2:E2")
+    
+    # Kiểm tra result có data hợp lệ không
+    if not result or len(result) == 0:
+      logger.warning("E2 trống hoặc không có dữ liệu")
+      return "0", True
+    
+    if len(result[0]) == 0:
+      logger.warning("E2 không có giá trị")
+      return "0", True
+    
+    e2_value = result[0][0].strip()
+    
     # Kiểm tra lỗi #DIV/0! hoặc các lỗi Excel khác
     if "#DIV/0!" in e2_value or "#VALUE!" in e2_value or "#ERROR!" in e2_value or "#N/A" in e2_value:
       logger.error(f"⚠️ Lỗi công thức trong E2: {e2_value}")
       return "0", True
+    
     return e2_value, False
+    
+  except HttpError as e:
+    logger.error(f"HttpError khi đọc vốn từ E2: {e}", exc_info=True)
+    print(f"❌ Lỗi Google Sheets API khi đọc E2: {e}", flush=True)
+    return "0", True
+  except (IndexError, KeyError, AttributeError) as e:
+    logger.warning(f"Lỗi parse dữ liệu E2: {e}", exc_info=True)
+    print(f"❌ Lỗi parse dữ liệu E2: {e}", flush=True)
+    return "0", True
   except Exception as e:
-    logger.warning(f"Không đọc được vốn mặc định từ E2: {e}")
+    logger.warning(f"Không đọc được vốn mặc định từ E2: {e}", exc_info=True)
+    print(f"❌ Lỗi không xác định khi đọc E2: {e}", flush=True)
     return "0", True
 
 def do_it():
@@ -867,6 +913,15 @@ def printf(name, data):
 
 print(f"🚀 Khởi động bot - Chạy mỗi {cst.delay_vao_lenh} giây", flush=True)
 logger.info(f"Khởi động bot - Chạy mỗi {cst.delay_vao_lenh} giây")
+
+# ✅ Khởi tạo Google Sheets API trước khi bắt đầu
+print("🔄 Đang khởi tạo Google Sheets API...", flush=True)
+try:
+    gg_sheet_factory.init_sheet_api()
+    print("✅ Google Sheets API đã sẵn sàng", flush=True)
+except Exception as e:
+    print(f"⚠️ Lỗi khởi tạo Google Sheets API: {e}", flush=True)
+    logger.error(f"Lỗi khởi tạo Google Sheets API: {e}", exc_info=True)
 
 while True:
     try:
