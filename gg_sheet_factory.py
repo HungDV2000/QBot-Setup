@@ -17,7 +17,10 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from google.auth.exceptions import RefreshError  # ✅ Thêm import RefreshError
+import logging
 
+logger = logging.getLogger(__name__)
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 creds = None
@@ -28,28 +31,35 @@ _service_initialized = False  # Flag để tránh tạo service nhiều lần
 def init_sheet_api():
   global creds, service, spreadsheets_service, _service_initialized
   
-  # Nếu đã khởi tạo service, chỉ cần kiểm tra token còn hợp lệ không
-  if _service_initialized and service is not None and spreadsheets_service is not None:
-    # Service đã tồn tại, không cần tạo lại
-    return
-  
-  # Lần đầu tiên hoặc service chưa tồn tại, tạo mới
+  # ✅ LUÔN LUÔN kiểm tra token validity, ngay cả khi service đã khởi tạo
+  # Load credentials từ file (nếu có)
   if os.path.exists("token.json"):
     creds = Credentials.from_authorized_user_file("token.json", SCOPES)
   
+  # Kiểm tra token có hợp lệ không
   if not creds or not creds.valid:
     if creds and creds.expired and creds.refresh_token:
       try:
         # Thử refresh token
+        logger.info("Token đã expired, đang refresh...")
         creds.refresh(Request())
         print("✅ Đã làm mới Google token thành công.", flush=True)
+        logger.info("Đã refresh token thành công")
+        
+        # Lưu token mới
+        with open("token.json", "w") as token:
+          token.write(creds.to_json())
+        
         # Reset service để dùng token mới
         _service_initialized = False
         spreadsheets_service = None
+        
       except Exception as e:
         # Nếu refresh thất bại (token bị revoke), xóa token.json và tạo mới
         print(f"⚠️ Không thể làm mới token: {e}", flush=True)
         print("🔄 Xóa token cũ và tạo mới...", flush=True)
+        logger.warning(f"Không thể refresh token: {e}, tạo token mới")
+        
         if os.path.exists("token.json"):
           os.remove("token.json")
         
@@ -58,35 +68,46 @@ def init_sheet_api():
         )
         creds = flow.run_local_server(port=0)
         print("✅ Đã tạo token mới thành công.", flush=True)
+        
+        # Lưu token mới
+        with open("token.json", "w") as token:
+          token.write(creds.to_json())
+        
         # Reset service để dùng token mới
         _service_initialized = False
         spreadsheets_service = None
     else:
       # Chưa có token hoặc không hợp lệ, tạo mới
+      print("🔑 Chưa có token, đang tạo mới...", flush=True)
       flow = InstalledAppFlow.from_client_secrets_file(
           "credentials.json", SCOPES
       )
       creds = flow.run_local_server(port=0)
       print("✅ Đã tạo token mới thành công.", flush=True)
+      
+      # Lưu token mới
+      with open("token.json", "w") as token:
+        token.write(creds.to_json())
+      
       # Reset service để dùng token mới
       _service_initialized = False
       spreadsheets_service = None
-    
-    # Lưu token mới
-    with open("token.json", "w") as token:
-      token.write(creds.to_json())
   
-  try:
-    # Chỉ tạo service 1 lần duy nhất
-    service = build("sheets", "v4", credentials=creds)
-    # ✅ Cache spreadsheets() resource để không phải tạo lại
-    spreadsheets_service = service.spreadsheets()
-    _service_initialized = True  # Đánh dấu đã khởi tạo
-    print("✅ Google Sheets service đã khởi tạo thành công.", flush=True)
-  except HttpError as err:
-    print(f"❌ Lỗi khởi tạo Google Sheets service: {err}", flush=True)
-    _service_initialized = False
-    spreadsheets_service = None
+  # Tạo service nếu chưa có hoặc đã bị reset
+  if not _service_initialized or service is None or spreadsheets_service is None:
+    try:
+      # Tạo service với credentials mới
+      service = build("sheets", "v4", credentials=creds)
+      # ✅ Cache spreadsheets() resource để không phải tạo lại
+      spreadsheets_service = service.spreadsheets()
+      _service_initialized = True  # Đánh dấu đã khởi tạo
+      print("✅ Google Sheets service đã khởi tạo thành công.", flush=True)
+      logger.info("Google Sheets service đã khởi tạo thành công")
+    except HttpError as err:
+      print(f"❌ Lỗi khởi tạo Google Sheets service: {err}", flush=True)
+      logger.error(f"Lỗi khởi tạo Google Sheets service: {err}", exc_info=True)
+      _service_initialized = False
+      spreadsheets_service = None
 
 def reset_sheet_api():
   """Reset service để tạo lại kết nối mới (dùng khi token refresh)"""
@@ -96,58 +117,144 @@ def reset_sheet_api():
   _service_initialized = False
   print("🔄 Đã reset Google Sheets service.", flush=True)
 
+def force_refresh_token():
+  """
+  Force refresh token khi gặp lỗi RefreshError
+  Xóa token cũ và tạo mới nếu cần
+  """
+  global creds, _service_initialized
+  
+  logger.warning("⚠️ Token hết hạn hoặc bị revoke, đang force refresh...")
+  print("⚠️ Token hết hạn hoặc bị revoke, đang force refresh...", flush=True)
+  
+  # Reset service
+  reset_sheet_api()
+  
+  # Xóa token.json để force tạo mới
+  if os.path.exists("token.json"):
+    os.remove("token.json")
+    print("🗑️ Đã xóa token.json cũ", flush=True)
+  
+  # Tạo token mới
+  try:
+    flow = InstalledAppFlow.from_client_secrets_file(
+        "credentials.json", SCOPES
+    )
+    creds = flow.run_local_server(port=0)
+    
+    # Lưu token mới
+    with open("token.json", "w") as token:
+      token.write(creds.to_json())
+    
+    print("✅ Đã tạo token mới thành công", flush=True)
+    logger.info("Đã tạo token mới thành công")
+    
+    # Khởi tạo lại service
+    init_sheet_api()
+    return True
+    
+  except Exception as e:
+    print(f"❌ Lỗi khi tạo token mới: {e}", flush=True)
+    logger.error(f"Lỗi khi tạo token mới: {e}", exc_info=True)
+    return False
+
+def execute_with_retry(func, *args, max_retries=2, **kwargs):
+  """
+  Wrapper function để tự động retry khi gặp RefreshError
+  
+  Args:
+    func: Function cần gọi (lambda hoặc callable)
+    max_retries: Số lần thử lại tối đa (mặc định 2)
+    *args, **kwargs: Arguments cho func
+  
+  Returns:
+    Kết quả từ func
+  """
+  for attempt in range(max_retries + 1):
+    try:
+      return func()
+      
+    except RefreshError as e:
+      logger.error(f"❌ RefreshError (lần thử {attempt + 1}/{max_retries + 1}): {e}")
+      print(f"❌ RefreshError (lần thử {attempt + 1}/{max_retries + 1}): {e}", flush=True)
+      
+      if attempt < max_retries:
+        # Thử force refresh token
+        print(f"🔄 Đang thử refresh token (lần {attempt + 1})...", flush=True)
+        if force_refresh_token():
+          print("✅ Refresh token thành công, thử lại API call...", flush=True)
+          continue
+        else:
+          print("❌ Không thể refresh token, dừng retry", flush=True)
+          raise
+      else:
+        # Hết số lần thử
+        print(f"❌ Đã thử {max_retries + 1} lần nhưng vẫn lỗi RefreshError", flush=True)
+        logger.critical(f"Không thể refresh token sau {max_retries + 1} lần thử")
+        raise
+        
+    except HttpError as e:
+      # Lỗi khác từ Google API (không phải refresh token)
+      logger.error(f"HttpError: {e}")
+      print(f"An error occurred: {e}", flush=True)
+      raise
+      
+    except Exception as e:
+      # Lỗi không xác định
+      logger.error(f"Unexpected error: {e}", exc_info=True)
+      print(f"Unexpected error: {e}", flush=True)
+      raise
+
 def get_dat_lenh(range):
   RANGE_NAME = f"'{tab_dat_lenh}'!{range}"
   init_sheet_api()
-  try:
-      result = (
-        spreadsheets_service  # ✅ Dùng cached resource
-        .values()
-        .get(spreadsheetId=spreadsheetId, range=RANGE_NAME)
-        .execute()
-      )
-      rows = result.get("values", [])
-      return rows
-  except HttpError as error:
-      print(f"An error occurred: {error}")
-      return error
+  
+  def _execute():
+    result = (
+      spreadsheets_service  # ✅ Dùng cached resource
+      .values()
+      .get(spreadsheetId=spreadsheetId, range=RANGE_NAME)
+      .execute()
+    )
+    return result.get("values", [])
+  
+  return execute_with_retry(_execute)
 
 def get_cho_va_khop(range):
   RANGE_NAME = f"'{tab_cho_va_khop}'!{range}"
   init_sheet_api()
-  try:
-      result = (
-        spreadsheets_service  # ✅ Dùng cached resource
-        .values()
-        .get(spreadsheetId=spreadsheetId, range=RANGE_NAME)
-        .execute()
-      )
-      rows = result.get("values", [])
-      return rows
-  except HttpError as error:
-      print(f"An error occurred: {error}")
-      return error
+  
+  def _execute():
+    result = (
+      spreadsheets_service  # ✅ Dùng cached resource
+      .values()
+      .get(spreadsheetId=spreadsheetId, range=RANGE_NAME)
+      .execute()
+    )
+    return result.get("values", [])
+  
+  return execute_with_retry(_execute)
   
 def get_100_ma(range):
   RANGE_NAME = f"'{tab_list_all_ma}'!{range}"
   init_sheet_api()
-  try:
-      result = (
-        spreadsheets_service  # ✅ Dùng cached resource
-        .values()
-        .get(spreadsheetId=spreadsheetId, range=RANGE_NAME)
-        .execute()
-      )
-      rows = result.get("values", [])
-      return rows
-  except HttpError as error:
-      print(f"An error occurred: {error}")
-      return error
+  
+  def _execute():
+    result = (
+      spreadsheets_service  # ✅ Dùng cached resource
+      .values()
+      .get(spreadsheetId=spreadsheetId, range=RANGE_NAME)
+      .execute()
+    )
+    return result.get("values", [])
+  
+  return execute_with_retry(_execute)
   
 def get_white_list():
     RANGE_NAME = f"'{tab_white_list}'!A1:A1000"
     init_sheet_api()
-    try:
+    
+    def _execute():
         result = (
             spreadsheets_service  # ✅ Dùng cached resource
             .values()
@@ -170,9 +277,8 @@ def get_white_list():
             else:
                 whitelist.append(symbol)
         return whitelist
-    except HttpError as error:
-        print(f"An error occurred: {error}")
-        return []
+    
+    return execute_with_retry(_execute)
 
 
 
@@ -181,54 +287,54 @@ def update(tab_name, array_index, value_array):
   index = 2 + array_index
   RANGE_NAME = f"'{tab_name}'!B{index}:P1000"
   init_sheet_api()
-  try:
-      values = [
-              value_array
-      ]
-      body = {"values": values}
-      print(body)
-      result = (
-          spreadsheets_service  # ✅ Dùng cached resource
-          .values()
-          .update(
-              spreadsheetId=spreadsheetId ,
-              range=RANGE_NAME,
-              valueInputOption="USER_ENTERED",
-              body=body,
-          )
-          .execute()
-      )
-      print(f"{result.get('updatedCells')} cells updated.")
-      return result
-  except HttpError as error:
-      print(f"An error occurred: {error}")
-      return error
+  
+  def _execute():
+    values = [
+            value_array
+    ]
+    body = {"values": values}
+    print(body)
+    result = (
+        spreadsheets_service  # ✅ Dùng cached resource
+        .values()
+        .update(
+            spreadsheetId=spreadsheetId ,
+            range=RANGE_NAME,
+            valueInputOption="USER_ENTERED",
+            body=body,
+        )
+        .execute()
+    )
+    print(f"{result.get('updatedCells')} cells updated.")
+    return result
+  
+  return execute_with_retry(_execute)
   
 def update_single_value(tab_name, range, value):
   RANGE_NAME = f"'{tab_name}'!{range}"
   init_sheet_api()
-  try:
-      values = [
-              [value]
-      ]
-      body = {"values": values}
-      print(body)
-      result = (
-          spreadsheets_service  # ✅ Dùng cached resource
-          .values()
-          .update(
-              spreadsheetId=spreadsheetId ,
-              range=RANGE_NAME,
-              valueInputOption="USER_ENTERED",
-              body=body,
-          )
-          .execute()
-      )
-      print(f"{result.get('updatedCells')} cells updated.")
-      return result
-  except HttpError as error:
-      print(f"An error occurred: {error}")
-      return error
+  
+  def _execute():
+    values = [
+            [value]
+    ]
+    body = {"values": values}
+    print(body)
+    result = (
+        spreadsheets_service  # ✅ Dùng cached resource
+        .values()
+        .update(
+            spreadsheetId=spreadsheetId ,
+            range=RANGE_NAME,
+            valueInputOption="USER_ENTERED",
+            body=body,
+        )
+        .execute()
+    )
+    print(f"{result.get('updatedCells')} cells updated.")
+    return result
+  
+  return execute_with_retry(_execute)
 
 def replace_nan(array, replace_value):
     nan_indices = np.isnan(array)
@@ -251,25 +357,24 @@ def update_multi(tab_name, array_index, array_2d, from_column_alphabet_name):
   print(f"Ghi {len(array_2d)} dòng vào {RANGE_NAME}", flush=True)
   init_sheet_api()
 
-  try:
-      values = array_2d
-      body = {"values": values}
-      result = (
-          spreadsheets_service  # ✅ Dùng cached resource
-          .values()
-          .update(
-              spreadsheetId=spreadsheetId ,
-              range=RANGE_NAME,
-              valueInputOption="USER_ENTERED",
-              body=body,
-          )
-          .execute()
-      )
-      print(f"{result.get('updatedCells')} cells updated.", flush=True)
-      return result
-  except HttpError as error:
-      print(f"An error occurred: {error}")
-      return error
+  def _execute():
+    values = array_2d
+    body = {"values": values}
+    result = (
+        spreadsheets_service  # ✅ Dùng cached resource
+        .values()
+        .update(
+            spreadsheetId=spreadsheetId ,
+            range=RANGE_NAME,
+            valueInputOption="USER_ENTERED",
+            body=body,
+        )
+        .execute()
+    )
+    print(f"{result.get('updatedCells')} cells updated.", flush=True)
+    return result
+  
+  return execute_with_retry(_execute)
 
 def clear_multi(tab_name, array_index,  from_column_alphabet_name, end_row=1000, end_column="AZ"):
   """
@@ -292,14 +397,13 @@ def clear_multi(tab_name, array_index,  from_column_alphabet_name, end_row=1000,
   print(f"Clear range: {RANGE_NAME}")
   init_sheet_api()
 
-  try:
-      result =  spreadsheets_service.values().clear(  # ✅ Dùng cached resource
-            spreadsheetId=spreadsheetId,
-            range=RANGE_NAME,
-        ).execute()
-      return result
-  except HttpError as error:
-      print(f"An error occurred: {error}")
-      return error
+  def _execute():
+    result = spreadsheets_service.values().clear(  # ✅ Dùng cached resource
+          spreadsheetId=spreadsheetId,
+          range=RANGE_NAME,
+      ).execute()
+    return result
+  
+  return execute_with_retry(_execute)
 
 
