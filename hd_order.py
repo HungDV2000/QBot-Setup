@@ -439,61 +439,83 @@ def get_current_state():
     print(f"❌ Lỗi không xác định khi đọc B2: {e}", flush=True)
     return STATE_CHO, datetime.now()
 
-def get_current_capital():
+def get_capital_config():
   """
-  Đọc vốn E2 hiện tại từ Google Sheet
-  Returns: (e2_value, has_error)
+  Đọc cấu hình vốn từ Google Sheet
+  - D1: % tỷ lệ vốn (ví dụ: 3.00%)
+  - D2: Vốn mặc định (tối thiểu 10 USDT)
+  - E2: Vốn tổng
+  
+  Returns: (d1_percent, d2_default, e2_total, has_error)
   """
   try:
-    result = gg_sheet_factory.get_dat_lenh("E2:E2")
+    # Đọc D1:E2 (2 dòng x 2 cột)
+    result = gg_sheet_factory.get_dat_lenh("D1:E2")
     
-    # ✅ Kiểm tra result có phải là HttpError không (trường hợp version cũ của gg_sheet_factory return HttpError)
+    # ✅ Kiểm tra result có phải là HttpError không
     if isinstance(result, HttpError):
-      logger.error(f"HttpError được return (không phải raise) từ get_dat_lenh: {result}")
+      logger.error(f"HttpError được return từ get_dat_lenh: {result}")
       print(f"❌ Lỗi Google Sheets API: {result}", flush=True)
-      return "0", True
+      return None, None, None, True
     
     # Kiểm tra result có phải là list hợp lệ không
     if not isinstance(result, list):
       logger.error(f"Result không phải list: type={type(result)}, value={result}")
-      print(f"❌ Dữ liệu trả về không hợp lệ (không phải list): {type(result)}", flush=True)
-      return "0", True
+      print(f"❌ Dữ liệu trả về không hợp lệ: {type(result)}", flush=True)
+      return None, None, None, True
     
-    # Kiểm tra result có data không
-    if len(result) == 0:
-      logger.warning("E2 trống hoặc không có dữ liệu")
-      return "0", True
+    # Kiểm tra có đủ 2 dòng không
+    if len(result) < 2:
+      logger.warning(f"Không đủ dữ liệu (cần 2 dòng D1:E2, chỉ có {len(result)})")
+      return None, None, None, True
     
-    if len(result[0]) == 0:
-      logger.warning("E2 không có giá trị")
-      return "0", True
+    # Parse D1 (% tỷ lệ vốn)
+    d1_percent = None
+    try:
+      if len(result[0]) > 0 and result[0][0]:
+        d1_str = str(result[0][0]).strip().replace("%", "")
+        if d1_str and d1_str not in ["#DIV/0!", "#VALUE!", "#ERROR!", "#N/A"]:
+          d1_percent = float(d1_str) / 100  # Convert % sang decimal (3.00% -> 0.03)
+          logger.info(f"D1 (% vốn): {d1_str}% = {d1_percent}")
+    except (ValueError, TypeError) as e:
+      logger.warning(f"Không parse được D1: {e}")
     
-    e2_value = result[0][0].strip()
+    # Parse D2 (vốn mặc định)
+    d2_default = None
+    try:
+      if len(result[1]) > 0 and result[1][0]:
+        d2_str = str(result[1][0]).strip()
+        if d2_str and d2_str not in ["#DIV/0!", "#VALUE!", "#ERROR!", "#N/A"]:
+          d2_default = float(d2_str)
+          logger.info(f"D2 (vốn mặc định): {d2_default} USDT")
+    except (ValueError, TypeError) as e:
+      logger.warning(f"Không parse được D2: {e}")
     
-    # Kiểm tra lỗi #DIV/0! hoặc các lỗi Excel khác
-    if "#DIV/0!" in e2_value or "#VALUE!" in e2_value or "#ERROR!" in e2_value or "#N/A" in e2_value:
-      logger.error(f"⚠️ Lỗi công thức trong E2: {e2_value}")
-      return "0", True
+    # Parse E2 (vốn tổng)
+    e2_total = None
+    try:
+      if len(result[1]) > 1 and result[1][1]:
+        e2_str = str(result[1][1]).strip()
+        if e2_str and e2_str not in ["#DIV/0!", "#VALUE!", "#ERROR!", "#N/A"]:
+          e2_total = float(e2_str)
+          logger.info(f"E2 (vốn tổng): {e2_total} USDT")
+    except (ValueError, TypeError) as e:
+      logger.warning(f"Không parse được E2: {e}")
     
-    return e2_value, False
+    return d1_percent, d2_default, e2_total, False
     
   except HttpError as e:
-    logger.error(f"HttpError khi đọc vốn từ E2: {e}", exc_info=True)
-    print(f"❌ Lỗi Google Sheets API khi đọc E2: {e}", flush=True)
-    return "0", True
+    logger.error(f"HttpError khi đọc cấu hình vốn: {e}", exc_info=True)
+    print(f"❌ Lỗi Google Sheets API: {e}", flush=True)
+    return None, None, None, True
   except TypeError as e:
-    # TypeError: 'HttpError' object has no len() hoặc is not subscriptable
-    logger.warning(f"TypeError (có thể do HttpError được return thay vì raise): {e}", exc_info=True)
-    print(f"❌ TypeError khi xử lý E2: {e}", flush=True)
-    return "0", True
-  except (IndexError, KeyError, AttributeError) as e:
-    logger.warning(f"Lỗi parse dữ liệu E2: {e}", exc_info=True)
-    print(f"❌ Lỗi parse dữ liệu E2: {e}", flush=True)
-    return "0", True
+    logger.error(f"TypeError khi xử lý cấu hình vốn: {e}", exc_info=True)
+    print(f"❌ TypeError: {e}", flush=True)
+    return None, None, None, True
   except Exception as e:
-    logger.warning(f"Không đọc được vốn mặc định từ E2: {e}", exc_info=True)
-    print(f"❌ Lỗi không xác định khi đọc E2: {e}", flush=True)
-    return "0", True
+    logger.error(f"Lỗi không xác định khi đọc cấu hình vốn: {e}", exc_info=True)
+    print(f"❌ Lỗi: {e}", flush=True)
+    return None, None, None, True
 
 def do_it():
   print(f"{datetime.now()}. Scan Vào Lệnh----------------------------------------------------", flush=True)
@@ -505,15 +527,39 @@ def do_it():
   print(f"📌 Trạng thái: {state_value} (đọc lúc {read_time.strftime('%H:%M:%S')})", flush=True)
   logger.info(f"[SCAN START] Đọc trạng thái từ B2: {state_value} (timestamp: {read_time.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]})")
   
-  # Đọc vốn mặc định từ E2
-  e2_value, has_error = get_current_capital()
+  # Đọc cấu hình vốn từ D1, D2, E2
+  d1_percent, d2_default, e2_total, has_error = get_capital_config()
+  
   if has_error:
-    print(f"⚠️ Lỗi công thức E2: '{e2_value}', sử dụng 0 USDT", flush=True)
-    logger.warning(f"Lỗi công thức E2: '{e2_value}', sử dụng 0 USDT")
-    e2_value = "0"
+    print(f"⚠️ Lỗi đọc cấu hình vốn (D1/D2/E2)", flush=True)
+    logger.warning("Lỗi đọc cấu hình vốn, không thể đặt lệnh")
+    d1_percent = None
+    d2_default = None
+    e2_total = None
+  
+  # Kiểm tra nếu E2 và D2 đều rỗng → KHÔNG đặt lệnh
+  if e2_total is None and d2_default is None:
+    print(f"⚠️ E2 và D2 đều rỗng → Không đặt lệnh (cần ít nhất 1 trong 2)", flush=True)
+    logger.warning("E2 và D2 đều rỗng → Không đặt lệnh")
   else:
-    print(f"💰 Vốn mặc định: {e2_value} USDT", flush=True)
-    logger.info(f"Vốn mặc định từ E2: {e2_value}")
+    # Log cấu hình
+    print(f"💰 Cấu hình vốn:", flush=True)
+    if d1_percent is not None:
+      print(f"   D1 (% vốn): {d1_percent*100:.2f}%", flush=True)
+    else:
+      print(f"   D1 (% vốn): Không có", flush=True)
+    
+    if d2_default is not None:
+      print(f"   D2 (vốn mặc định): {d2_default} USDT", flush=True)
+    else:
+      print(f"   D2 (vốn mặc định): Không có", flush=True)
+    
+    if e2_total is not None:
+      print(f"   E2 (vốn tổng): {e2_total} USDT", flush=True)
+    else:
+      print(f"   E2 (vốn tổng): Không có", flush=True)
+    
+    logger.info(f"Cấu hình vốn: D1={d1_percent}, D2={d2_default}, E2={e2_total}")
 
   if state_value == STATE_STOP:
     logger.warning("🛑 LỆNH STOP ĐƯỢC KÍCH HOẠT!")
@@ -616,6 +662,12 @@ def do_it():
   elif state_value == STATE_CHO:
     print("💤 Trạng thái CHỜ - Không làm gì...", flush=True)
     logger.info("Trạng thái CHỜ - Không làm gì...")
+  
+  # ⚠️ Kiểm tra điều kiện đặt lệnh: E2 và D2 không được đều rỗng
+  elif e2_total is None and d2_default is None:
+    print("⏭️  Bỏ qua scan - E2 và D2 đều rỗng", flush=True)
+    logger.warning("Bỏ qua scan - Không có cấu hình vốn hợp lệ")
+  
   else:
     
     if state_value == STATE_LONG:
@@ -744,13 +796,63 @@ def do_it():
             print(f"🎯 Vào lệnh 1 {state_value}: {sym} (Leverage {d[leverage_idx]}x)", flush=True)
             logger.info(f"--- Vào lệnh 1 {state_value}: {sym} TRAILING_STOP đòn bẩy: {d[leverage_idx]} [B2 confirmed: {current_state} @ {check_time.strftime('%H:%M:%S')}]")
 
-            # Đọc vốn từ cột H, nếu trống dùng E2
-            capitalMoney = float(e2_value) if e2_value != "0" else 100
+            # ✅ Logic tính vốn mới (theo thứ tự ưu tiên):
+            # 1. Cột H (nếu có) → Dùng ngay
+            # 2. E2 có giá trị → capitalMoney = D1 * E2 (min 10)
+            # 3. E2 rỗng → capitalMoney = D2
+            # 4. E2 và D2 đều rỗng → Đã check ở trên (không chạy vào đây)
+            
+            capitalMoney = None
+            
+            # Ưu tiên 1: Cột H (capital riêng cho dòng này)
             try:
                 if len(d) > capital_idx and d[capital_idx]:
-                    capitalMoney = float(d[capital_idx])
-            except (ValueError, TypeError):
-                pass
+                    h_value = str(d[capital_idx]).strip()
+                    if h_value and h_value not in ["#DIV/0!", "#VALUE!", "#ERROR!", "#N/A"]:
+                        capitalMoney = float(h_value)
+                        logger.info(f"{sym}: Dùng vốn từ cột H = {capitalMoney} USDT")
+            except (ValueError, TypeError) as e:
+                logger.warning(f"{sym}: Lỗi parse cột H: {e}")
+            
+            # Ưu tiên 2 & 3: Tính từ D1/D2/E2
+            if capitalMoney is None:
+                if e2_total is not None:
+                    # E2 có giá trị → capitalMoney = D1 * E2 (min 10)
+                    if d1_percent is not None:
+                        capitalMoney = d1_percent * e2_total
+                        if capitalMoney < 10:
+                            logger.info(f"{sym}: D1*E2 = {capitalMoney:.2f} < 10, dùng 10 USDT")
+                            capitalMoney = 10
+                        else:
+                            logger.info(f"{sym}: Dùng vốn = D1*E2 = {d1_percent*100:.2f}% * {e2_total} = {capitalMoney:.2f} USDT")
+                    else:
+                        # E2 có nhưng D1 rỗng → Dùng D2
+                        if d2_default is not None:
+                            capitalMoney = d2_default
+                            logger.info(f"{sym}: E2 có nhưng D1 rỗng, dùng D2 = {capitalMoney} USDT")
+                        else:
+                            # E2 có, D1 và D2 đều rỗng → Không đặt lệnh
+                            print(f"⏭️  {sym}: E2 có nhưng D1 và D2 rỗng → Bỏ qua", flush=True)
+                            logger.warning(f"{sym}: Bỏ qua - E2={e2_total} nhưng không có D1 và D2")
+                            continue
+                else:
+                    # E2 rỗng → Dùng D2
+                    if d2_default is not None:
+                        capitalMoney = d2_default
+                        logger.info(f"{sym}: E2 rỗng, dùng D2 = {capitalMoney} USDT")
+                    else:
+                        # E2 và D2 đều rỗng → Không đặt lệnh (đã check ở trên, nhưng double check)
+                        print(f"⏭️  {sym}: E2 và D2 đều rỗng → Bỏ qua", flush=True)
+                        logger.warning(f"{sym}: Bỏ qua - Không có vốn")
+                        continue
+            
+            # Validate capitalMoney >= 10
+            if capitalMoney < 10:
+                print(f"⏭️  {sym}: Vốn = {capitalMoney:.2f} USDT < 10 USDT (tối thiểu) → Bỏ qua", flush=True)
+                logger.warning(f"{sym}: Bỏ qua - Vốn {capitalMoney:.2f} < 10 USDT")
+                continue
+            
+            print(f"💰 {sym}: Vốn = {capitalMoney:.2f} USDT", flush=True)
 
             symbol = d[0]
             
