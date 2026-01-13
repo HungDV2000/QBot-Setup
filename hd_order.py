@@ -397,8 +397,21 @@ def get_current_state():
   try:
     result = gg_sheet_factory.get_dat_lenh("B2:B2")
     
-    # Kiểm tra result có data hợp lệ không
-    if not result or len(result) == 0:
+    # ✅ Kiểm tra result có phải là HttpError không (trường hợp version cũ của gg_sheet_factory return HttpError)
+    if isinstance(result, HttpError):
+      logger.error(f"HttpError được return (không phải raise) từ get_dat_lenh: {result}")
+      print(f"❌ Lỗi Google Sheets API: {result}", flush=True)
+      print(f"⚠️  gg_sheet_factory.py cần được cập nhật! Chạy: python sync_to_all_bots.py", flush=True)
+      return STATE_CHO, datetime.now()
+    
+    # Kiểm tra result có phải là list hợp lệ không
+    if not isinstance(result, list):
+      logger.error(f"Result không phải list: type={type(result)}, value={result}")
+      print(f"❌ Dữ liệu trả về không hợp lệ (không phải list): {type(result)}", flush=True)
+      return STATE_CHO, datetime.now()
+    
+    # Kiểm tra result có data không
+    if len(result) == 0:
       logger.warning("B2 trống hoặc không có dữ liệu")
       return STATE_CHO, datetime.now()
     
@@ -412,6 +425,12 @@ def get_current_state():
   except HttpError as e:
     logger.error(f"HttpError khi đọc trạng thái từ B2: {e}", exc_info=True)
     print(f"❌ Lỗi Google Sheets API khi đọc B2: {e}", flush=True)
+    return STATE_CHO, datetime.now()
+  except TypeError as e:
+    # TypeError: 'HttpError' object has no len() hoặc is not subscriptable
+    logger.error(f"TypeError (có thể do HttpError được return thay vì raise): {e}", exc_info=True)
+    print(f"❌ TypeError khi xử lý B2: {e}", flush=True)
+    print(f"⚠️  gg_sheet_factory.py cần được cập nhật! Chạy: python sync_to_all_bots.py", flush=True)
     return STATE_CHO, datetime.now()
   except (IndexError, KeyError, AttributeError) as e:
     logger.error(f"Lỗi parse dữ liệu B2: {e}", exc_info=True)
@@ -430,8 +449,21 @@ def get_current_capital():
   try:
     result = gg_sheet_factory.get_dat_lenh("E2:E2")
     
-    # Kiểm tra result có data hợp lệ không
-    if not result or len(result) == 0:
+    # ✅ Kiểm tra result có phải là HttpError không (trường hợp version cũ của gg_sheet_factory return HttpError)
+    if isinstance(result, HttpError):
+      logger.error(f"HttpError được return (không phải raise) từ get_dat_lenh: {result}")
+      print(f"❌ Lỗi Google Sheets API: {result}", flush=True)
+      print(f"⚠️  gg_sheet_factory.py cần được cập nhật! Chạy: python sync_to_all_bots.py", flush=True)
+      return "0", True
+    
+    # Kiểm tra result có phải là list hợp lệ không
+    if not isinstance(result, list):
+      logger.error(f"Result không phải list: type={type(result)}, value={result}")
+      print(f"❌ Dữ liệu trả về không hợp lệ (không phải list): {type(result)}", flush=True)
+      return "0", True
+    
+    # Kiểm tra result có data không
+    if len(result) == 0:
       logger.warning("E2 trống hoặc không có dữ liệu")
       return "0", True
     
@@ -451,6 +483,12 @@ def get_current_capital():
   except HttpError as e:
     logger.error(f"HttpError khi đọc vốn từ E2: {e}", exc_info=True)
     print(f"❌ Lỗi Google Sheets API khi đọc E2: {e}", flush=True)
+    return "0", True
+  except TypeError as e:
+    # TypeError: 'HttpError' object has no len() hoặc is not subscriptable
+    logger.warning(f"TypeError (có thể do HttpError được return thay vì raise): {e}", exc_info=True)
+    print(f"❌ TypeError khi xử lý E2: {e}", flush=True)
+    print(f"⚠️  gg_sheet_factory.py cần được cập nhật! Chạy: python sync_to_all_bots.py", flush=True)
     return "0", True
   except (IndexError, KeyError, AttributeError) as e:
     logger.warning(f"Lỗi parse dữ liệu E2: {e}", exc_info=True)
