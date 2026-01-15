@@ -151,15 +151,46 @@ def get_opened_possition():
             symbol = position['symbol']
             position_amt = float(position['positionAmt'])
             
-            # Fix: Kiểm tra key tồn tại trước khi dùng
-            entry_price = float(position.get('entryPrice', 0)) if position.get('entryPrice') else 0.0
-            unrealized_pnl = float(position.get('unrealizedProfit', 0)) if position.get('unrealizedProfit') else 0.0
-            leverage = int(position.get('leverage', 1)) if position.get('leverage') else 1
+            # Fix: Parse entry price an toàn
+            entry_price_raw = position.get('entryPrice')
+            if entry_price_raw is not None and entry_price_raw != '' and entry_price_raw != 0:
+                try:
+                    entry_price = float(entry_price_raw)
+                except (ValueError, TypeError):
+                    entry_price = 0.0
+            else:
+                entry_price = 0.0
+            
+            # Parse unrealized PnL an toàn
+            unrealized_pnl_raw = position.get('unrealizedProfit')
+            if unrealized_pnl_raw is not None and unrealized_pnl_raw != '':
+                try:
+                    unrealized_pnl = float(unrealized_pnl_raw)
+                except (ValueError, TypeError):
+                    unrealized_pnl = 0.0
+            else:
+                unrealized_pnl = 0.0
+            
+            # Parse leverage an toàn
+            leverage_raw = position.get('leverage')
+            if leverage_raw is not None and leverage_raw != '' and leverage_raw != 0:
+                try:
+                    leverage = int(float(leverage_raw))
+                except (ValueError, TypeError):
+                    leverage = 1
+            else:
+                leverage = 1
             
             if position_amt != 0:
                 opened_possition.append(position)
                 print(f"📊 {symbol}: Pos={position_amt}, Entry={entry_price}, PnL={unrealized_pnl:.2f}, Lev={leverage}x", flush=True)
                 logger.info(f"Position: {symbol}, Amt={position_amt}, Entry={entry_price}, PnL={unrealized_pnl}, Lev={leverage}")
+                
+                # Debug: Log raw data nếu entry price = 0
+                if entry_price == 0.0:
+                    logger.warning(f"⚠️  {symbol}: Entry price = 0! Raw data: entryPrice={entry_price_raw}, position data keys: {list(position.keys())}")
+                    print(f"    ⚠️  Entry price = 0! Raw: {entry_price_raw}", flush=True)
+                    
         except Exception as e:
             logger.error(f"Lỗi khi xử lý position {position.get('symbol', 'N/A')}: {e}")
             continue
@@ -191,6 +222,9 @@ def do_it():
             
             print(f"\n  [{idx}/{len(res)}] Xử lý {cac_ma}...", flush=True)
             
+            # Debug: Log raw position data để kiểm tra
+            logger.debug(f"Raw position data for {cac_ma}: {position}")
+            
             # Format symbol: HOMEUSDT → HOME/USDT
             symbol_formatted = cac_ma.replace("USDT", "/USDT")
             
@@ -201,9 +235,26 @@ def do_it():
             cho_khop = "N"  # Không còn chờ
             da_khop_mo_vi_the = "Y"  # Đã mở vị thế
             
-            # Entry price và leverage
-            gia_vao = position.get('entryPrice', 0) if position.get('entryPrice') else 0.0
-            don_bay = position.get('leverage', 1) if position.get('leverage') else 1
+            # Entry price và leverage - Parse an toàn
+            entry_price_raw = position.get('entryPrice')
+            if entry_price_raw is not None and entry_price_raw != '' and entry_price_raw != 0:
+                try:
+                    gia_vao = float(entry_price_raw)
+                except (ValueError, TypeError):
+                    gia_vao = 0.0
+                    logger.warning(f"{cac_ma}: Lỗi parse entryPrice: {entry_price_raw}")
+            else:
+                gia_vao = 0.0
+                logger.warning(f"{cac_ma}: entryPrice rỗng hoặc = 0, raw: {entry_price_raw}")
+            
+            leverage_raw = position.get('leverage')
+            if leverage_raw is not None and leverage_raw != '' and leverage_raw != 0:
+                try:
+                    don_bay = int(float(leverage_raw))
+                except (ValueError, TypeError):
+                    don_bay = 1
+            else:
+                don_bay = 1
             
             # Lấy orders cho symbol này
             orders = exchange.fetch_open_orders(symbol=cac_ma)
@@ -217,6 +268,11 @@ def do_it():
             
             print(f"    ✓ Side: {vi_the_short_long}, Entry: {gia_vao}, Lev: {don_bay}x", flush=True)
             print(f"    ✓ Orders: {order_count} (SL: {lenh_ls}, TP: {lenh_tp})", flush=True)
+            
+            # ⚠️ CẢNH BÁO NẾU ENTRY PRICE = 0
+            if gia_vao == 0.0:
+                print(f"    ⚠️  CẢNH BÁO: Entry price = 0! (Raw: {entry_price_raw})", flush=True)
+                logger.error(f"❌ {symbol_formatted}: Entry price = 0! Raw data: {entry_price_raw}, Position: {position}")
             
             logger.info(f"{symbol_formatted}: {vi_the_short_long}, Entry={gia_vao}, Lev={don_bay}, Orders={order_count}, SL={lenh_ls}, TP={lenh_tp}")
             
