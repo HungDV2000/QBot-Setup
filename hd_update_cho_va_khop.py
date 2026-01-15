@@ -313,13 +313,10 @@ def do_it():
         print("  🗑️  Xóa dữ liệu cũ...", flush=True)
         gg_sheet_factory.clear_multi(gg_sheet_factory.tab_cho_va_khop, 2, "a", end_row=1000)
         
-        # Thêm timestamp vào đầu array
+        # Ghi timestamp vào A2
         timestamp_str = current_time.strftime("%Y-%m-%d %H:%M:%S")
-        if tab_100_ma_2d_arr:
-            # Thêm hàng timestamp (chỉ cột A có giá trị, các cột khác rỗng)
-            first_row_len = len(tab_100_ma_2d_arr[0])
-            timestamp_row = [timestamp_str] + [""] * (first_row_len - 1)
-            tab_100_ma_2d_arr = [timestamp_row] + tab_100_ma_2d_arr
+        print(f"  📅 Cập nhật timestamp vào A2: {timestamp_str}", flush=True)
+        gg_sheet_factory.update_single_value(gg_sheet_factory.tab_cho_va_khop, "A2", timestamp_str)
         
         # Update dữ liệu mới (bắt đầu từ hàng 4)
         print("  ✍️  Ghi dữ liệu mới...", flush=True)
