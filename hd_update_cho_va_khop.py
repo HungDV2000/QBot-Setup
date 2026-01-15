@@ -14,6 +14,10 @@ os.system(f"title {file_name} - {cst.key_name}")
 logs_dir = Path('logs')
 logs_dir.mkdir(exist_ok=True)
 
+# Tạo tên file log với timestamp: cho_va_khop_dd_mm_yyyy.txt
+log_timestamp = datetime.now().strftime('%d_%m_%Y')
+log_filename_base = f'cho_va_khop_{log_timestamp}'
+
 # Logging cải thiện với file trong logs/
 logging.basicConfig(
     level=logging.INFO,
@@ -23,19 +27,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# File handler cho error log
-error_log_path = logs_dir / 'hd_update_cho_va_khop_error.log'
+# File handler cho error log với timestamp (định dạng .txt)
+error_log_path = logs_dir / f'{log_filename_base}_error.txt'
 error_handler = logging.FileHandler(error_log_path, encoding='utf-8')
 error_handler.setLevel(logging.ERROR)
 error_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
 logger.addHandler(error_handler)
 
-# File handler cho info log
-info_log_path = logs_dir / 'hd_update_cho_va_khop_info.log'
+# File handler cho info log với timestamp (định dạng .txt)
+info_log_path = logs_dir / f'{log_filename_base}_info.txt'
 info_handler = logging.FileHandler(info_log_path, encoding='utf-8')
 info_handler.setLevel(logging.INFO)
 info_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
 logger.addHandler(info_handler)
+
+print(f"📝 Log files: {error_log_path.name} & {info_log_path.name}", flush=True)
 
 exchange_id = 'binance'
 exchange_class = getattr(ccxt, exchange_id)
