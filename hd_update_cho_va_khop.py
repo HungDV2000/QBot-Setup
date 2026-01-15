@@ -269,10 +269,12 @@ def do_it():
             print(f"    ✓ Side: {vi_the_short_long}, Entry: {gia_vao}, Lev: {don_bay}x", flush=True)
             print(f"    ✓ Orders: {order_count} (SL: {lenh_ls}, TP: {lenh_tp})", flush=True)
             
-            # ⚠️ CẢNH BÁO NẾU ENTRY PRICE = 0
-            if gia_vao == 0.0:
-                print(f"    ⚠️  CẢNH BÁO: Entry price = 0! (Raw: {entry_price_raw})", flush=True)
-                logger.error(f"❌ {symbol_formatted}: Entry price = 0! Raw data: {entry_price_raw}, Position: {position}")
+            # ⚠️ VALIDATION: SKIP NẾU ENTRY PRICE = 0
+            if gia_vao == 0.0 or gia_vao is None:
+                print(f"    ❌ BỎ QUA: Entry price = 0 hoặc None! (Raw: {entry_price_raw})", flush=True)
+                logger.error(f"❌ {symbol_formatted}: Entry price không hợp lệ (0 hoặc None). Raw: {entry_price_raw}")
+                logger.error(f"   Position data: {position}")
+                continue  # Bỏ qua position này
             
             logger.info(f"{symbol_formatted}: {vi_the_short_long}, Entry={gia_vao}, Lev={don_bay}, Orders={order_count}, SL={lenh_ls}, TP={lenh_tp}")
             
