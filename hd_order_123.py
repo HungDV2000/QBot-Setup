@@ -72,64 +72,59 @@ def is_same_pair(sym1, sym2):
        return True
     return False
 
-def getLenh23Rate(symbol, state):
+def get_sl_tp_rate_from_cho_va_khop(symbol, side, row_data):
     """
-    Lấy tỷ lệ SL/TP từ Google Sheet.
-    Logic: Ưu tiên Sheet > 0, nếu lỗi/trống thì dùng Config.
-    """
-    # 1. Xác định vùng quét
-    if state == STATE_LONG:
-        start_row = 55
-        end_row = 104
-    elif state == STATE_SHORT:
-        start_row = 4
-        end_row = 53
+    Lấy rate SL/TP từ sheet "Chờ và khớp" (cột J, K)
+    Ưu tiên: Sheet cột J, K > Config
     
-    # 2. Chuẩn bị giá trị Config mặc định
-    def_sl = cst.lenh2_rate_long if state == STATE_LONG else cst.lenh2_rate_short
-    def_tp = cst.lenh3_rate_long if state == STATE_LONG else cst.lenh3_rate_short
-
+    Args:
+        symbol: Symbol hiện tại
+        side: "LONG" hoặc "SHORT"
+        row_data: Dữ liệu dòng từ sheet (list) - mỗi symbol có rate riêng
+    
+    Returns:
+        (sl_rate, tp_rate, source_info)
+    """
+    # Config mặc định (fallback)
+    if side == STATE_LONG:
+        default_sl = cst.lenh2_rate_long
+        default_tp = cst.lenh3_rate_long
+    else:
+        default_sl = cst.lenh2_rate_short
+        default_tp = cst.lenh3_rate_short
+    
+    # Khởi tạo với giá trị mặc định
+    sl_rate = default_sl
+    tp_rate = default_tp
+    
+    sl_source = "Config"
+    tp_source = "Config"
+    
     try:
-        # Đọc dữ liệu từ Sheet
-        sheet_dat_lenh = gg_sheet_factory.get_dat_lenh(f"A{start_row}:G{end_row}")
-        
-        for d in sheet_dat_lenh:
-            try:
-                if len(d) < 1: continue
-                sym = d[0]
-                if not sym: continue
-                
-                # Nếu tìm thấy Symbol
-                if is_same_pair(symbol, sym):
-                    
-                    # --- XỬ LÝ RATE SL (Cột F / Index 5) ---
-                    try:
-                        val_sl = float(d[5]) if len(d) > 5 and d[5] else 0
-                    except: val_sl = 0
-                    
-                    # --- XỬ LÝ RATE TP (Cột G / Index 6) ---
-                    try:
-                        val_tp = float(d[6]) if len(d) > 6 and d[6] else 0
-                    except: val_tp = 0
-                    
-                    # --- LOGIC QUYẾT ĐỊNH ---
-                    # Nếu Sheet > 0 thì dùng Sheet, ngược lại dùng Config
-                    final_sl = val_sl if val_sl > 0 else def_sl
-                    final_tp = val_tp if val_tp > 0 else def_tp
-                    
-                    logger.info(f"   ✅ Tìm thấy {symbol}: Sheet(SL={val_sl}, TP={val_tp}) -> Final(SL={final_sl}, TP={final_tp})")
-                    
-                    return symbol, final_sl, final_tp
-
-            except Exception:
-                continue
-
+        # Cột J (index 9) - STOP LIMIT rate (mỗi symbol có rate riêng)
+        if len(row_data) > 9 and row_data[9]:
+            val = str(row_data[9]).strip()
+            if val and val not in ["", "0", "0.0"]:
+                sl_rate = float(val)
+                sl_source = "Sheet"
+                logger.debug(f"{symbol}: SL rate từ cột J = {sl_rate}%")
     except Exception as e:
-        logger.error(f"Lỗi đọc Google Sheet: {e}")
-
-    # Fallback cuối cùng nếu không tìm thấy symbol trong sheet
-    logger.info(f"   ⬇️ Không tìm thấy {symbol} trong sheet -> Dùng Full Config: SL={def_sl}, TP={def_tp}")
-    return symbol, def_sl, def_tp
+        logger.debug(f"{symbol}: Lỗi parse SL rate từ sheet cột J: {e}")
+    
+    try:
+        # Cột K (index 10) - TRAILING STOP rate (mỗi symbol có rate riêng)
+        if len(row_data) > 10 and row_data[10]:
+            val = str(row_data[10]).strip()
+            if val and val not in ["", "0", "0.0"]:
+                tp_rate = float(val)
+                tp_source = "Sheet"
+                logger.debug(f"{symbol}: TP rate từ cột K = {tp_rate}%")
+    except Exception as e:
+        logger.debug(f"{symbol}: Lỗi parse TP rate từ sheet cột K: {e}")
+    
+    logger.info(f"{symbol}: Rate SL={sl_rate}% ({sl_source}), TP={tp_rate}% ({tp_source})")
+    
+    return sl_rate, tp_rate, f"SL from {sl_source}, TP from {tp_source}"
 
 def call_binance_api_direct(method, endpoint, params=None, api_key=None, secret_key=None):
     base_url = 'https://fapi.binance.com'
@@ -269,6 +264,44 @@ def has_sl_tp_orders(symbol, exchange):
         logger.error(f"Lỗi check SL/TP: {e}", exc_info=True)
         return False, False
 
+# --- HÀM HỖ TRỢ ---
+
+def get_position_amount_from_binance(symbol):
+    """
+    Lấy position amount từ Binance cho symbol cụ thể
+    Dùng để tính toán SL/TP amount
+    
+    Returns: 
+        (position_amt, entry_price) hoặc (None, None) nếu không có position
+    """
+    try:
+        positions = exchange.fetch_positions([symbol])
+        for position in positions:
+            try:
+                amount = float(position.get('contracts', 0))
+            except:
+                amount = 0.0
+            
+            if amount != 0:
+                position_side = position.get('side', '').lower()
+                is_long = (position_side == 'long')
+                
+                # Lấy entry price (để verify với sheet)
+                entry_price_raw = position.get('entryPrice', 0)
+                entry_price = float(entry_price_raw) if entry_price_raw else 0.0
+                
+                # CCXT contracts luôn dương, cần thêm dấu dựa vào side
+                position_amt_rounded = float(exchange.amount_to_precision(symbol, amount))
+                position_amt = position_amt_rounded if is_long else -position_amt_rounded
+                
+                logger.debug(f"{symbol}: Position amount = {position_amt}, Entry = {entry_price}")
+                return position_amt, entry_price
+        
+        return None, None
+    except Exception as e:
+        logger.error(f"Lỗi lấy position amount cho {symbol}: {e}")
+        return None, None
+
 # --- KHỞI TẠO EXCHANGE ---
 logger.info(f"{datetime.now()}. Khởi tạo Bot -------------------------")
 exchange_id = 'binance'
@@ -293,159 +326,165 @@ order_helper = BinanceOrderHelper(exchange)
 cascade_mgr = get_cascade_manager(exchange, order_helper)
 
 
-# --- LOGIC CHÍNH ---
+# --- LOGIC CHÍNH MỚI: ĐỌC TỪ SHEET "CHỜ VÀ KHỚP" ---
 
 def do_it():
-    logger.info(f"{datetime.now()}. Scan Vào Lệnh 123 (Verified Mode) -------------------------")
+    logger.info(f"{datetime.now()}. Scan Lệnh 123 - Đọc từ Sheet 'Chờ và khớp' -------------------------")
     
-    # [FIX CRITICAL] Dùng fetch_positions() thay vì balance['info']['positions']
-    # Vì balance['info']['positions'] KHÔNG trả về entryPrice!
+    # [LOGIC MỚI] Đọc sheet "Chờ và khớp" thay vì quét Binance trực tiếp
     try:
-        positions = exchange.fetch_positions()
-        logger.info(f"✅ Đã lấy {len(positions)} positions từ fetch_positions()")
+        sheet_data = gg_sheet_factory.get_cho_va_khop("A4:K1000")  # Đọc từ hàng 4 đến 1000, cột A-K
+        logger.info(f"✅ Đã đọc {len(sheet_data)} dòng từ sheet 'Chờ và khớp'")
     except Exception as e:
-        logger.error(f"Lỗi khi lấy positions: {e}")
+        logger.error(f"❌ Lỗi khi đọc sheet 'Chờ và khớp': {e}")
         return
-
-    for position in positions:
+    
+    processed_count = 0
+    
+    for row in sheet_data:
         try:
-            # [FIX] CCXT fetch_positions() trả về format khác:
-            # - 'contracts' thay vì 'positionAmt'
-            # - 'symbol' đã là 'HOME/USDT:USDT' format
-            # - 'entryPrice' có sẵn!
+            # [BƯỚC 1] PARSE DỮ LIỆU TỪ SHEET
+            if len(row) < 4:
+                continue  # Dòng không đủ dữ liệu tối thiểu
+            
+            # Cột A: Symbol
+            symbol_raw = row[0] if len(row) > 0 else None
+            if not symbol_raw:
+                continue
+            symbol = str(symbol_raw).strip()
+            
+            # Cột B: Vị thế (LONG/SHORT)
+            side_raw = row[1] if len(row) > 1 else None
+            if not side_raw:
+                continue
+            side = str(side_raw).strip().upper()
+            
+            # Validate side
+            if side not in [STATE_LONG, STATE_SHORT]:
+                logger.warning(f"{symbol}: Side không hợp lệ: {side}")
+                continue
+            
+            # Cột C: Chờ khớp (Y/N) - không dùng nhưng vẫn parse để log
+            cho_khop = str(row[2]).strip().upper() if len(row) > 2 else "N"
+            
+            # Cột D: Đã khớp/Mở vị thế (Y/N) - ĐIỀU KIỆN QUAN TRỌNG
+            da_khop = str(row[3]).strip().upper() if len(row) > 3 else "N"
+            
+            # [ĐIỀU KIỆN 1] Chỉ xử lý lệnh ĐÃ KHỚP (đã vào lệnh)
+            if da_khop != "Y":
+                continue
+            
+            # Cột E: Giá vào
             try:
-                amount = float(position.get('contracts', 0))
-            except: 
-                amount = 0.0
-
-            if amount != 0:
-                symbol = position['symbol']  # Đã là 'HOME/USDT:USDT'
-                
-                # Chuẩn hóa symbol (bỏ :USDT nếu có)
-                if ':USDT' in symbol:
-                    symbol_formatted = symbol.replace(':USDT', '')
+                entry_price = float(row[4]) if len(row) > 4 and row[4] else 0.0
+            except:
+                entry_price = 0.0
+            
+            if entry_price <= 0:
+                logger.warning(f"{symbol}: Entry price = {entry_price} (không hợp lệ), bỏ qua")
+                continue
+            
+            # Cột F: Đòn bẩy
+            try:
+                leverage_raw = row[5] if len(row) > 5 and row[5] else "1"
+                if str(leverage_raw).strip().upper() == "N":
+                    leverage = 1
                 else:
-                    symbol_formatted = symbol
+                    leverage = int(float(leverage_raw))
+            except:
+                leverage = 1
+            
+            # Cột G: Lệnh Stop Limit (Y/N)
+            has_sl = str(row[6]).strip().upper() == "Y" if len(row) > 6 else False
+            
+            # Cột H: Lệnh Trailing Stop (Y/N)
+            has_tp = str(row[7]).strip().upper() == "Y" if len(row) > 7 else False
+            
+            # [ĐIỀU KIỆN 2] Chỉ xử lý nếu THIẾU SL hoặc THIẾU TP
+            need_sl = not has_sl
+            need_tp = not has_tp
+            
+            if not need_sl and not need_tp:
+                # Đã đủ cả 2 → Bỏ qua
+                continue
+            
+            print(f"🔍 Xử lý: {symbol} | Side: {side} | Entry: {entry_price} | Need SL: {need_sl}, TP: {need_tp}", flush=True)
+            
+            # [BƯỚC 2] LẤY RATE SL/TP TỪ CỘT J, K (mỗi symbol có rate riêng)
+            sl_rate, tp_rate, rate_source = get_sl_tp_rate_from_cho_va_khop(symbol, side, row)
                 
-                print(f"🔍 Kiểm tra position: {symbol_formatted}, Amount: {amount}", flush=True)
+            # Validate rate
+            if need_sl and sl_rate <= 0:
+                logger.warning(f"⚠️ {symbol}: Thiếu SL nhưng SL rate = {sl_rate} <= 0, bỏ qua")
+                continue
+            if need_tp and tp_rate <= 0:
+                logger.warning(f"⚠️ {symbol}: Thiếu TP nhưng TP rate = {tp_rate} <= 0, bỏ qua")
+                continue
+            
+            # [BƯỚC 3] LẤY POSITION AMOUNT TỪ BINANCE
+            position_amt, entry_price_binance = get_position_amount_from_binance(symbol)
+            
+            if position_amt is None:
+                logger.warning(f"⚠️ {symbol}: Không tìm thấy position trên Binance (sheet có thể chưa sync)")
+                continue
+            
+            # [Optional] Verify entry price từ Binance vs Sheet (warning nếu khác)
+            if entry_price_binance and abs(entry_price_binance - entry_price) / entry_price > 0.01:  # Chênh lệch > 1%
+                logger.warning(f"⚠️ {symbol}: Entry price khác biệt - Sheet: {entry_price}, Binance: {entry_price_binance}")
+            
+            # [BƯỚC 4] ĐẶT LỆNH LẺ (có thể chỉ SL hoặc chỉ TP)
+            print(f"🎯 Đặt lệnh cho {symbol} | Entry: {entry_price} | SL: {sl_rate}%, TP: {tp_rate}%", flush=True)
+            
+            try:
+                # Gọi cascade manager với rate từ sheet
+                result = cascade_mgr.on_entry_filled(
+                    symbol=symbol,
+                    layer_num=1,
+                    entry_price=entry_price,  # Từ sheet
+                    leverage=leverage,  # Từ sheet
+                    position_amt=position_amt,  # Từ Binance
+                    side=side,  # Từ sheet
+                    max_layers=3,
+                    lenh2_rate=sl_rate,  # Từ sheet cột J (mỗi symbol riêng)
+                    lenh3_rate=tp_rate,  # Từ sheet cột K (mỗi symbol riêng)
+                    lenh3_callback_rate=cst.lenh3_callback_rate,
+                    next_layer_config=None 
+                )
                 
-                # [DEBUG] Log toàn bộ position để debug
-                logger.info(f"📊 Position data đầy đủ: symbol={position.get('symbol')}, "
-                           f"contracts={position.get('contracts')}, "
-                           f"entryPrice={position.get('entryPrice')}, "
-                           f"leverage={position.get('leverage')}, "
-                           f"side={position.get('side')}")
+                sl_order = result.get('sl_order')
+                tp_order = result.get('tp_order')
                 
-                has_sl, has_tp = has_sl_tp_orders(symbol_formatted, exchange)
+                # Log kết quả
+                orders_created = []
+                if need_sl and sl_order:
+                    orders_created.append(f"SL (ID: {sl_order.get('id', 'N/A')})")
+                    order_logger.info(f"LỆNH 2 (SL) | {symbol} | {side} | Entry: {entry_price} | Rate: {sl_rate}%")
                 
-                # Logic xác định trạng thái
-                if has_sl and has_tp:
-                    print(f"⏭️  {symbol_formatted} đã ĐỦ SL và TP. Bỏ qua.", flush=True)
-                    continue
+                if need_tp and tp_order:
+                    orders_created.append(f"TP (ID: {tp_order.get('id', 'N/A')})")
+                    order_logger.info(f"LỆNH 3 (TP) | {symbol} | {side} | Entry: {entry_price} | Rate: {tp_rate}%")
                 
-                elif has_sl or has_tp:
-                    print(f"♻️  {symbol_formatted} bị LẺ LỆNH (SL={has_sl}, TP={has_tp}). Fix lỗi...", flush=True)
-                    logger.warning(f"{symbol_formatted} bị lẻ lệnh. Reset...")
-                    try:
-                        exchange.cancel_all_orders(symbol_formatted)
-                        cancel_all_algo_orders_direct(symbol_formatted)
-                        
-                        msg = f"🛠 <b>AUTO-FIX</b>\n<b>Mã:</b> {symbol_formatted}\n<b>Trạng thái:</b> Lẻ lệnh -> Đã Reset.\n<b>Hành động:</b> Chờ tạo mới."
-                        telegram_factory.send_tele(msg, cst.chat_id, True, True)
-                    except Exception as e:
-                        print(f"❌ Lỗi hủy lệnh: {e}", flush=True)
-                    continue 
-                
-                # --- TẠO LỆNH MỚI ---
-                symbol = symbol_formatted
-                position_amt_raw = float(position['contracts']) # Số lượng từ CCXT (luôn dương)
-                
-                # [QUAN TRỌNG] Lấy Entry Price từ Position (CCXT đã chuẩn hóa)
-                entry_price = None
-                if 'entryPrice' in position and position['entryPrice']:
-                    try: 
-                        entry_price = float(position['entryPrice'])
-                        if entry_price > 0:
-                            logger.info(f"[ENTRY PRICE] {symbol}: {entry_price}")
-                        else:
-                            logger.warning(f"⚠️  {symbol}: entryPrice = {entry_price} (không hợp lệ)")
-                            entry_price = None
-                    except Exception as e:
-                        logger.error(f"[ENTRY PRICE] {symbol}: Lỗi parse entryPrice: {e}")
-                        entry_price = None
-                
-                # Nếu không lấy được entry price → BỎ QUA
-                if entry_price is None or entry_price <= 0:
-                    logger.error(f"❌ {symbol}: Không lấy được Entry Price. Position data: {position}")
-                    continue
-                
-                # [FIX] CCXT fetch_positions() trả về 'side' rõ ràng
-                position_side = position.get('side', '').lower()
-                is_long = (position_side == 'long')
-                side = STATE_LONG if is_long else STATE_SHORT
-                
-                # [FIX] leverage có thể là None → cần xử lý an toàn
-                leverage_raw = position.get('leverage')
-                leverage = int(leverage_raw) if leverage_raw and leverage_raw != 'None' else 1
-                
-                logger.info(f"[POSITION] {symbol}: Side={position_side}, Is_Long={is_long}, Leverage={leverage}")
-                
-                # Lấy Rate (đã dùng hàm mới an toàn)
-                sb, lenh2rate, lenh3rate = getLenh23Rate(symbol, side)
-                
-                if entry_price <= 0: continue
-                if lenh2rate <= 0 and lenh3rate <= 0:
-                    logger.warning(f"⚠️ {symbol}: Rate SL/TP đều <= 0. Kiểm tra lại Config.")
-                    continue
-
-                print(f"🎯 Tạo SL + TP cho {symbol} | Entry: {entry_price} | Side: {side}", flush=True)
-                
-                # [FIX 2 - QUAN TRỌNG] Làm tròn số lượng (position_amt) trước khi gửi đi
-                try:
-                    # CCXT contracts luôn dương, cần thêm dấu dựa vào side
-                    position_amt_rounded = float(exchange.amount_to_precision(symbol, position_amt_raw))
-                    position_amt = position_amt_rounded if is_long else -position_amt_rounded
+                if orders_created:
+                    print(f"✅ Đã tạo: {', '.join(orders_created)} cho {symbol}", flush=True)
+                    logger.info(f"✅ Tạo lệnh thành công cho {symbol}: {', '.join(orders_created)}")
                     
-                    logger.info(f"[AMOUNT FIX] {symbol}: Raw={position_amt_raw} -> Rounded={position_amt}")
-                except Exception as e:
-                    logger.error(f"Lỗi làm tròn amount {symbol}: {e}")
-                    position_amt = position_amt_raw if is_long else -position_amt_raw  # Fallback
-
-                try:
-                    result = cascade_mgr.on_entry_filled(
-                        symbol=symbol,
-                        layer_num=1,
-                        entry_price=entry_price,
-                        leverage=leverage,
-                        position_amt=position_amt, # Dùng số lượng đã làm tròn
-                        side=side,
-                        max_layers=3,
-                        lenh2_rate=lenh2rate,
-                        lenh3_rate=lenh3rate,
-                        lenh3_callback_rate=cst.lenh3_callback_rate,
-                        next_layer_config=None 
-                    )
-                    
-                    sl_order = result.get('sl_order')
-                    tp_order = result.get('tp_order')
-                    
-                    if sl_order and tp_order:
-                        order_logger.info(f"LỆNH 2 (SL) | {symbol} | {side} | Entry: {entry_price}")
-                        order_logger.info(f"LỆNH 3 (TP) | {symbol} | {side} | Entry: {entry_price}")
-                        
-                        msg = f"✅ <b>ĐÃ TẠO SL + TP CHO LỚP 1</b>\n\n<b>Mã:</b> {symbol}\n<b>Entry:</b> {entry_price}\n<b>SL:</b> {sl_order.get('id')}\n<b>TP:</b> {tp_order.get('id')}"
-                        telegram_factory.send_tele(msg, cst.chat_id, True, True)
-                        logger.info(f"✅ Cascade lớp 1 hoàn tất cho {symbol}")
-                    else:
-                        logger.warning(f"⚠️ Cascade lớp 1 lỗi (Có thể do tạo lệnh thất bại)")
-                        
-                except Exception as e:
-                    logger.error(f"❌ Lỗi cascade lớp 1 cho {symbol}: {e}", exc_info=True)
-                    msg = f"🚨 <b>LỖI TẠO SL/TP</b>\n\n<b>Mã:</b> {symbol}\n<b>Lỗi:</b> {str(e)}"
+                    msg = f"✅ <b>ĐÃ TẠO LỆNH</b>\n\n<b>Mã:</b> {symbol}\n<b>Side:</b> {side}\n<b>Entry:</b> {entry_price}\n<b>Lệnh:</b> {', '.join(orders_created)}\n<b>Rate:</b> SL {sl_rate}%, TP {tp_rate}%"
                     telegram_factory.send_tele(msg, cst.chat_id, True, True)
+                    
+                    processed_count += 1
+                else:
+                    logger.warning(f"⚠️ {symbol}: Không có lệnh nào được tạo (có thể do cascade_mgr logic)")
+                    
+            except Exception as e:
+                logger.error(f"❌ Lỗi tạo lệnh cho {symbol}: {e}", exc_info=True)
+                msg = f"🚨 <b>LỖI TẠO LỆNH</b>\n\n<b>Mã:</b> {symbol}\n<b>Lỗi:</b> {str(e)}"
+                telegram_factory.send_tele(msg, cst.chat_id, True, True)
 
         except Exception as e:
-            logger.error(f"Lỗi xử lý position: {e}")
+            logger.error(f"❌ Lỗi xử lý dòng sheet: {e}", exc_info=True)
+    
+    # Tổng kết
+    logger.info(f"✅ Hoàn thành scan - Đã xử lý {processed_count} symbol")
 
 while True:
     try:
