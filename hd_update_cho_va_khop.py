@@ -141,29 +141,54 @@ def get_all_open_orders_with_single_order():
 def get_opened_possition():
     """
     Lấy tất cả positions đang mở (position_amt != 0)
-    Có retry logic nếu entryPrice=None (có thể do timing issue từ Binance)
+    SỬ DỤNG fetch_positions() thay vì fetch_balance() để có entryPrice!
     """
-    balance = exchange.fetch_balance()
-    positions = balance['info']['positions']
+    try:
+        # ✅ FIX: Dùng fetch_positions() thay vì fetch_balance()['info']['positions']
+        # Vì fetch_balance() KHÔNG trả về entryPrice trong raw data!
+        positions = exchange.fetch_positions()
+        logger.info(f"✅ Đã lấy {len(positions)} positions từ fetch_positions()")
+    except Exception as e:
+        logger.error(f"Lỗi khi lấy positions: {e}", exc_info=True)
+        return []
+    
     opened_possition = []
     
     for position in positions:
         try:
-            symbol = position['symbol']
-            position_amt = float(position['positionAmt'])
+            # CCXT fetch_positions() trả về format khác:
+            # - 'contracts' (luôn dương) thay vì 'positionAmt' (có thể âm/dương)
+            # - 'side' = "long" hoặc "short"
+            # - 'symbol' = "HOME/USDT:USDT" (đã format sẵn)
+            # - CÓ 'entryPrice' và 'leverage'!
             
-            # Fix: Parse entry price an toàn
+            contracts = float(position.get('contracts', 0))
+            if contracts == 0:
+                continue  # Bỏ qua position rỗng
+            
+            side = position.get('side', '').lower()
+            symbol_ccxt = position['symbol']  # "HOME/USDT:USDT"
+            
+            # Convert về format "HOMEUSDT" để tương thích với code hiện tại
+            symbol = symbol_ccxt.replace('/', '').replace(':USDT', '')
+            
+            # Convert contracts + side thành position_amt (âm nếu short, dương nếu long)
+            position_amt = contracts if side == 'long' else -contracts
+            
+            # Parse entry price - fetch_positions() CÓ entryPrice!
             entry_price_raw = position.get('entryPrice')
             if entry_price_raw is not None and entry_price_raw != '' and entry_price_raw != 0:
                 try:
                     entry_price = float(entry_price_raw)
                 except (ValueError, TypeError):
                     entry_price = 0.0
+                    logger.warning(f"{symbol}: Lỗi parse entryPrice: {entry_price_raw}")
             else:
                 entry_price = 0.0
+                logger.warning(f"{symbol}: entryPrice rỗng hoặc = 0, raw: {entry_price_raw}")
             
-            # Parse unrealized PnL an toàn
-            unrealized_pnl_raw = position.get('unrealizedProfit')
+            # Parse unrealized PnL
+            unrealized_pnl_raw = position.get('unrealizedPnl', position.get('unrealizedProfit', 0))
             if unrealized_pnl_raw is not None and unrealized_pnl_raw != '':
                 try:
                     unrealized_pnl = float(unrealized_pnl_raw)
@@ -172,7 +197,7 @@ def get_opened_possition():
             else:
                 unrealized_pnl = 0.0
             
-            # Parse leverage an toàn
+            # Parse leverage - fetch_positions() CÓ leverage!
             leverage_raw = position.get('leverage')
             if leverage_raw is not None and leverage_raw != '' and leverage_raw != 0:
                 try:
@@ -182,51 +207,22 @@ def get_opened_possition():
             else:
                 leverage = 1
             
-            if position_amt != 0:
-                # ⚠️ NẾU ENTRY PRICE = 0: Thử retry một lần (có thể do timing issue)
-                if entry_price == 0.0:
-                    logger.warning(f"⚠️  {symbol}: Entry price = 0! Thử fetch lại position một lần...")
-                    print(f"    ⚠️  {symbol}: Entry price = 0, đang thử fetch lại...", flush=True)
-                    
-                    try:
-                        # Thử fetch lại position cụ thể cho symbol này
-                        time.sleep(0.5)  # Đợi 0.5s trước khi retry
-                        balance_retry = exchange.fetch_balance()
-                        positions_retry = balance_retry['info']['positions']
-                        
-                        # Tìm position tương ứng
-                        for pos_retry in positions_retry:
-                            if pos_retry['symbol'] == symbol:
-                                entry_price_raw_retry = pos_retry.get('entryPrice')
-                                if entry_price_raw_retry is not None and entry_price_raw_retry != '' and entry_price_raw_retry != 0:
-                                    try:
-                                        entry_price = float(entry_price_raw_retry)
-                                        logger.info(f"✅ {symbol}: Retry thành công! Entry price = {entry_price}")
-                                        print(f"    ✅ Retry thành công! Entry = {entry_price}", flush=True)
-                                        # Cập nhật position với dữ liệu mới
-                                        position = pos_retry
-                                        break
-                                    except (ValueError, TypeError):
-                                        pass
-                                break
-                    except Exception as retry_error:
-                        logger.error(f"Lỗi khi retry position {symbol}: {retry_error}")
-                
-                opened_possition.append(position)
-                print(f"📊 {symbol}: Pos={position_amt}, Entry={entry_price}, PnL={unrealized_pnl:.2f}, Lev={leverage}x", flush=True)
-                logger.info(f"Position: {symbol}, Amt={position_amt}, Entry={entry_price}, PnL={unrealized_pnl}, Lev={leverage}")
-                
-                # Debug: Log CHI TIẾT raw data nếu entry price vẫn = 0 sau retry
-                if entry_price == 0.0:
-                    logger.error(f"❌ {symbol}: Entry price = 0 SAU KHI RETRY!")
-                    logger.error(f"   Raw entryPrice: {entry_price_raw} (type: {type(entry_price_raw)})")
-                    logger.error(f"   FULL RAW POSITION DATA: {position}")
-                    logger.error(f"   Position keys: {list(position.keys())}")
-                    # Log từng field quan trọng
-                    for key in ['entryPrice', 'positionAmt', 'unrealizedProfit', 'leverage', 'markPrice', 'liquidationPrice', 'notional']:
-                        if key in position:
-                            logger.error(f"   {key}: {position[key]} (type: {type(position[key])})")
-                    print(f"    ❌ Entry price vẫn = 0 sau retry! Xem log chi tiết.", flush=True)
+            # Thêm position vào danh sách
+            # Lưu cả symbol gốc (CCXT format) và symbol format (để tương thích)
+            position['symbol'] = symbol  # Format "HOMEUSDT" để tương thích với code hiện tại
+            position['symbol_ccxt'] = symbol_ccxt  # Format "HOME/USDT:USDT" để dùng cho API calls
+            position['positionAmt'] = str(position_amt)  # Thêm positionAmt để tương thích
+            
+            opened_possition.append(position)
+            print(f"📊 {symbol}: Pos={position_amt}, Entry={entry_price}, PnL={unrealized_pnl:.2f}, Lev={leverage}x", flush=True)
+            logger.info(f"Position: {symbol}, Amt={position_amt}, Entry={entry_price}, PnL={unrealized_pnl}, Lev={leverage}")
+            
+            # Debug: Log nếu entry price = 0 (không nên xảy ra với fetch_positions())
+            if entry_price == 0.0:
+                logger.error(f"❌ {symbol}: Entry price = 0! (Không nên xảy ra với fetch_positions())")
+                logger.error(f"   Raw entryPrice: {entry_price_raw} (type: {type(entry_price_raw)})")
+                logger.error(f"   FULL RAW POSITION DATA: {position}")
+                print(f"    ⚠️  Entry price = 0! Xem log chi tiết.", flush=True)
                     
         except Exception as e:
             logger.error(f"Lỗi khi xử lý position {position.get('symbol', 'N/A')}: {e}", exc_info=True)
@@ -293,8 +289,12 @@ def do_it():
             else:
                 don_bay = 1
             
-            # Lấy orders cho symbol này
-            orders = exchange.fetch_open_orders(symbol=cac_ma)
+            # Lấy orders cho symbol này - dùng symbol_ccxt nếu có (format CCXT chuẩn)
+            symbol_for_orders = position.get('symbol_ccxt', cac_ma)
+            # Nếu không có symbol_ccxt, convert từ "HOMEUSDT" → "HOME/USDT:USDT"
+            if symbol_for_orders == cac_ma and 'symbol_ccxt' not in position:
+                symbol_for_orders = cac_ma.replace("USDT", "/USDT:USDT")
+            orders = exchange.fetch_open_orders(symbol=symbol_for_orders)
             
             # ✅ LOGIC MỚI: Phân tích chính xác SL/TP
             has_sl, has_tp, order_count = check_sl_tp_orders(orders)
