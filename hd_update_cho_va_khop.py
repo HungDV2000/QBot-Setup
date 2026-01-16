@@ -6,6 +6,10 @@ import time
 from datetime import datetime
 from pathlib import Path
 import os
+import requests
+import hmac
+import hashlib
+import urllib.parse
 
 file_name = os.path.basename(os.path.abspath(__file__))  
 os.system(f"title {file_name} - {cst.key_name}")
@@ -59,41 +63,163 @@ exchange.setSandboxMode(False)
 logger.info("✅ Khởi tạo Binance exchange thành công")
 
 
-def check_sl_tp_orders(orders):
+def call_binance_api_direct(method, endpoint, params=None):
+    """
+    Gọi Binance API trực tiếp bằng requests (để lấy algo orders)
+    """
+    base_url = 'https://fapi.binance.com'
+    url = f"{base_url}{endpoint}"
+    
+    if params is None:
+        params = {}
+    
+    # Thêm timestamp
+    params['timestamp'] = int(time.time() * 1000)
+    
+    # Tạo query string
+    query_string = urllib.parse.urlencode(params)
+    
+    # Tạo signature
+    signature = hmac.new(
+        cst.secret_binance.encode('utf-8'),
+        query_string.encode('utf-8'),
+        hashlib.sha256
+    ).hexdigest()
+    
+    params['signature'] = signature
+    
+    # Headers
+    headers = {
+        'X-MBX-APIKEY': cst.key_binance
+    }
+    
+    try:
+        if method.upper() == 'GET':
+            response = requests.get(url, params=params, headers=headers, timeout=10)
+        else:
+            return None
+            
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        logger.error(f"Lỗi khi gọi Binance API trực tiếp ({method} {endpoint}): {e}")
+        return None
+
+def get_algo_orders_for_symbol(symbol):
+    """
+    Lấy algo orders cho một symbol cụ thể từ Binance API
+    Dùng endpoint: /fapi/v1/allAlgoOrders (Query All Algo Orders)
+    """
+    try:
+        # Binance API yêu cầu symbol format: HOMEUSDT (không có / và :USDT)
+        symbol_clean = symbol.replace('/', '').replace(':USDT', '')
+        
+        params = {
+            'symbol': symbol_clean
+        }
+        
+        response = call_binance_api_direct('GET', '/fapi/v1/allAlgoOrders', params)
+        
+        if not response:
+            return []
+        
+        # Binance trả về có thể là array hoặc dict
+        if isinstance(response, list):
+            return response
+        elif isinstance(response, dict):
+            if 'data' in response:
+                return response['data']
+            elif response.get('code') == 200:
+                return response
+            else:
+                logger.warning(f"Response có code khác 200 cho {symbol}: {response}")
+                return []
+        else:
+            logger.warning(f"Response format không đúng cho {symbol}: {type(response)}")
+            return []
+        
+    except Exception as e:
+        logger.error(f"Lỗi khi lấy algo orders cho {symbol}: {e}", exc_info=True)
+        return []
+
+
+def check_sl_tp_orders(symbol, orders):
     """
     Phân tích danh sách orders để xác định có SL và TP không
+    ✅ CẬP NHẬT: Quét cả algo orders (giống hd_order_123.py)
     
     Logic phân biệt:
-    - STOP_MARKET, STOP → Stop Loss (SL)
-    - TRAILING_STOP_MARKET → Take Profit (TP)
-    - TAKE_PROFIT_MARKET, TAKE_PROFIT → Take Profit (TP)
+    - Algo Orders: STOP_MARKET, STOP_LOSS → SL; TRAILING_STOP → TP
+    - Open Orders: STOP, STOP_LIMIT, STOP_MARKET → SL
     
     Returns: (has_sl, has_tp, order_count)
     """
     has_sl = False
     has_tp = False
-    order_count = len(orders)
     
-    for order in orders:
-        try:
-            order_type = str(order.get('type', '')).upper()
+    try:
+        # ✅ BƯỚC 1: QUÉT ALGO ORDERS (quan trọng nhất!)
+        algo_orders = get_algo_orders_for_symbol(symbol)
+        active_algo_orders = [o for o in algo_orders if o.get('algoStatus', '').upper() == 'NEW']
+        
+        logger.debug(f"{symbol}: Tìm thấy {len(active_algo_orders)} active algo orders")
+        
+        for order in active_algo_orders:
+            algo_type = order.get('algoType', '').upper()
+            reduce_only = order.get('reduceOnly', False)
             
-            # Debug log
-            logger.debug(f"Order type: {order_type}, ID: {order.get('id', 'N/A')}")
-            
-            # Check Stop Loss (STOP nhưng không phải TRAILING_STOP)
-            if 'STOP' in order_type and 'TRAILING' not in order_type:
-                has_sl = True
-                logger.debug(f"  → Detected SL order")
-            
-            # Check Take Profit (TRAILING_STOP hoặc TAKE_PROFIT)
-            if 'TRAILING' in order_type or 'TAKE_PROFIT' in order_type:
-                has_tp = True
-                logger.debug(f"  → Detected TP order")
+            # Lấy callbackRate để phân biệt
+            callback_rate = order.get('callbackRate')
+            callback_val = 0.0
+            if callback_rate is not None:
+                try:
+                    callback_val = float(callback_rate)
+                except:
+                    callback_val = 0.0
+
+            if reduce_only:
+                # == KIỂM TRA TP (Trailing Stop) ==
+                if algo_type in ['CONDITIONAL', 'VP', 'TRAILING_STOP_MARKET'] and callback_val > 0:
+                    has_tp = True
+                    logger.debug(f"  → Detected TP algo order: {algo_type}, callbackRate={callback_val}")
                 
-        except Exception as e:
-            logger.error(f"Lỗi khi phân tích order: {e}")
-            continue
+                # == KIỂM TRA SL (Stop Limit/Market) ==
+                if algo_type in ['STOP', 'STOP_MARKET', 'STOP_LOSS', 'STOP_LOSS_MARKET', 'STOP_LIMIT']:
+                    has_sl = True
+                    logger.debug(f"  → Detected SL algo order: {algo_type}")
+                elif algo_type == 'CONDITIONAL' and callback_val == 0:
+                    has_sl = True
+                    logger.debug(f"  → Detected SL algo order: CONDITIONAL (callbackRate=0)")
+        
+        # ✅ BƯỚC 2: QUÉT OPEN ORDERS (fallback nếu chưa có SL)
+        if not has_sl:
+            for order in orders:
+                try:
+                    order_type = str(order.get('type', '')).upper()
+                    info = order.get('info', {})
+                    reduce_only = order.get('reduceOnly', False) or info.get('reduceOnly', False)
+                    
+                    # Check Stop Loss (STOP nhưng không phải TRAILING_STOP)
+                    if order_type in ['STOP', 'STOP_LIMIT', 'STOP_MARKET'] and reduce_only:
+                        has_sl = True
+                        logger.debug(f"  → Detected SL open order: {order_type}")
+                    
+                    # Check Take Profit (TRAILING_STOP hoặc TAKE_PROFIT)
+                    if 'TRAILING' in order_type or 'TAKE_PROFIT' in order_type:
+                        has_tp = True
+                        logger.debug(f"  → Detected TP open order: {order_type}")
+                        
+                except Exception as e:
+                    logger.error(f"Lỗi khi phân tích order: {e}")
+                    continue
+        
+        # Đếm tổng số orders (algo + open)
+        order_count = len(active_algo_orders) + len(orders)
+        
+    except Exception as e:
+        logger.error(f"Lỗi khi check SL/TP cho {symbol}: {e}", exc_info=True)
+        # Fallback: chỉ đếm open orders
+        order_count = len(orders)
     
     return has_sl, has_tp, order_count
 
@@ -294,10 +420,16 @@ def do_it():
             # Nếu không có symbol_ccxt, convert từ "HOMEUSDT" → "HOME/USDT:USDT"
             if symbol_for_orders == cac_ma and 'symbol_ccxt' not in position:
                 symbol_for_orders = cac_ma.replace("USDT", "/USDT:USDT")
-            orders = exchange.fetch_open_orders(symbol=symbol_for_orders)
             
-            # ✅ LOGIC MỚI: Phân tích chính xác SL/TP
-            has_sl, has_tp, order_count = check_sl_tp_orders(orders)
+            try:
+                orders = exchange.fetch_open_orders(symbol=symbol_for_orders)
+            except Exception as e:
+                logger.warning(f"Lỗi khi lấy open orders cho {symbol_for_orders}: {e}")
+                orders = []
+            
+            # ✅ LOGIC MỚI: Phân tích chính xác SL/TP (quét cả algo orders)
+            # Truyền symbol để quét algo orders
+            has_sl, has_tp, order_count = check_sl_tp_orders(symbol_for_orders, orders)
             
             lenh_ls = "Y" if has_sl else "N"  # Cột G
             lenh_tp = "Y" if has_tp else "N"  # Cột H
