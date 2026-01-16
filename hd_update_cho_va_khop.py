@@ -141,6 +141,7 @@ def get_all_open_orders_with_single_order():
 def get_opened_possition():
     """
     Lấy tất cả positions đang mở (position_amt != 0)
+    Có retry logic nếu entryPrice=None (có thể do timing issue từ Binance)
     """
     balance = exchange.fetch_balance()
     positions = balance['info']['positions']
@@ -182,17 +183,53 @@ def get_opened_possition():
                 leverage = 1
             
             if position_amt != 0:
+                # ⚠️ NẾU ENTRY PRICE = 0: Thử retry một lần (có thể do timing issue)
+                if entry_price == 0.0:
+                    logger.warning(f"⚠️  {symbol}: Entry price = 0! Thử fetch lại position một lần...")
+                    print(f"    ⚠️  {symbol}: Entry price = 0, đang thử fetch lại...", flush=True)
+                    
+                    try:
+                        # Thử fetch lại position cụ thể cho symbol này
+                        time.sleep(0.5)  # Đợi 0.5s trước khi retry
+                        balance_retry = exchange.fetch_balance()
+                        positions_retry = balance_retry['info']['positions']
+                        
+                        # Tìm position tương ứng
+                        for pos_retry in positions_retry:
+                            if pos_retry['symbol'] == symbol:
+                                entry_price_raw_retry = pos_retry.get('entryPrice')
+                                if entry_price_raw_retry is not None and entry_price_raw_retry != '' and entry_price_raw_retry != 0:
+                                    try:
+                                        entry_price = float(entry_price_raw_retry)
+                                        logger.info(f"✅ {symbol}: Retry thành công! Entry price = {entry_price}")
+                                        print(f"    ✅ Retry thành công! Entry = {entry_price}", flush=True)
+                                        # Cập nhật position với dữ liệu mới
+                                        position = pos_retry
+                                        break
+                                    except (ValueError, TypeError):
+                                        pass
+                                break
+                    except Exception as retry_error:
+                        logger.error(f"Lỗi khi retry position {symbol}: {retry_error}")
+                
                 opened_possition.append(position)
                 print(f"📊 {symbol}: Pos={position_amt}, Entry={entry_price}, PnL={unrealized_pnl:.2f}, Lev={leverage}x", flush=True)
                 logger.info(f"Position: {symbol}, Amt={position_amt}, Entry={entry_price}, PnL={unrealized_pnl}, Lev={leverage}")
                 
-                # Debug: Log raw data nếu entry price = 0
+                # Debug: Log CHI TIẾT raw data nếu entry price vẫn = 0 sau retry
                 if entry_price == 0.0:
-                    logger.warning(f"⚠️  {symbol}: Entry price = 0! Raw data: entryPrice={entry_price_raw}, position data keys: {list(position.keys())}")
-                    print(f"    ⚠️  Entry price = 0! Raw: {entry_price_raw}", flush=True)
+                    logger.error(f"❌ {symbol}: Entry price = 0 SAU KHI RETRY!")
+                    logger.error(f"   Raw entryPrice: {entry_price_raw} (type: {type(entry_price_raw)})")
+                    logger.error(f"   FULL RAW POSITION DATA: {position}")
+                    logger.error(f"   Position keys: {list(position.keys())}")
+                    # Log từng field quan trọng
+                    for key in ['entryPrice', 'positionAmt', 'unrealizedProfit', 'leverage', 'markPrice', 'liquidationPrice', 'notional']:
+                        if key in position:
+                            logger.error(f"   {key}: {position[key]} (type: {type(position[key])})")
+                    print(f"    ❌ Entry price vẫn = 0 sau retry! Xem log chi tiết.", flush=True)
                     
         except Exception as e:
-            logger.error(f"Lỗi khi xử lý position {position.get('symbol', 'N/A')}: {e}")
+            logger.error(f"Lỗi khi xử lý position {position.get('symbol', 'N/A')}: {e}", exc_info=True)
             continue
     
     return opened_possition
@@ -274,6 +311,12 @@ def do_it():
                 print(f"    ❌ BỎ QUA: Entry price = 0 hoặc None! (Raw: {entry_price_raw})", flush=True)
                 logger.error(f"❌ {symbol_formatted}: Entry price không hợp lệ (0 hoặc None). Raw: {entry_price_raw}")
                 logger.error(f"   Position data: {position}")
+                logger.error(f"   FULL RAW POSITION DATA: {position}")
+                logger.error(f"   Position keys: {list(position.keys())}")
+                # Log từng field quan trọng để debug
+                for key in ['entryPrice', 'positionAmt', 'unrealizedProfit', 'leverage', 'markPrice', 'liquidationPrice', 'notional', 'isolated', 'marginType']:
+                    if key in position:
+                        logger.error(f"   {key}: {position[key]} (type: {type(position[key])})")
                 continue  # Bỏ qua position này
             
             logger.info(f"{symbol_formatted}: {vi_the_short_long}, Entry={gia_vao}, Lev={don_bay}, Orders={order_count}, SL={lenh_ls}, TP={lenh_tp}")
