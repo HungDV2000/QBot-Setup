@@ -18,8 +18,8 @@ os.system(f"title {file_name} - {cst.key_name}")
 logs_dir = Path('logs')
 logs_dir.mkdir(exist_ok=True)
 
-# Tạo tên file log với timestamp: cho_va_khop_dd_mm_yyyy.txt
-log_timestamp = datetime.now().strftime('%d_%m_%Y')
+# Tạo tên file log với timestamp: cho_va_khop_dd_mm_yyyy_H_M_S.txt
+log_timestamp = datetime.now().strftime('%d_%m_%Y_%H_%M_%S')
 log_filename_base = f'cho_va_khop_{log_timestamp}'
 
 # Logging cải thiện với file trong logs/

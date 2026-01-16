@@ -24,9 +24,9 @@ os.system(f"title {file_name} - {cst.key_name}")
 logs_dir = Path('logs')
 logs_dir.mkdir(exist_ok=True)
 
-# Tạo tên file log với timestamp: hd_update_all_dd_mm_yyyy_h_m_s.log
+# Tạo tên file log với timestamp: hd_update_all_dd_mm_yyyy_H_M_S.txt
 log_timestamp = datetime.now().strftime('%d_%m_%Y_%H_%M_%S')
-log_filename = logs_dir / f'hd_update_all_{log_timestamp}.log'
+log_filename = logs_dir / f'hd_update_all_{log_timestamp}.txt'
 
 # Cải thiện logging với timestamp và UTF-8 encoding
 logging.basicConfig(

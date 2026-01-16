@@ -5,6 +5,12 @@ import time
 import telegram_factory
 import logging
 import os
+import requests
+import hmac
+import hashlib
+import urllib.parse
+import gg_sheet_factory
+from datetime import datetime
 
 file_name = os.path.basename(os.path.abspath(__file__))  
 os.system(f"title {file_name} - {cst.key_name}")
@@ -13,77 +19,25 @@ os.system(f"title {file_name} - {cst.key_name}")
 logs_dir = Path('logs')
 logs_dir.mkdir(exist_ok=True)
 
-# Log file riêng (liên quan đến hủy lệnh - xử lý tiền)
-log_file = logs_dir / 'hd_cancel.log'
+# Tạo tên file log với timestamp: hd_cancel_dd_mm_yyyy_H_M_S.txt
+log_timestamp = datetime.now().strftime('%d_%m_%Y_%H_%M_%S')
+log_filename = logs_dir / f'hd_cancel_{log_timestamp}.txt'
+
 logging.basicConfig(
-    filename=str(log_file), 
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+    datefmt='%Y-%m-%d %H:%M:%S',
+    encoding='utf-8'
 )
 logger = logging.getLogger(__name__)
 
+# Tạo file handler với tên file động
+file_handler = logging.FileHandler(log_filename, encoding='utf-8')
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
+file_handler.setLevel(logging.INFO)
+logger.addHandler(file_handler)
 
-def cancel_all_open_orders(symbol):
-    """Hủy TẤT CẢ orders (bao gồm cả TRAILING_STOP/Algo orders)"""
-    total_cancelled = 0
-    
-    try:
-        # Lấy tất cả open orders (bao gồm cả algo orders)
-    open_orders = exchange.fetch_open_orders(symbol)
-
-        if not open_orders:
-            print(f"ℹ️  Không có lệnh mở nào cho {symbol}", flush=True)
-            return
-        
-        for order in open_orders:
-            try:
-                info = order.get('info', {})
-                order_id = order.get('id')
-                algo_id = info.get('algoId', None)
-                algo_type = info.get('algoType', 'N/A')
-                
-                # Nếu là algo order (có algoId), cần hủy bằng cách đặc biệt
-                if algo_id:
-                    try:
-                        # Hủy algo order
-                        # Binance Futures algo orders cần hủy qua cancelAlgoOrder endpoint
-                        cancel_params = {
-                            'algoId': str(algo_id)
-                        }
-                        cancel_result = exchange.cancel_order(order_id, symbol, params=cancel_params)
-                        total_cancelled += 1
-                        print(f"✅ Hủy Algo order {algo_id} [{algo_type}] cho {symbol}", flush=True)
-                        logger.info(f"Đã hủy Algo order {algo_id} [{algo_type}] cho {symbol}")
-                    except Exception as e:
-                        # Fallback: thử hủy như order thông thường
-                        logger.warning(f"Lỗi hủy algo order {algo_id}, thử fallback: {e}")
-                        try:
-            cancel_result = exchange.cancel_order(order_id, symbol)
-                            total_cancelled += 1
-                            print(f"✅ Hủy order {order_id} (fallback) cho {symbol}", flush=True)
-                            logger.info(f"Đã hủy order {order_id} (fallback) cho {symbol}")
-                        except Exception as e2:
-                            logger.error(f"Không thể hủy order {order_id}/{algo_id}: {e2}")
-    else:
-                    # Hủy order thông thường
-                    cancel_result = exchange.cancel_order(order_id, symbol)
-                    total_cancelled += 1
-                    print(f"✅ Hủy order {order_id} cho {symbol}", flush=True)
-                    logger.info(f"Đã hủy order {order_id} cho {symbol}")
-                    
-            except Exception as e:
-                logger.error(f"Lỗi khi hủy order {order.get('id', 'N/A')}: {e}")
-        
-        # Thông báo
-        if total_cancelled > 0:
-            msg = f"✅ Đã hủy {total_cancelled} lệnh chờ theo lịch: {symbol}"
-            telegram_factory.send_tele(msg, cst.chat_id, True, True)
-            print(f"🧹 Tổng cộng đã hủy {total_cancelled} lệnh cho {symbol}", flush=True)
-            
-    except Exception as e:
-        logger.error(f"Lỗi khi lấy/hủy orders cho {symbol}: {e}", exc_info=True)
-
+# Khởi tạo exchange
 exchange_id = 'binance'
 exchange_class = getattr(ccxt, exchange_id)
 exchange = exchange_class({
@@ -96,38 +50,251 @@ exchange = exchange_class({
 })
 exchange.setSandboxMode(False)
 
+logger.info("✅ Khởi tạo Binance exchange thành công")
 
-import gg_sheet_factory
-from datetime import datetime
 
-def my_function():
-    try:
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[{current_time}] Hàm đang chạy...", flush=True)
-        logger.info(f"[{current_time}] Bắt đầu cancel orders theo lịch")
+def call_binance_api_direct(method, endpoint, params=None):
+    """
+    Gọi Binance API trực tiếp bằng requests (để hủy algo orders)
+    """
+    base_url = 'https://fapi.binance.com'
+    url = f"{base_url}{endpoint}"
     
-    for symbol in gg_sheet_factory.get_cho_va_khop("A3:A100"):
-            if symbol and len(symbol) > 0 and "USDT" in str(symbol[0]):
-                print(f"cancel: {symbol[0]}", flush=True)
-            cancel_all_open_orders(symbol[0])
+    if params is None:
+        params = {}
+    
+    # Thêm timestamp
+    params['timestamp'] = int(time.time() * 1000)
+    
+    # Tạo query string
+    query_string = urllib.parse.urlencode(params)
+    
+    # Tạo signature
+    signature = hmac.new(
+        cst.secret_binance.encode('utf-8'),
+        query_string.encode('utf-8'),
+        hashlib.sha256
+    ).hexdigest()
+    
+    params['signature'] = signature
+    
+    # Headers
+    headers = {
+        'X-MBX-APIKEY': cst.key_binance
+    }
+    
+    try:
+        if method.upper() == 'DELETE':
+            response = requests.delete(url, params=params, headers=headers, timeout=10)
+        elif method.upper() == 'GET':
+            response = requests.get(url, params=params, headers=headers, timeout=10)
+        else:
+            return None
+            
+        response.raise_for_status()
+        return response.json()
     except Exception as e:
-        print(f"Lỗi trong my_function: {e}", flush=True)
-        logger.error(f"Lỗi trong my_function: {e}", exc_info=True)
+        logger.error(f"Lỗi khi gọi Binance API trực tiếp ({method} {endpoint}): {e}")
+        return None
+
+def get_algo_orders_for_symbol(symbol):
+    """
+    Lấy algo orders cho một symbol cụ thể từ Binance API
+    """
+    try:
+        # Binance API yêu cầu symbol format: HOMEUSDT (không có / và :USDT)
+        symbol_clean = symbol.replace('/', '').replace(':USDT', '')
+        
+        params = {
+            'symbol': symbol_clean
+        }
+        
+        response = call_binance_api_direct('GET', '/fapi/v1/allAlgoOrders', params)
+        
+        if not response:
+            return []
+        
+        # Binance trả về có thể là array hoặc dict
+        if isinstance(response, list):
+            return response
+        elif isinstance(response, dict):
+            if 'data' in response:
+                return response['data']
+            elif response.get('code') == 200:
+                return response
+            else:
+                return []
+        else:
+            return []
+        
+    except Exception as e:
+        logger.error(f"Lỗi khi lấy algo orders cho {symbol}: {e}", exc_info=True)
+        return []
 
 
-# Thay thế schedule bằng logic đơn giản với time.sleep
-print(f"Bắt đầu chạy...{cst.cancel_orders_minutes} phút một lần")
+def cancel_all_open_orders(symbol):
+    """
+    Hủy TẤT CẢ orders (bao gồm cả TRAILING_STOP/Algo orders và open orders thông thường)
+    ✅ NÂNG CẤP: Sử dụng API trực tiếp để hủy algo orders chính xác
+    """
+    total_cancelled = 0
+    total_algo_cancelled = 0
+    total_open_cancelled = 0
+    
+    try:
+        # ✅ BƯỚC 1: Hủy Algo Orders (TRAILING_STOP, STOP_MARKET, etc.)
+        try:
+            algo_orders = get_algo_orders_for_symbol(symbol)
+            active_algo_orders = [o for o in algo_orders if o.get('algoStatus', '').upper() == 'NEW']
+            
+            if active_algo_orders:
+                logger.info(f"Tìm thấy {len(active_algo_orders)} Algo Orders cần hủy cho {symbol}")
+                
+                for order in active_algo_orders:
+                    algo_id = order.get('algoId')
+                    algo_type = order.get('algoType', 'N/A')
+                    
+                    if algo_id:
+                        # Hủy algo order qua API trực tiếp
+                        symbol_clean = symbol.replace('/', '').replace(':USDT', '')
+                        params = {
+                            'symbol': symbol_clean,
+                            'algoId': algo_id
+                        }
+                        response = call_binance_api_direct('DELETE', '/fapi/v1/algoOrder', params)
+                        
+                        if response:
+                            code = response.get('code')
+                            if str(code) == '200':
+                                total_algo_cancelled += 1
+                                total_cancelled += 1
+                                print(f"✅ Hủy Algo order {algo_id} [{algo_type}] cho {symbol}", flush=True)
+                                logger.info(f"Đã hủy Algo order {algo_id} [{algo_type}] cho {symbol}")
+                            else:
+                                logger.warning(f"Không thể hủy algo order {algo_id}: code={code}")
+                        else:
+                            logger.warning(f"Không nhận được response khi hủy algo order {algo_id}")
+        except Exception as e:
+            logger.error(f"Lỗi khi hủy algo orders cho {symbol}: {e}", exc_info=True)
+        
+        # ✅ BƯỚC 2: Hủy Open Orders thông thường
+        try:
+            open_orders = exchange.fetch_open_orders(symbol)
+            
+            if open_orders:
+                logger.info(f"Tìm thấy {len(open_orders)} Open Orders cần hủy cho {symbol}")
+                
+                for order in open_orders:
+                    try:
+                        order_id = order.get('id')
+                        if order_id:
+                            cancel_result = exchange.cancel_order(order_id, symbol)
+                            total_open_cancelled += 1
+                            total_cancelled += 1
+                            print(f"✅ Hủy order {order_id} cho {symbol}", flush=True)
+                            logger.info(f"Đã hủy order {order_id} cho {symbol}")
+                    except Exception as e:
+                        logger.error(f"Lỗi khi hủy order {order.get('id', 'N/A')}: {e}")
+        except Exception as e:
+            logger.error(f"Lỗi khi lấy/hủy open orders cho {symbol}: {e}", exc_info=True)
+        
+        # Thông báo kết quả
+        if total_cancelled > 0:
+            msg = f"✅ <b>ĐÃ HỦY LỆNH THEO LỊCH</b>\n\n<b>Mã:</b> {symbol}\n<b>Tổng:</b> {total_cancelled} lệnh\n<b>Algo:</b> {total_algo_cancelled}\n<b>Open:</b> {total_open_cancelled}"
+            telegram_factory.send_tele(msg, cst.chat_id, True, True)
+            print(f"🧹 Tổng cộng đã hủy {total_cancelled} lệnh cho {symbol} (Algo: {total_algo_cancelled}, Open: {total_open_cancelled})", flush=True)
+        else:
+            print(f"ℹ️  Không có lệnh nào cần hủy cho {symbol}", flush=True)
+            
+    except Exception as e:
+        logger.error(f"Lỗi tổng quát khi hủy orders cho {symbol}: {e}", exc_info=True)
+        print(f"❌ Lỗi khi hủy orders cho {symbol}: {e}", flush=True)
+
+
+def cancel_orders_scheduled():
+    """
+    Hàm chính: Đọc danh sách symbols từ sheet và hủy orders
+    """
+    try:
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"\n{'='*80}", flush=True)
+        print(f"[{current_time}] Bắt đầu hủy lệnh theo lịch...", flush=True)
+        print(f"{'='*80}\n", flush=True)
+        logger.info(f"[{current_time}] Bắt đầu cancel orders theo lịch")
+        
+        # Đọc danh sách symbols từ sheet "Chờ và khớp" (cột A, hàng 3-100)
+        sheet_data = gg_sheet_factory.get_cho_va_khop("A3:A100")
+        
+        if not sheet_data:
+            print("⚠️  Không có dữ liệu từ sheet", flush=True)
+            logger.warning("Không có dữ liệu từ sheet 'Chờ và khớp'")
+            return
+        
+        symbols_processed = 0
+        symbols_with_orders = 0
+        
+        for row in sheet_data:
+            try:
+                if not row or len(row) == 0:
+                    continue
+                
+                symbol_raw = str(row[0]).strip() if row[0] else ""
+                
+                # Validate symbol (phải chứa USDT)
+                if not symbol_raw or "USDT" not in symbol_raw.upper():
+                    continue
+                
+                # Format symbol: "HOME/USDT" hoặc "HOMEUSDT" → "HOME/USDT:USDT" (CCXT format)
+                symbol = symbol_raw
+                if "/" not in symbol:
+                    # "HOMEUSDT" → "HOME/USDT:USDT"
+                    symbol = symbol.replace("USDT", "/USDT:USDT")
+                elif ":USDT" not in symbol:
+                    # "HOME/USDT" → "HOME/USDT:USDT"
+                    symbol = f"{symbol}:USDT"
+                
+                print(f"🔍 Xử lý: {symbol}", flush=True)
+                symbols_processed += 1
+                
+                # Hủy tất cả orders cho symbol này
+                cancel_all_open_orders(symbol)
+                symbols_with_orders += 1
+                
+            except Exception as e:
+                logger.error(f"Lỗi xử lý dòng sheet: {e}", exc_info=True)
+                continue
+        
+        # Tổng kết
+        print(f"\n{'='*80}", flush=True)
+        print(f"✅ Hoàn thành! Đã xử lý {symbols_processed} symbols", flush=True)
+        print(f"{'='*80}\n", flush=True)
+        logger.info(f"Hoàn thành cancel orders - Đã xử lý {symbols_processed} symbols")
+        
+    except Exception as e:
+        print(f"❌ Lỗi trong cancel_orders_scheduled: {e}", flush=True)
+        logger.error(f"Lỗi trong cancel_orders_scheduled: {e}", exc_info=True)
+
+
+# Main loop
+print(f"🚀 Bot hủy lệnh theo lịch khởi động - Chạy mỗi {cst.cancel_orders_minutes} phút", flush=True)
 logger.info(f"Khởi động cancel orders scheduler - chạy mỗi {cst.cancel_orders_minutes} phút")
 
 # Chạy ngay lần đầu
-my_function()
+cancel_orders_scheduled()
 
 # Sau đó chạy theo interval
 while True:
     try:
         time.sleep(cst.cancel_orders_minutes * 60)  # Chuyển phút thành giây
-        my_function()
+        cancel_orders_scheduled()
+    except KeyboardInterrupt:
+        print("\n⚠️  Nhận Ctrl+C - Dừng bot...", flush=True)
+        logger.info("Bot dừng bởi user (Ctrl+C)")
+        break
     except Exception as e:
-        print(f"Lỗi trong vòng lặp cancel orders: {e}", flush=True)
+        print(f"❌ Lỗi trong vòng lặp cancel orders: {e}", flush=True)
         logger.error(f"Lỗi trong vòng lặp cancel orders: {e}", exc_info=True)
         time.sleep(60)  # Chờ 1 phút trước khi thử lại
+
+print("👋 Bot đã dừng", flush=True)
+logger.info("Bot đã dừng")

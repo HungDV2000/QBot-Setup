@@ -1,7 +1,6 @@
 import ccxt
 import cst
 import gg_sheet_factory
-import cst
 import logging
 import time
 from datetime import datetime
@@ -21,15 +20,23 @@ os.system(f"title {file_name} - {cst.key_name}")
 logs_dir = Path('logs')
 logs_dir.mkdir(exist_ok=True)
 
-# Log file riêng (liên quan đến positions/orders - xử lý tiền)
-log_file = logs_dir / 'hd_alert_possition_and_open_order.log'
+# Tạo tên file log với timestamp: hd_alert_possition_and_open_order_dd_mm_yyyy_H_M_S.txt
+log_timestamp = datetime.now().strftime('%d_%m_%Y_%H_%M_%S')
+log_filename = logs_dir / f'hd_alert_possition_and_open_order_{log_timestamp}.txt'
+
 logging.basicConfig(
-    filename=str(log_file), 
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+    datefmt='%Y-%m-%d %H:%M:%S',
+    encoding='utf-8'
 )
 logger = logging.getLogger(__name__)
+
+# Tạo file handler với tên file động
+file_handler = logging.FileHandler(log_filename, encoding='utf-8')
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
+file_handler.setLevel(logging.INFO)
+logger.addHandler(file_handler)
 
 exchange_id = 'binance'
 exchange_class = getattr(ccxt, exchange_id)
@@ -66,31 +73,89 @@ def get_all_open_orders_with_single_order():
     return res
 
 def get_opened_possition():
+    """
+    Lấy tất cả positions đang mở (position_amt != 0)
+    ✅ SỬ DỤNG fetch_positions() thay vì fetch_balance() để có entryPrice!
+    """
+    try:
+        # ✅ FIX: Dùng fetch_positions() thay vì fetch_balance()['info']['positions']
+        # Vì fetch_balance() KHÔNG trả về entryPrice trong raw data!
+        positions = exchange.fetch_positions()
+        logger.info(f"✅ Đã lấy {len(positions)} positions từ fetch_positions()")
+    except Exception as e:
+        logger.error(f"Lỗi khi lấy positions: {e}", exc_info=True)
+        return []
     
-    balance = exchange.fetch_balance()
-    positions = balance['info']['positions']
     opened_possition = []
     
     for position in positions:
         try:
-            symbol = position.get('symbol', '')
-            if not symbol:
-                continue
-                
-            position_amt = float(position.get('positionAmt', 0))
+            # CCXT fetch_positions() trả về format khác:
+            # - 'contracts' (luôn dương) thay vì 'positionAmt' (có thể âm/dương)
+            # - 'side' = "long" hoặc "short"
+            # - 'symbol' = "HOME/USDT:USDT" (đã format sẵn)
+            # - CÓ 'entryPrice' và 'leverage'!
             
-            # Chỉ xử lý position có amount khác 0
-        if position_amt != 0:
-                # Sử dụng .get() với giá trị mặc định để tránh KeyError
-                entry_price = float(position.get('entryPrice', 0))
-                unrealized_pnl = float(position.get('unrealizedProfit', 0))
-                leverage = int(position.get('leverage', 1))
-                
-                print(position, flush=True)
-            opened_possition.append(position)
-                print(f"Symbol: {symbol}, Position: {position_amt}, Entry Price: {entry_price}, Unrealized PnL: {unrealized_pnl}, Leverage: {leverage}", flush=True)
-        except (KeyError, ValueError, TypeError) as e:
-            logger.warning(f"Lỗi khi xử lý position: {position.get('symbol', 'UNKNOWN')} - {e}")
+            contracts = float(position.get('contracts', 0))
+            if contracts == 0:
+                continue  # Bỏ qua position rỗng
+            
+            side = position.get('side', '').lower()
+            symbol_ccxt = position['symbol']  # "HOME/USDT:USDT"
+            
+            # Convert về format "HOMEUSDT" để tương thích với code hiện tại
+            symbol = symbol_ccxt.replace('/', '').replace(':USDT', '')
+            
+            # Convert contracts + side thành position_amt (âm nếu short, dương nếu long)
+            position_amt = contracts if side == 'long' else -contracts
+            
+            # Parse entry price - fetch_positions() CÓ entryPrice!
+            entry_price_raw = position.get('entryPrice')
+            if entry_price_raw is not None and entry_price_raw != '' and entry_price_raw != 0:
+                try:
+                    entry_price = float(entry_price_raw)
+                except (ValueError, TypeError):
+                    entry_price = 0.0
+                    logger.warning(f"{symbol}: Lỗi parse entryPrice: {entry_price_raw}")
+            else:
+                entry_price = 0.0
+                logger.warning(f"{symbol}: entryPrice rỗng hoặc = 0, raw: {entry_price_raw}")
+            
+            # Parse unrealized PnL
+            unrealized_pnl_raw = position.get('unrealizedPnl', position.get('unrealizedProfit', 0))
+            if unrealized_pnl_raw is not None and unrealized_pnl_raw != '':
+                try:
+                    unrealized_pnl = float(unrealized_pnl_raw)
+                except (ValueError, TypeError):
+                    unrealized_pnl = 0.0
+            else:
+                unrealized_pnl = 0.0
+            
+            # Parse leverage - fetch_positions() CÓ leverage!
+            leverage_raw = position.get('leverage')
+            if leverage_raw is not None and leverage_raw != '' and leverage_raw != 0:
+                try:
+                    leverage = int(float(leverage_raw))
+                except (ValueError, TypeError):
+                    leverage = 1
+            else:
+                leverage = 1
+            
+            # Tạo position dict với format tương thích với code hiện tại
+            position_dict = {
+                'symbol': symbol,  # Format "HOMEUSDT"
+                'positionAmt': str(position_amt),
+                'entryPrice': entry_price,
+                'unrealizedProfit': unrealized_pnl,
+                'leverage': leverage
+            }
+            
+            opened_possition.append(position_dict)
+            print(f"Symbol: {symbol}, Position: {position_amt}, Entry Price: {entry_price}, Unrealized PnL: {unrealized_pnl}, Leverage: {leverage}", flush=True)
+            logger.debug(f"Position: {symbol}, Amt={position_amt}, Entry={entry_price}, PnL={unrealized_pnl}, Lev={leverage}")
+            
+        except Exception as e:
+            logger.error(f"Lỗi khi xử lý position {position.get('symbol', 'N/A')}: {e}", exc_info=True)
             continue
             
     return opened_possition
@@ -280,10 +345,7 @@ def do_it():
 
 while True:
     try:
-
         do_it()
-        
-
     except Exception as e:
         print(f"Tổng Lỗi: {e}", flush=True)
         logger.error(f"Tổng lỗi: {e}", exc_info=True)
@@ -291,4 +353,3 @@ while True:
         traceback.print_exc()
 
     time.sleep(cst.delay_calert_possition_and_open_order)
-    

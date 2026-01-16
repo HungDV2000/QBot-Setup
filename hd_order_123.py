@@ -32,7 +32,7 @@ logs_dir = Path('logs')
 logs_dir.mkdir(exist_ok=True)
 
 log_timestamp = datetime.now().strftime('%d_%m_%Y_%H_%M_%S')
-log_filename = logs_dir / f'hd_order_123_{log_timestamp}.log'
+log_filename = logs_dir / f'hd_order_123_{log_timestamp}.txt'
 
 logging.basicConfig(
     level=logging.INFO,
