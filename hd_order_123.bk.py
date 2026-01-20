@@ -72,19 +72,18 @@ def is_same_pair(sym1, sym2):
        return True
     return False
 
-def get_sl_tp_activation_price_from_cho_va_khop(symbol, side, row_data, entry_price):
+def get_sl_tp_rate_from_cho_va_khop(symbol, side, row_data):
     """
-    Lấy giá kích hoạt SL/TP từ sheet "Chờ và khớp" (cột J, K)
-    Tính rate từ giá kích hoạt và entry price
+    Lấy rate SL/TP từ sheet "Chờ và khớp" (cột J, K)
+    Ưu tiên: Sheet cột J, K > Config
     
     Args:
         symbol: Symbol hiện tại
         side: "LONG" hoặc "SHORT"
-        row_data: Dữ liệu dòng từ sheet (list)
-        entry_price: Giá vào lệnh (để tính rate từ giá kích hoạt)
+        row_data: Dữ liệu dòng từ sheet (list) - mỗi symbol có rate riêng
     
     Returns:
-        (sl_rate, tp_rate, source_info, sl_activation_price, tp_activation_price)
+        (sl_rate, tp_rate, source_info)
     """
     # Config mặc định (fallback)
     if side == STATE_LONG:
@@ -97,53 +96,35 @@ def get_sl_tp_activation_price_from_cho_va_khop(symbol, side, row_data, entry_pr
     # Khởi tạo với giá trị mặc định
     sl_rate = default_sl
     tp_rate = default_tp
-    sl_activation_price = None
-    tp_activation_price = None
     
     sl_source = "Config"
     tp_source = "Config"
     
     try:
-        # Cột J (index 9) - Giá kích hoạt SL
+        # Cột J (index 9) - STOP LIMIT rate (mỗi symbol có rate riêng)
         if len(row_data) > 9 and row_data[9]:
             val = str(row_data[9]).strip()
             if val and val not in ["", "0", "0.0"]:
-                try:
-                    sl_activation_price = float(val)
-                    # Tính rate từ giá kích hoạt: rate = abs(activation_price - entry_price) / entry_price * 100
-                    if entry_price > 0:
-                        sl_rate = abs(sl_activation_price - entry_price) / entry_price * 100
-                        sl_source = "Sheet (từ giá kích hoạt)"
-                        logger.debug(f"{symbol}: Giá kích hoạt SL từ cột J = {sl_activation_price}, Rate = {sl_rate}%")
-                except (ValueError, TypeError) as e:
-                    logger.debug(f"{symbol}: Lỗi parse giá kích hoạt SL từ sheet cột J: {e}")
+                sl_rate = float(val)
+                sl_source = "Sheet"
+                logger.debug(f"{symbol}: SL rate từ cột J = {sl_rate}%")
     except Exception as e:
-        logger.debug(f"{symbol}: Lỗi đọc giá kích hoạt SL từ sheet cột J: {e}")
+        logger.debug(f"{symbol}: Lỗi parse SL rate từ sheet cột J: {e}")
     
     try:
-        # Cột K (index 10) - Giá kích hoạt TP
+        # Cột K (index 10) - TRAILING STOP rate (mỗi symbol có rate riêng)
         if len(row_data) > 10 and row_data[10]:
             val = str(row_data[10]).strip()
             if val and val not in ["", "0", "0.0"]:
-                try:
-                    tp_activation_price = float(val)
-                    # Tính rate từ giá kích hoạt: rate = abs(activation_price - entry_price) / entry_price * 100
-                    if entry_price > 0:
-                        tp_rate = abs(tp_activation_price - entry_price) / entry_price * 100
-                        tp_source = "Sheet (từ giá kích hoạt)"
-                        logger.debug(f"{symbol}: Giá kích hoạt TP từ cột K = {tp_activation_price}, Rate = {tp_rate}%")
-                except (ValueError, TypeError) as e:
-                    logger.debug(f"{symbol}: Lỗi parse giá kích hoạt TP từ sheet cột K: {e}")
+                tp_rate = float(val)
+                tp_source = "Sheet"
+                logger.debug(f"{symbol}: TP rate từ cột K = {tp_rate}%")
     except Exception as e:
-        logger.debug(f"{symbol}: Lỗi đọc giá kích hoạt TP từ sheet cột K: {e}")
+        logger.debug(f"{symbol}: Lỗi parse TP rate từ sheet cột K: {e}")
     
     logger.info(f"{symbol}: Rate SL={sl_rate}% ({sl_source}), TP={tp_rate}% ({tp_source})")
-    if sl_activation_price:
-        logger.info(f"{symbol}: Giá kích hoạt SL={sl_activation_price}")
-    if tp_activation_price:
-        logger.info(f"{symbol}: Giá kích hoạt TP={tp_activation_price}")
     
-    return sl_rate, tp_rate, f"SL from {sl_source}, TP from {tp_source}", sl_activation_price, tp_activation_price
+    return sl_rate, tp_rate, f"SL from {sl_source}, TP from {tp_source}"
 
 def call_binance_api_direct(method, endpoint, params=None, api_key=None, secret_key=None):
     base_url = 'https://fapi.binance.com'
@@ -363,7 +344,7 @@ def do_it():
     
     # [LOGIC MỚI] Đọc sheet "Chờ và khớp" thay vì quét Binance trực tiếp
     try:
-        sheet_data = gg_sheet_factory.get_cho_va_khop("A4:L1000")  # Đọc từ hàng 4 đến 1000, cột A-L (thêm cột L: trạng thái)
+        sheet_data = gg_sheet_factory.get_cho_va_khop("A4:K1000")  # Đọc từ hàng 4 đến 1000, cột A-K
         logger.info(f"✅ Đã đọc {len(sheet_data)} dòng từ sheet 'Chờ và khớp'")
     except Exception as e:
         logger.error(f"❌ Lỗi khi đọc sheet 'Chờ và khớp': {e}")
@@ -470,26 +451,10 @@ def do_it():
                 logger.debug(f"{symbol}: Đã có đủ SL và TP trên Binance, bỏ qua")
                 continue
             
-            # ✅ [ĐIỀU KIỆN 3] KIỂM TRA TRẠNG THÁI CHO PHÉP ĐẶT LỆNH (Cột L)
-            # Cột L (index 11) - Trạng thái cho phép đặt lệnh (Y/N)
-            allow_order = True  # Mặc định cho phép nếu không có giá trị
-            try:
-                if len(row) > 11 and row[11]:
-                    status_str = str(row[11]).strip().upper()
-                    allow_order = (status_str == "Y")
-                    if not allow_order:
-                        logger.info(f"{symbol}: Trạng thái cột L = '{status_str}' (không phải Y) → Bỏ qua, không đặt lệnh")
-            except Exception as e:
-                logger.debug(f"{symbol}: Lỗi đọc trạng thái từ cột L: {e}, mặc định cho phép")
-            
-            if not allow_order:
-                logger.debug(f"{symbol}: Không được phép đặt lệnh (cột L ≠ Y), bỏ qua")
-                continue
-            
             print(f"🔍 Xử lý: {symbol} | Side: {side} | Entry: {entry_price} | Need SL: {need_sl}, TP: {need_tp}", flush=True)
             
-            # [BƯỚC 2] LẤY GIÁ KÍCH HOẠT SL/TP TỪ CỘT J, K và tính rate
-            sl_rate, tp_rate, rate_source, sl_activation_price, tp_activation_price = get_sl_tp_activation_price_from_cho_va_khop(symbol, side, row, entry_price)
+            # [BƯỚC 2] LẤY RATE SL/TP TỪ CỘT J, K (mỗi symbol có rate riêng)
+            sl_rate, tp_rate, rate_source = get_sl_tp_rate_from_cho_va_khop(symbol, side, row)
                 
             # Validate rate
             if need_sl and sl_rate <= 0:

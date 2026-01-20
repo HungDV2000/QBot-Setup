@@ -453,7 +453,7 @@ def do_it():
             
             logger.info(f"{symbol_formatted}: {vi_the_short_long}, Entry={gia_vao}, Lev={don_bay}, Orders={order_count}, SL={lenh_ls}, TP={lenh_tp}")
             
-            # ✅ Tạo row với 15 cột (A-P) để có thể giữ lại cột J, K, L, O, P
+            # ✅ Tạo row với 15 cột (A-P) để có thể giữ lại cột O, P
             row = (
                 symbol_formatted,      # A: Symbol
                 vi_the_short_long,     # B: LONG/SHORT
@@ -464,9 +464,9 @@ def do_it():
                 lenh_ls,               # G: Lệnh Stop Limit (Y/N)
                 lenh_tp,               # H: Lệnh Trailing Stop (Y/N)
                 lenh_nguoc,            # I: Số lượng orders
-                "",                    # J: Giá kích hoạt SL - Để trống, user điền tay (sẽ merge từ dữ liệu cũ)
-                "",                    # K: Giá kích hoạt TP - Để trống, user điền tay (sẽ merge từ dữ liệu cũ)
-                "",                    # L: Trạng thái cho phép đặt lệnh (Y/N) - Sẽ merge từ dữ liệu cũ
+                "",                    # J: Rate SL (%) - Để trống, user điền tay (sẽ merge từ dữ liệu cũ)
+                "",                    # K: Rate TP (%) - Để trống, user điền tay (sẽ merge từ dữ liệu cũ)
+                "",                    # L: (trống)
                 "",                    # M: (trống)
                 "",                    # N: (trống)
                 "",                    # O: (trống - sẽ merge từ dữ liệu cũ nếu có)
@@ -526,7 +526,7 @@ def do_it():
             
             logger.info(f"{symbol_formatted}: {vi_the_short_long}, Price={gia_vao}, Status=Chờ khớp")
             
-            # ✅ Tạo row với 15 cột (A-P) để có thể giữ lại cột J, K, L, O, P
+            # ✅ Tạo row với 15 cột (A-P) để có thể giữ lại cột O, P
             row = (
                 symbol_formatted,      # A: Symbol
                 vi_the_short_long,     # B: LONG/SHORT
@@ -537,9 +537,9 @@ def do_it():
                 lenh_ls,               # G: Lệnh SL (N)
                 lenh_tp,               # H: Lệnh TP (N)
                 lenh_nguoc,            # I: Số lượng orders (0)
-                "",                    # J: Giá kích hoạt SL - Để trống (sẽ merge từ dữ liệu cũ)
-                "",                    # K: Giá kích hoạt TP - Để trống (sẽ merge từ dữ liệu cũ)
-                "",                    # L: Trạng thái cho phép đặt lệnh (Y/N) - Sẽ merge từ dữ liệu cũ
+                "",                    # J: Rate SL (%) - Để trống (sẽ merge từ dữ liệu cũ)
+                "",                    # K: Rate TP (%) - Để trống (sẽ merge từ dữ liệu cũ)
+                "",                    # L: (trống)
                 "",                    # M: (trống)
                 "",                    # N: (trống)
                 "",                    # O: (trống - sẽ merge từ dữ liệu cũ nếu có)
@@ -558,9 +558,9 @@ def do_it():
     logger.info(f"Tổng dòng dữ liệu: {len(tab_100_ma_2d_arr)}")
     
     try:
-        # ✅ BƯỚC 5.1: ĐỌC DỮ LIỆU CŨ (trước khi clear) để giữ lại giá kích hoạt SL/TP (cột J, K), trạng thái (L) và cột O, P
-        print("  📖 Đọc dữ liệu cũ để giữ lại giá kích hoạt SL/TP (J, K), trạng thái (L) và cột O, P...", flush=True)
-        data_map = {}  # Dict: {symbol: (price_sl, price_tp, status, col_o, col_p)}
+        # ✅ BƯỚC 5.1: ĐỌC DỮ LIỆU CŨ (trước khi clear) để giữ lại rate SL/TP (cột J, K) và cột O, P
+        print("  📖 Đọc dữ liệu cũ để giữ lại rate SL/TP (J, K) và cột O, P...", flush=True)
+        rate_map = {}  # Dict: {symbol: (rate_sl, rate_tp, col_o, col_p)}
         
         try:
             # ✅ Đọc dữ liệu cũ từ hàng 2, cột A-P (15 cột để có cả O, P)
@@ -568,12 +568,11 @@ def do_it():
             
             if old_data:
                 for row in old_data:
-                    # Kiểm tra row có đủ dữ liệu không (ít nhất 12 cột để có L)
-                    if len(row) >= 12:
+                    # Kiểm tra row có đủ dữ liệu không (ít nhất 11 cột, có thể có O, P)
+                    if len(row) >= 11:
                         symbol = str(row[0]).strip() if len(row) > 0 and row[0] else ""
-                        price_sl = str(row[9]).strip() if len(row) > 9 and row[9] else ""  # Cột J (index 9): Giá kích hoạt SL
-                        price_tp = str(row[10]).strip() if len(row) > 10 and row[10] else ""  # Cột K (index 10): Giá kích hoạt TP
-                        status = str(row[11]).strip().upper() if len(row) > 11 and row[11] else ""  # Cột L (index 11): Trạng thái Y/N
+                        rate_sl = str(row[9]).strip() if len(row) > 9 and row[9] else ""  # Cột J (index 9)
+                        rate_tp = str(row[10]).strip() if len(row) > 10 and row[10] else ""  # Cột K (index 10)
                         col_o = str(row[14]).strip() if len(row) > 14 and row[14] else ""  # Cột O (index 14)
                         col_p = str(row[15]).strip() if len(row) > 15 and row[15] else ""  # Cột P (index 15)
                         
@@ -581,24 +580,24 @@ def do_it():
                         if symbol:
                             # Chuẩn hóa symbol format: HOME/USDT hoặc HOME/USDT:USDT → HOME/USDT
                             symbol_normalized = symbol.replace(":USDT", "").strip()
-                            data_map[symbol_normalized] = (price_sl, price_tp, status, col_o, col_p)
-                            if price_sl or price_tp or status:
-                                logger.debug(f"Lưu dữ liệu cho {symbol_normalized}: SL={price_sl}, TP={price_tp}, Status={status}, O={col_o}, P={col_p}")
+                            rate_map[symbol_normalized] = (rate_sl, rate_tp, col_o, col_p)
+                            if rate_sl or rate_tp:
+                                logger.debug(f"Lưu rate cho {symbol_normalized}: SL={rate_sl}, TP={rate_tp}, O={col_o}, P={col_p}")
                             else:
                                 logger.debug(f"Lưu dữ liệu cho {symbol_normalized}: O={col_o}, P={col_p}")
                 
-                print(f"    ✅ Đã đọc {len(data_map)} symbols từ dữ liệu cũ", flush=True)
-                logger.info(f"Đã đọc {len(data_map)} symbols từ dữ liệu cũ (bao gồm giá kích hoạt J/K, trạng thái L và cột O/P)")
+                print(f"    ✅ Đã đọc {len(rate_map)} symbols từ dữ liệu cũ", flush=True)
+                logger.info(f"Đã đọc {len(rate_map)} symbols từ dữ liệu cũ (bao gồm rate J/K và cột O/P)")
             else:
                 print("    ℹ️  Không có dữ liệu cũ", flush=True)
                 
         except Exception as e:
-            print(f"    ⚠️  Lỗi khi đọc dữ liệu cũ: {e} (tiếp tục không merge)", flush=True)
-            logger.warning(f"Lỗi đọc dữ liệu cũ để merge: {e}", exc_info=True)
+            print(f"    ⚠️  Lỗi khi đọc dữ liệu cũ: {e} (tiếp tục không merge rate)", flush=True)
+            logger.warning(f"Lỗi đọc dữ liệu cũ để merge rate: {e}", exc_info=True)
         
-        # ✅ BƯỚC 5.2: MERGE GIÁ KÍCH HOẠT SL/TP (J, K), TRẠNG THÁI (L) và cột O, P vào dữ liệu mới
-        if data_map:
-            print("  🔄 Merge giá kích hoạt SL/TP (J, K), trạng thái (L) và cột O, P vào dữ liệu mới...", flush=True)
+        # ✅ BƯỚC 5.2: MERGE RATE VÀO DỮ LIỆU MỚI (J, K) và giữ lại cột O, P
+        if rate_map:
+            print("  🔄 Merge rate SL/TP (J, K) và cột O, P vào dữ liệu mới...", flush=True)
             merged_count = 0
             
             for i, row in enumerate(tab_100_ma_2d_arr):
@@ -607,23 +606,22 @@ def do_it():
                     # Chuẩn hóa symbol để so sánh
                     symbol_normalized = symbol.replace(":USDT", "").strip()
                     
-                    # Check xem symbol có trong data_map không
-                    if symbol_normalized in data_map:
-                        price_sl, price_tp, status, col_o, col_p = data_map[symbol_normalized]
-                        # Update row: giữ nguyên các cột A-I, update J, K, L và thêm O, P
+                    # Check xem symbol có trong rate_map không
+                    if symbol_normalized in rate_map:
+                        rate_sl, rate_tp, col_o, col_p = rate_map[symbol_normalized]
+                        # Update row: giữ nguyên các cột A-I, update J, K và thêm O, P
                         row_list = list(row)
                         
                         # Đảm bảo row_list có đủ 15 cột (A-P)
                         while len(row_list) < 15:
                             row_list.append("")  # Thêm cột rỗng nếu thiếu
                         
-                        # ✅ Update cột J, K (giá kích hoạt SL/TP) - CHỈ merge nếu có giá trị (không rỗng)
-                        if price_sl:  # Chỉ merge nếu price_sl không rỗng
-                            row_list[9] = price_sl   # Cột J: Giá kích hoạt SL
-                        if price_tp:  # Chỉ merge nếu price_tp không rỗng
-                            row_list[10] = price_tp  # Cột K: Giá kích hoạt TP
-                        if status:  # Chỉ merge nếu status không rỗng
-                            row_list[11] = status  # Cột L: Trạng thái Y/N
+                        # ✅ Update cột J, K (rate SL/TP) - CHỈ merge nếu rate cũ có giá trị (không rỗng)
+                        # Đảm bảo rate cũ có giá trị mới được merge, tránh ghi đè dữ liệu mới
+                        if rate_sl:  # Chỉ merge nếu rate_sl không rỗng
+                            row_list[9] = rate_sl   # Cột J
+                        if rate_tp:  # Chỉ merge nếu rate_tp không rỗng
+                            row_list[10] = rate_tp  # Cột K
                         
                         # Giữ lại cột O, P nếu có
                         if col_o:
@@ -633,15 +631,15 @@ def do_it():
                         
                         tab_100_ma_2d_arr[i] = tuple(row_list)
                         merged_count += 1
-                        logger.debug(f"Merged cho {symbol_normalized}: SL={price_sl}, TP={price_tp}, Status={status}, O={col_o}, P={col_p}")
+                        logger.debug(f"Merged cho {symbol_normalized}: SL={rate_sl}, TP={rate_tp}, O={col_o}, P={col_p}")
             
-            print(f"    ✅ Đã merge giá kích hoạt (J/K), trạng thái (L) và cột O, P cho {merged_count} symbols", flush=True)
-            logger.info(f"Đã merge giá kích hoạt (J/K), trạng thái (L) và cột O/P cho {merged_count} symbols từ dữ liệu cũ")
+            print(f"    ✅ Đã merge rate và cột O, P cho {merged_count} symbols", flush=True)
+            logger.info(f"Đã merge rate (J/K) và cột O/P cho {merged_count} symbols từ dữ liệu cũ")
         
-        # ✅ Clear dữ liệu cũ CHỈ từ cột A-I (KHÔNG xóa cột J, K, L, O, P)
-        print("  🗑️  Xóa dữ liệu cũ (chỉ cột A-I, giữ nguyên J-K-L và O-P)...", flush=True)
-        # Clear từ cột A đến I (end_column="I" thay vì "K") - Giữ nguyên J, K, L, O, P
-        gg_sheet_factory.clear_multi(gg_sheet_factory.tab_cho_va_khop, 2, "a", end_row=1000, end_column="I")
+        # ✅ Clear dữ liệu cũ CHỈ từ cột A-K (KHÔNG xóa cột O, P)
+        print("  🗑️  Xóa dữ liệu cũ (chỉ cột A-K, giữ nguyên O-P)...", flush=True)
+        # Clear từ cột A đến K (end_column="K" thay vì "AZ")
+        gg_sheet_factory.clear_multi(gg_sheet_factory.tab_cho_va_khop, 2, "a", end_row=1000, end_column="K")
         
         # Ghi timestamp vào A2
         timestamp_str = current_time.strftime("%Y-%m-%d %H:%M:%S")
