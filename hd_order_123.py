@@ -556,8 +556,14 @@ def do_it():
             # [BƯỚC 4] ĐẶT LỆNH LẺ (có thể chỉ SL hoặc chỉ TP)
             print(f"🎯 Đặt lệnh cho {symbol} | Entry: {entry_price} | SL: {sl_rate}%, TP: {tp_rate}%", flush=True)
             
+            # ✅ [FIX BUG] Convert rate từ phần trăm (%) sang số thập phân cho cascade_manager
+            # cascade_manager expect rate là số thập phân (0.3 = 30%), không phải phần trăm (30.0)
+            sl_rate_decimal = sl_rate / 100.0  # 30.0% → 0.3
+            tp_rate_decimal = tp_rate / 100.0  # 60.0% → 0.6
+            logger.debug(f"{symbol}: Convert rate - SL: {sl_rate}% → {sl_rate_decimal}, TP: {tp_rate}% → {tp_rate_decimal}")
+            
             try:
-                # Gọi cascade manager với rate từ sheet
+                # Gọi cascade manager với rate từ sheet (đã convert sang decimal)
                 result = cascade_mgr.on_entry_filled(
                     symbol=symbol,
                     layer_num=1,
@@ -566,8 +572,8 @@ def do_it():
                     position_amt=position_amt,  # Từ Binance
                     side=side,  # Từ sheet
                     max_layers=3,
-                    lenh2_rate=sl_rate,  # Từ sheet cột J (mỗi symbol riêng)
-                    lenh3_rate=tp_rate,  # Từ sheet cột K (mỗi symbol riêng)
+                    lenh2_rate=sl_rate_decimal,  # ✅ Đã convert: 30.0% → 0.3
+                    lenh3_rate=tp_rate_decimal,  # ✅ Đã convert: 60.0% → 0.6
                     lenh3_callback_rate=cst.lenh3_callback_rate,
                     next_layer_config=None 
                 )
