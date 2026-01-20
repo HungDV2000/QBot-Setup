@@ -539,31 +539,66 @@ def do_it():
                 sl_order = result.get('sl_order')
                 tp_order = result.get('tp_order')
                 
+                # ✅ Debug: Log chi tiết để kiểm tra
+                logger.debug(f"{symbol}: Result từ cascade_mgr - sl_order: {sl_order is not None}, tp_order: {tp_order is not None}")
+                if sl_order:
+                    logger.debug(f"{symbol}: SL order ID: {sl_order.get('id', 'N/A')}")
+                if tp_order:
+                    logger.debug(f"{symbol}: TP order ID: {tp_order.get('id', 'N/A')}")
+                
                 # Log kết quả
                 orders_created = []
+                order_ids = []
+                
                 if need_sl and sl_order:
-                    orders_created.append(f"SL (ID: {sl_order.get('id', 'N/A')})")
+                    sl_id = sl_order.get('id', 'N/A')
+                    orders_created.append(f"SL (ID: {sl_id})")
+                    order_ids.append(sl_id)
                     order_logger.info(f"LỆNH 2 (SL) | {symbol} | {side} | Entry: {entry_price} | Rate: {sl_rate}%")
+                elif need_sl:
+                    logger.warning(f"⚠️ {symbol}: Cần SL nhưng cascade_mgr không trả về sl_order")
                 
                 if need_tp and tp_order:
-                    orders_created.append(f"TP (ID: {tp_order.get('id', 'N/A')})")
+                    tp_id = tp_order.get('id', 'N/A')
+                    orders_created.append(f"TP (ID: {tp_id})")
+                    order_ids.append(tp_id)
                     order_logger.info(f"LỆNH 3 (TP) | {symbol} | {side} | Entry: {entry_price} | Rate: {tp_rate}%")
+                elif need_tp:
+                    logger.warning(f"⚠️ {symbol}: Cần TP nhưng cascade_mgr không trả về tp_order")
                 
+                # ✅ Gửi Telegram và log CHỈ KHI thực sự có orders được tạo
                 if orders_created:
                     print(f"✅ Đã tạo: {', '.join(orders_created)} cho {symbol}", flush=True)
                     logger.info(f"✅ Tạo lệnh thành công cho {symbol}: {', '.join(orders_created)}")
                     
                     msg = f"✅ <b>ĐÃ TẠO LỆNH</b>\n\n<b>Mã:</b> {symbol}\n<b>Side:</b> {side}\n<b>Entry:</b> {entry_price}\n<b>Lệnh:</b> {', '.join(orders_created)}\n<b>Rate:</b> SL {sl_rate}%, TP {tp_rate}%"
-                    telegram_factory.send_tele(msg, cst.chat_id, True, True)
+                    
+                    # ✅ Gửi Telegram với try-catch để đảm bảo không bị lỗi im lặng
+                    try:
+                        telegram_factory.send_tele(msg, cst.chat_id, True, True)
+                        logger.info(f"✅ Đã gửi Telegram cho {symbol}")
+                    except Exception as tele_error:
+                        logger.error(f"❌ Lỗi gửi Telegram cho {symbol}: {tele_error}", exc_info=True)
+                        # Vẫn tiếp tục, không block việc xử lý
                     
                     processed_count += 1
                 else:
-                    logger.warning(f"⚠️ {symbol}: Không có lệnh nào được tạo (có thể do cascade_mgr logic)")
+                    # ✅ Log chi tiết khi không có orders được tạo
+                    logger.warning(f"⚠️ {symbol}: Không có lệnh nào được tạo - need_sl={need_sl}, need_tp={need_tp}, sl_order={sl_order is not None}, tp_order={tp_order is not None}")
+                    # ✅ Vẫn gửi Telegram cảnh báo để user biết
+                    msg = f"⚠️ <b>KHÔNG TẠO ĐƯỢC LỆNH</b>\n\n<b>Mã:</b> {symbol}\n<b>Side:</b> {side}\n<b>Entry:</b> {entry_price}\n<b>Lý do:</b> cascade_mgr không trả về orders\n<b>Need:</b> SL={need_sl}, TP={need_tp}"
+                    try:
+                        telegram_factory.send_tele(msg, cst.chat_id, True, True)
+                    except Exception as tele_error:
+                        logger.error(f"❌ Lỗi gửi Telegram cảnh báo cho {symbol}: {tele_error}", exc_info=True)
                     
             except Exception as e:
                 logger.error(f"❌ Lỗi tạo lệnh cho {symbol}: {e}", exc_info=True)
                 msg = f"🚨 <b>LỖI TẠO LỆNH</b>\n\n<b>Mã:</b> {symbol}\n<b>Lỗi:</b> {str(e)}"
-                telegram_factory.send_tele(msg, cst.chat_id, True, True)
+                try:
+                    telegram_factory.send_tele(msg, cst.chat_id, True, True)
+                except Exception as tele_error:
+                    logger.error(f"❌ Lỗi gửi Telegram lỗi cho {symbol}: {tele_error}", exc_info=True)
 
         except Exception as e:
             logger.error(f"❌ Lỗi xử lý dòng sheet: {e}", exc_info=True)
