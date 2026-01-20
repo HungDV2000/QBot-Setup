@@ -548,7 +548,65 @@ def do_it():
     logger.info(f"Tổng dòng dữ liệu: {len(tab_100_ma_2d_arr)}")
     
     try:
-        # Clear dữ liệu cũ (từ hàng 4 trở đi, giữ header hàng 1-3)
+        # ✅ BƯỚC 5.1: ĐỌC DỮ LIỆU CŨ (trước khi clear) để giữ lại rate SL/TP (cột J, K)
+        print("  📖 Đọc dữ liệu cũ để giữ lại rate SL/TP...", flush=True)
+        rate_map = {}  # Dict: {symbol: (rate_sl, rate_tp)}
+        
+        try:
+            # Đọc dữ liệu cũ từ hàng 2, cột A-K (11 cột)
+            old_data = gg_sheet_factory.get_cho_va_khop("A2:K1000")
+            
+            if old_data:
+                for row in old_data:
+                    # Kiểm tra row có đủ dữ liệu không (ít nhất 11 cột)
+                    if len(row) >= 11:
+                        symbol = str(row[0]).strip() if len(row) > 0 and row[0] else ""
+                        rate_sl = str(row[9]).strip() if len(row) > 9 and row[9] else ""  # Cột J (index 9)
+                        rate_tp = str(row[10]).strip() if len(row) > 10 and row[10] else ""  # Cột K (index 10)
+                        
+                        # Chỉ lưu nếu có symbol và có ít nhất 1 rate
+                        if symbol and (rate_sl or rate_tp):
+                            # Chuẩn hóa symbol format: HOME/USDT hoặc HOME/USDT:USDT → HOME/USDT
+                            symbol_normalized = symbol.replace(":USDT", "").strip()
+                            rate_map[symbol_normalized] = (rate_sl, rate_tp)
+                            logger.debug(f"Lưu rate cho {symbol_normalized}: SL={rate_sl}, TP={rate_tp}")
+                
+                print(f"    ✅ Đã đọc {len(rate_map)} symbols có rate SL/TP", flush=True)
+                logger.info(f"Đã đọc {len(rate_map)} symbols có rate từ dữ liệu cũ")
+            else:
+                print("    ℹ️  Không có dữ liệu cũ", flush=True)
+                
+        except Exception as e:
+            print(f"    ⚠️  Lỗi khi đọc dữ liệu cũ: {e} (tiếp tục không merge rate)", flush=True)
+            logger.warning(f"Lỗi đọc dữ liệu cũ để merge rate: {e}", exc_info=True)
+        
+        # ✅ BƯỚC 5.2: MERGE RATE VÀO DỮ LIỆU MỚI
+        if rate_map:
+            print("  🔄 Merge rate SL/TP vào dữ liệu mới...", flush=True)
+            merged_count = 0
+            
+            for i, row in enumerate(tab_100_ma_2d_arr):
+                if len(row) >= 11:  # Đảm bảo row có đủ 11 cột
+                    symbol = str(row[0]).strip() if row[0] else ""
+                    # Chuẩn hóa symbol để so sánh
+                    symbol_normalized = symbol.replace(":USDT", "").strip()
+                    
+                    # Check xem symbol có trong rate_map không
+                    if symbol_normalized in rate_map:
+                        rate_sl, rate_tp = rate_map[symbol_normalized]
+                        # Update row: giữ nguyên các cột A-I, update J và K
+                        row_list = list(row)
+                        if len(row_list) >= 11:
+                            row_list[9] = rate_sl   # Cột J
+                            row_list[10] = rate_tp  # Cột K
+                            tab_100_ma_2d_arr[i] = tuple(row_list)
+                            merged_count += 1
+                            logger.debug(f"Merged rate cho {symbol_normalized}: SL={rate_sl}, TP={rate_tp}")
+            
+            print(f"    ✅ Đã merge rate cho {merged_count} symbols", flush=True)
+            logger.info(f"Đã merge rate cho {merged_count} symbols từ dữ liệu cũ")
+        
+        # Clear dữ liệu cũ (từ hàng 2 trở đi, giữ header hàng 1)
         print("  🗑️  Xóa dữ liệu cũ...", flush=True)
         gg_sheet_factory.clear_multi(gg_sheet_factory.tab_cho_va_khop, 2, "a", end_row=1000)
         
@@ -557,12 +615,12 @@ def do_it():
         print(f"  📅 Cập nhật timestamp vào A2: {timestamp_str}", flush=True)
         gg_sheet_factory.update_single_value(gg_sheet_factory.tab_cho_va_khop, "A2", timestamp_str)
         
-        # Update dữ liệu mới (bắt đầu từ hàng 4)
-        print("  ✍️  Ghi dữ liệu mới...", flush=True)
+        # Update dữ liệu mới (bắt đầu từ hàng 2, đã có rate merged)
+        print("  ✍️  Ghi dữ liệu mới (đã merge rate)...", flush=True)
         gg_sheet_factory.update_multi(gg_sheet_factory.tab_cho_va_khop, 2, tab_100_ma_2d_arr, "a")
         
-        print(f"✅ Hoàn thành! Đã cập nhật {len(tab_100_ma_2d_arr)} dòng vào sheet", flush=True)
-        logger.info(f"✅ Hoàn thành cập nhật sheet: {len(tab_100_ma_2d_arr)} dòng")
+        print(f"✅ Hoàn thành! Đã cập nhật {len(tab_100_ma_2d_arr)} dòng vào sheet (đã giữ lại rate)", flush=True)
+        logger.info(f"✅ Hoàn thành cập nhật sheet: {len(tab_100_ma_2d_arr)} dòng (đã merge rate)")
         
     except Exception as e:
         print(f"❌ Lỗi khi cập nhật sheet: {e}", flush=True)

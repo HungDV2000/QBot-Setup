@@ -353,6 +353,19 @@ def do_it():
                 continue
             symbol = str(symbol_raw).strip()
             
+            # ✅ Chuẩn hóa symbol format cho CCXT Binance Futures (HOME/USDT -> HOME/USDT:USDT)
+            if ':USDT' not in symbol:
+                # Nếu chưa có :USDT, thêm vào
+                if symbol.endswith('/USDT'):
+                    symbol = f"{symbol}:USDT"
+                elif symbol.endswith('USDT'):
+                    # HOMEUSDT -> HOME/USDT:USDT
+                    base = symbol[:-4]
+                    symbol = f"{base}/USDT:USDT"
+                else:
+                    # HOME -> HOME/USDT:USDT
+                    symbol = f"{symbol}/USDT:USDT"
+            
             # Cột B: Vị thế (LONG/SHORT)
             side_raw = row[1] if len(row) > 1 else None
             if not side_raw:
@@ -394,18 +407,37 @@ def do_it():
             except:
                 leverage = 1
             
-            # Cột G: Lệnh Stop Limit (Y/N)
-            has_sl = str(row[6]).strip().upper() == "Y" if len(row) > 6 else False
+            # Cột G: Lệnh Stop Limit (Y/N) - từ sheet (chỉ để reference)
+            has_sl_sheet = str(row[6]).strip().upper() == "Y" if len(row) > 6 else False
             
-            # Cột H: Lệnh Trailing Stop (Y/N)
-            has_tp = str(row[7]).strip().upper() == "Y" if len(row) > 7 else False
+            # Cột H: Lệnh Trailing Stop (Y/N) - từ sheet (chỉ để reference)
+            has_tp_sheet = str(row[7]).strip().upper() == "Y" if len(row) > 7 else False
             
-            # [ĐIỀU KIỆN 2] Chỉ xử lý nếu THIẾU SL hoặc THIẾU TP
-            need_sl = not has_sl
-            need_tp = not has_tp
+            # ✅ [FIX BUG LẶP ĐƠN] KIỂM TRA THỰC TẾ TRÊN BINANCE (không chỉ dựa vào sheet!)
+            # Sheet có thể bị cập nhật chậm hoặc bị clear → PHẢI check Binance thực tế
+            try:
+                has_sl_binance, has_tp_binance = has_sl_tp_orders(symbol, exchange)
+                logger.debug(f"{symbol}: Binance check - SL: {has_sl_binance}, TP: {has_tp_binance} | Sheet - SL: {has_sl_sheet}, TP: {has_tp_sheet}")
+            except Exception as e:
+                logger.error(f"❌ {symbol}: Lỗi khi check SL/TP trên Binance: {e}", exc_info=True)
+                # Nếu lỗi check Binance, fallback về sheet (nhưng cảnh báo)
+                logger.warning(f"⚠️ {symbol}: Fallback về sheet check do lỗi Binance API")
+                has_sl_binance = has_sl_sheet
+                has_tp_binance = has_tp_sheet
+            
+            # [ĐIỀU KIỆN 2] Chỉ xử lý nếu THIẾU SL hoặc THIẾU TP (dựa vào BINANCE thực tế!)
+            need_sl = not has_sl_binance
+            need_tp = not has_tp_binance
+            
+            # ✅ Kiểm tra conflict giữa Sheet và Binance
+            if has_sl_sheet != has_sl_binance:
+                logger.warning(f"⚠️ {symbol}: Sheet vs Binance - SL mismatch! Sheet={has_sl_sheet}, Binance={has_sl_binance}")
+            if has_tp_sheet != has_tp_binance:
+                logger.warning(f"⚠️ {symbol}: Sheet vs Binance - TP mismatch! Sheet={has_tp_sheet}, Binance={has_tp_binance}")
             
             if not need_sl and not need_tp:
-                # Đã đủ cả 2 → Bỏ qua
+                # Đã đủ cả 2 trên Binance → Bỏ qua (không tạo lệnh trùng)
+                logger.debug(f"{symbol}: Đã có đủ SL và TP trên Binance, bỏ qua")
                 continue
             
             print(f"🔍 Xử lý: {symbol} | Side: {side} | Entry: {entry_price} | Need SL: {need_sl}, TP: {need_tp}", flush=True)
