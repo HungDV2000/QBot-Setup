@@ -160,7 +160,12 @@ def call_binance_api_direct(method, endpoint, params=None, api_key=None, secret_
 
 def get_algo_orders_for_symbol(symbol):
     try:
-        params = {'symbol': symbol.replace('/', '')}
+        # ✅ [FIX BUG] Binance API yêu cầu symbol format: HOMEUSDT (không có / và :USDT)
+        # HOME/USDT:USDT -> HOMEUSDT
+        # HOMEUSDT:USDT -> HOMEUSDT
+        symbol_clean = symbol.replace('/', '').replace(':USDT', '').upper()
+        params = {'symbol': symbol_clean}
+        logger.debug(f"Lấy algo orders cho {symbol} (cleaned: {symbol_clean})")
         response = call_binance_api_direct('GET', '/fapi/v1/allAlgoOrders', params)
         if not response: return []
         if isinstance(response, list): return response
@@ -188,7 +193,9 @@ def cancel_all_algo_orders_direct(symbol):
         for order in pending_orders:
             algo_id = order.get('algoId')
             if algo_id:
-                params = {'symbol': symbol.replace('/', ''), 'algoId': algo_id}
+                # ✅ [FIX] Binance API yêu cầu symbol format: HOMEUSDT (không có / và :USDT)
+                symbol_clean = symbol.replace('/', '').replace(':USDT', '').upper()
+                params = {'symbol': symbol_clean, 'algoId': algo_id}
                 response = call_binance_api_direct('DELETE', '/fapi/v1/algoOrder', params)
                 
                 is_success = False
@@ -261,8 +268,12 @@ def has_sl_tp_orders(symbol, exchange):
         return has_sl, has_tp
         
     except Exception as e:
-        logger.error(f"Lỗi check SL/TP: {e}", exc_info=True)
-        return False, False
+        # ✅ [FIX BUG] Khi lỗi API, KHÔNG return False ngay (sẽ tạo lệnh trùng)
+        # Thay vào đó, log error và return True, True để CHẶN tạo lệnh (an toàn hơn)
+        logger.error(f"❌ Lỗi check SL/TP cho {symbol}: {e}", exc_info=True)
+        logger.warning(f"⚠️ {symbol}: Lỗi API khi check SL/TP → Chặn tạo lệnh để tránh trùng (safety first)")
+        # Return True, True để CHẶN tạo lệnh khi không chắc chắn (tránh tạo trùng)
+        return True, True  # ✅ Safety first - Chặn tạo lệnh khi không check được
 
 # --- HÀM HỖ TRỢ ---
 
