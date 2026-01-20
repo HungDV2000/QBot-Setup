@@ -613,7 +613,40 @@ def do_it():
                     print(f"✅ Đã tạo: {', '.join(orders_created)} cho {symbol}", flush=True)
                     logger.info(f"✅ Tạo lệnh thành công cho {symbol}: {', '.join(orders_created)}")
                     
-                    msg = f"✅ <b>ĐÃ TẠO LỆNH</b>\n\n<b>Mã:</b> {symbol}\n<b>Side:</b> {side}\n<b>Entry:</b> {entry_price}\n<b>Lệnh:</b> {', '.join(orders_created)}\n<b>Rate:</b> SL {sl_rate}%, TP {tp_rate}%"
+                    # ✅ Tạo thông báo Telegram với giá kích hoạt và rate tự động tính
+                    msg_parts = [
+                        f"✅ <b>ĐÃ TẠO LỆNH</b>",
+                        f"",
+                        f"<b>Mã:</b> {symbol}",
+                        f"<b>Side:</b> {side}",
+                        f"<b>Entry:</b> {entry_price}",
+                        f"<b>Lệnh:</b> {', '.join(orders_created)}"
+                    ]
+                    
+                    # ✅ Hiển thị giá kích hoạt và rate tự động tính
+                    rate_info_parts = []
+                    
+                    if need_sl and sl_order:
+                        if sl_activation_price:
+                            # Có giá kích hoạt từ sheet → Hiển thị giá và rate tính được
+                            rate_info_parts.append(f"<b>SL:</b> Giá kích hoạt {sl_activation_price} → Rate {sl_rate}%")
+                        else:
+                            # Dùng rate từ Config
+                            rate_info_parts.append(f"<b>SL:</b> Rate {sl_rate}% (Config)")
+                    
+                    if need_tp and tp_order:
+                        if tp_activation_price:
+                            # Có giá kích hoạt từ sheet → Hiển thị giá và rate tính được
+                            rate_info_parts.append(f"<b>TP:</b> Giá kích hoạt {tp_activation_price} → Rate {tp_rate}%")
+                        else:
+                            # Dùng rate từ Config
+                            rate_info_parts.append(f"<b>TP:</b> Rate {tp_rate}% (Config)")
+                    
+                    if rate_info_parts:
+                        msg_parts.append(f"<b>Rate:</b>")
+                        msg_parts.extend(rate_info_parts)
+                    
+                    msg = "\n".join(msg_parts)
                     
                     # ✅ Gửi Telegram với try-catch để đảm bảo không bị lỗi im lặng
                     try:
