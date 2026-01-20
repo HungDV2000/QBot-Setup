@@ -292,37 +292,28 @@ def has_pending_trailing_stop_order(symbol):
     """
     try:
         # Lấy algo orders từ Binance API trực tiếp
-        logger.debug(f"[CHECK PENDING] {symbol}: Đang kiểm tra algo orders...")
+        logger.info(f"[CHECK PENDING] {symbol}: Đang kiểm tra algo orders...")
         algo_orders = get_algo_orders_for_symbol(symbol)
         
         if not algo_orders:
-            logger.debug(f"[CHECK PENDING] {symbol}: Không có algo orders")
+            logger.info(f"[CHECK PENDING] {symbol}: Không có algo orders → Cho phép tạo lệnh mới")
             return False
         
-        logger.debug(f"[CHECK PENDING] {symbol}: Tìm thấy {len(algo_orders)} algo order(s)")
+        logger.info(f"[CHECK PENDING] {symbol}: Tìm thấy {len(algo_orders)} algo order(s)")
         
-        # Lọc orders có status=NEW (active/pending) - theo test results
-        active_orders = [o for o in algo_orders if o.get('algoStatus', '').upper() == 'NEW']
-        
-        if not active_orders:
-            logger.debug(f"[CHECK PENDING] {symbol}: Không có active algo orders (status=NEW)")
-            # Log tất cả orders để debug
-            for o in algo_orders:
-                logger.debug(f"[CHECK PENDING] {symbol}: Found order with algoStatus={o.get('algoStatus')}, algoId={o.get('algoId')}")
-            return False
-        
-        logger.debug(f"[CHECK PENDING] {symbol}: Có {len(active_orders)} active algo order(s)")
-        
+        # ✅ [FIX BUG] KHÔNG return False ngay nếu không có active orders
+        # Vì có thể có orders TRIGGERED/CANCELED gần đây cần check
         # Đếm TRAILING_STOP orders (active + recent)
         # Theo test: algoType='CONDITIONAL' hoặc 'VP' là TRAILING_STOP
         trailing_stop_count = 0
         trailing_stop_details = []
         
-        # [FIX] Cũng kiểm tra các lệnh TRIGGERED gần đây (trong vòng 2 phút)
+        # ✅ [FIX BUG LẶP ĐƠN] Kiểm tra TẤT CẢ orders (NEW, TRIGGERED, CANCELED gần đây)
         # Vì lệnh có thể đã trigger nhưng chưa kịp check position
+        # Hoặc lệnh bị cancel nhưng vẫn còn trong history
         import time
         current_time = int(time.time() * 1000)  # milliseconds
-        recent_window = 2 * 60 * 1000  # 2 phút = 120000 ms
+        recent_window = 10 * 60 * 1000  # ✅ Nâng lên 10 phút (thay vì 2 phút) để tránh lặp đơn
         
         for order in algo_orders:  # Check TẤT CẢ orders, không chỉ active
             algo_id = order.get('algoId', 'N/A')
@@ -336,11 +327,18 @@ def has_pending_trailing_stop_order(symbol):
             is_trailing_stop = algo_type in ['CONDITIONAL', 'VP']
             
             if is_trailing_stop:
-                # [FIX] Chấp nhận cả orders NEW hoặc TRIGGERED gần đây
+                # ✅ [FIX] Chấp nhận:
+                # 1. Orders NEW (active/pending) - LUÔN chặn
+                # 2. Orders TRIGGERED gần đây (< 10 phút) - Có thể đã vào lệnh, cần chặn
+                # 3. Orders CANCELED gần đây (< 10 phút) - Có thể vừa bị cancel, cần chặn để tránh tạo ngay sau
                 is_active = (algo_status == 'NEW')
-                is_recent_triggered = (algo_status == 'TRIGGERED' and (current_time - create_time) < recent_window)
+                age_ms = current_time - create_time
+                is_recent = (age_ms < recent_window)  # Gần đây (< 10 phút)
+                is_recent_triggered = (algo_status == 'TRIGGERED' and is_recent)
+                is_recent_canceled = (algo_status == 'CANCELED' and is_recent)
                 
-                if is_active or is_recent_triggered:
+                # ✅ CHẶN nếu: NEW hoặc TRIGGERED gần đây hoặc CANCELED gần đây
+                if is_active or is_recent_triggered or is_recent_canceled:
                     trailing_stop_count += 1
                     trailing_stop_details.append({
                         'algo_id': algo_id,
@@ -348,19 +346,37 @@ def has_pending_trailing_stop_order(symbol):
                         'algo_status': algo_status,
                         'activation': activate_price,
                         'callback': callback_rate,
-                        'create_time': create_time
+                        'create_time': create_time,
+                        'age_seconds': age_ms / 1000
                     })
                     
                     if is_recent_triggered:
-                        logger.info(f"⚠️  {symbol}: Phát hiện lệnh TRIGGERED gần đây (algoId={algo_id}, created {(current_time - create_time)/1000:.0f}s ago)")
+                        logger.info(f"⚠️  {symbol}: Phát hiện lệnh TRIGGERED gần đây (algoId={algo_id}, {age_ms/1000:.0f}s ago)")
+                    elif is_recent_canceled:
+                        logger.info(f"⚠️  {symbol}: Phát hiện lệnh CANCELED gần đây (algoId={algo_id}, {age_ms/1000:.0f}s ago) - Chặn để tránh tạo lại ngay")
+                else:
+                    # Log các algo orders khác để debug
+                    logger.debug(f"[CHECK PENDING] {symbol}: Found non-trailing algo order: type={algo_type}, status={algo_status}")
         
-        # Nếu có ít nhất 1 TRAILING_STOP order active/recent = đã có order (tránh trùng lặp)
+        # ✅ Nếu có ít nhất 1 TRAILING_STOP order active/recent = đã có order (tránh trùng lặp)
         if trailing_stop_count > 0:
-            detail_str = ", ".join([f"AlgoId: {d['algo_id']}, Status: {d['algo_status']}" 
+            detail_str = ", ".join([f"AlgoId: {d['algo_id']}, Status: {d['algo_status']}, Age: {d['age_seconds']:.0f}s" 
                                    for d in trailing_stop_details])
             logger.info(f"✅ {symbol} đã có {trailing_stop_count} TRAILING_STOP algo order(s) - {detail_str}")
-            print(f"⏭️  {symbol} đã có {trailing_stop_count} lệnh TRAILING_STOP, bỏ qua", flush=True)
+            print(f"⏭️  {symbol} đã có {trailing_stop_count} lệnh TRAILING_STOP (NEW/TRIGGERED/CANCELED gần đây), bỏ qua", flush=True)
             return True
+        
+        # ✅ Log chi tiết nếu không có TRAILING_STOP orders nào
+        logger.info(f"[CHECK PENDING] {symbol}: Không có TRAILING_STOP orders (NEW/TRIGGERED/CANCELED < 10 phút) → Cho phép tạo lệnh mới")
+        if algo_orders:
+            # Log tất cả orders để debug
+            for o in algo_orders:
+                algo_type = o.get('algoType', '').upper()
+                algo_status = o.get('algoStatus', '').upper()
+                algo_id = o.get('algoId', 'N/A')
+                create_time = o.get('createTime', 0)
+                age_seconds = (current_time - create_time) / 1000 if create_time > 0 else 0
+                logger.debug(f"[CHECK PENDING] {symbol}: Found order - Type: {algo_type}, Status: {algo_status}, AlgoId: {algo_id}, Age: {age_seconds:.0f}s")
         
         return False
         
@@ -772,15 +788,17 @@ def do_it():
                 continue
             
             # Bước 2: Kiểm tra symbol đã có ORDER TRAILING_STOP pending chưa
-            print(f"🔍 [{row_count}] Kiểm tra pending orders cho {sym}...", flush=True)
+            # ✅ [FIX] Đảm bảo symbol đã được normalize trước khi check
+            symbol_for_check = normalized_sym  # Dùng normalized_sym từ bước 0
+            print(f"🔍 [{row_count}] Kiểm tra pending orders cho {symbol_for_check}...", flush=True)
             try:
-                if has_pending_trailing_stop_order(sym):
-                    print(f"⏭️  {sym} đã có lệnh chờ TRAILING_STOP, bỏ qua", flush=True)
-                    logger.info(f"{sym} Đã có lệnh chờ TRAILING_STOP, bỏ qua")
+                if has_pending_trailing_stop_order(symbol_for_check):
+                    print(f"⏭️  {symbol_for_check} đã có lệnh chờ TRAILING_STOP, bỏ qua", flush=True)
+                    logger.info(f"{symbol_for_check} Đã có lệnh chờ TRAILING_STOP, bỏ qua")
                     continue
             except Exception as e:
-                print(f"⚠️  Lỗi khi kiểm tra pending orders cho {sym}: {e}", flush=True)
-                logger.error(f"Lỗi khi kiểm tra pending orders cho {sym}: {e}", exc_info=True)
+                print(f"⚠️  Lỗi khi kiểm tra pending orders cho {symbol_for_check}: {e}", flush=True)
+                logger.error(f"Lỗi khi kiểm tra pending orders cho {symbol_for_check}: {e}", exc_info=True)
                 continue
             
             # ⚠️ BƯỚC 3: KIỂM TRA LẠI B2 TRƯỚC KHI TẠO LỆNH (Safety Check)
