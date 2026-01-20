@@ -110,11 +110,29 @@ def get_sl_tp_activation_price_from_cho_va_khop(symbol, side, row_data, entry_pr
             if val and val not in ["", "0", "0.0"]:
                 try:
                     sl_activation_price = float(val)
-                    # Tính rate từ giá kích hoạt: rate = abs(activation_price - entry_price) / entry_price * 100
+                    # Tính rate từ giá kích hoạt (có xét LONG/SHORT)
                     if entry_price > 0:
-                        sl_rate = abs(sl_activation_price - entry_price) / entry_price * 100
-                        sl_source = "Sheet (từ giá kích hoạt)"
-                        logger.debug(f"{symbol}: Giá kích hoạt SL từ cột J = {sl_activation_price}, Rate = {sl_rate}%")
+                        if side == STATE_LONG:
+                            # LONG: SL < Entry → rate = (entry - sl) / entry * 100
+                            if sl_activation_price < entry_price:
+                                sl_rate = (entry_price - sl_activation_price) / entry_price * 100
+                            else:
+                                logger.warning(f"{symbol}: SL ({sl_activation_price}) >= Entry ({entry_price}) cho LONG - không hợp lệ!")
+                                sl_rate = default_sl
+                        else:
+                            # SHORT: SL > Entry → rate = (sl - entry) / entry * 100
+                            if sl_activation_price > entry_price:
+                                sl_rate = (sl_activation_price - entry_price) / entry_price * 100
+                            else:
+                                logger.warning(f"{symbol}: SL ({sl_activation_price}) <= Entry ({entry_price}) cho SHORT - không hợp lệ!")
+                                sl_rate = default_sl
+                        
+                        if sl_rate > 0:
+                            sl_source = "Sheet (từ giá kích hoạt)"
+                            logger.debug(f"{symbol}: Giá kích hoạt SL từ cột J = {sl_activation_price}, Rate = {sl_rate}% (Side: {side})")
+                        else:
+                            logger.warning(f"{symbol}: Rate SL tính được = {sl_rate}% <= 0, dùng default {default_sl}%")
+                            sl_rate = default_sl
                 except (ValueError, TypeError) as e:
                     logger.debug(f"{symbol}: Lỗi parse giá kích hoạt SL từ sheet cột J: {e}")
     except Exception as e:
@@ -127,11 +145,29 @@ def get_sl_tp_activation_price_from_cho_va_khop(symbol, side, row_data, entry_pr
             if val and val not in ["", "0", "0.0"]:
                 try:
                     tp_activation_price = float(val)
-                    # Tính rate từ giá kích hoạt: rate = abs(activation_price - entry_price) / entry_price * 100
+                    # Tính rate từ giá kích hoạt (có xét LONG/SHORT)
                     if entry_price > 0:
-                        tp_rate = abs(tp_activation_price - entry_price) / entry_price * 100
-                        tp_source = "Sheet (từ giá kích hoạt)"
-                        logger.debug(f"{symbol}: Giá kích hoạt TP từ cột K = {tp_activation_price}, Rate = {tp_rate}%")
+                        if side == STATE_LONG:
+                            # LONG: TP > Entry → rate = (tp - entry) / entry * 100
+                            if tp_activation_price > entry_price:
+                                tp_rate = (tp_activation_price - entry_price) / entry_price * 100
+                            else:
+                                logger.warning(f"{symbol}: TP ({tp_activation_price}) <= Entry ({entry_price}) cho LONG - không hợp lệ!")
+                                tp_rate = default_tp
+                        else:
+                            # SHORT: TP < Entry → rate = (entry - tp) / entry * 100
+                            if tp_activation_price < entry_price:
+                                tp_rate = (entry_price - tp_activation_price) / entry_price * 100
+                            else:
+                                logger.warning(f"{symbol}: TP ({tp_activation_price}) >= Entry ({entry_price}) cho SHORT - không hợp lệ!")
+                                tp_rate = default_tp
+                        
+                        if tp_rate > 0:
+                            tp_source = "Sheet (từ giá kích hoạt)"
+                            logger.debug(f"{symbol}: Giá kích hoạt TP từ cột K = {tp_activation_price}, Rate = {tp_rate}% (Side: {side})")
+                        else:
+                            logger.warning(f"{symbol}: Rate TP tính được = {tp_rate}% <= 0, dùng default {default_tp}%")
+                            tp_rate = default_tp
                 except (ValueError, TypeError) as e:
                     logger.debug(f"{symbol}: Lỗi parse giá kích hoạt TP từ sheet cột K: {e}")
     except Exception as e:

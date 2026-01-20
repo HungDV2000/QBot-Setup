@@ -294,7 +294,9 @@ class CascadeManager:
             result['sl_order'] = sl_order
             logger.info(f"✅ Đã tạo SL lớp {layer_num}: Order ID {sl_order.get('id')}")
         except Exception as e:
-            logger.error(f"❌ Lỗi tạo SL lớp {layer_num}: {e}")
+            logger.error(f"❌ Lỗi tạo SL lớp {layer_num}: {e}", exc_info=True)
+            import traceback
+            logger.error(f"❌ Traceback SL lớp {layer_num}:\n{traceback.format_exc()}")
         
         # 2. Tạo Take Profit (lệnh c: 1c, 2c, 3c...)
         try:
