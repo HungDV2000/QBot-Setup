@@ -36,11 +36,29 @@ def send(chat_id, text, is_html, show_web_preview):
 
 
 
+def format_telegram_message(msg, is_html):
+    """
+    Thêm prefix_channel vào đầu message nếu có
+    """
+    if cst.prefix_channel and cst.prefix_channel.strip():
+        prefix = cst.prefix_channel.strip()
+        # Nếu message đã có HTML tags hoặc emoji, thêm prefix vào đầu với HTML format
+        if is_html and (msg.startswith('<b>') or msg.startswith('✅') or msg.startswith('🛑') or msg.startswith('🚨') or msg.startswith('⚠️')):
+            return f"<b>[{prefix}]</b>\n\n{msg}"
+        elif is_html:
+            return f"<b>[{prefix}]</b>\n\n{msg}"
+        else:
+            return f"[{prefix}]\n\n{msg}"
+    return msg
+
 sent_messages_all = set()
 def send_tele(msg, chat_id,is_html, show_web_preview):
     print(f"msg======================={msg}")
     
-    send(str(chat_id), msg, is_html, show_web_preview)
+    # ✅ Tự động thêm prefix_channel vào message
+    formatted_msg = format_telegram_message(msg, is_html)
+    
+    send(str(chat_id), formatted_msg, is_html, show_web_preview)
     sent_messages_all.add(msg)
     
     
@@ -79,7 +97,9 @@ def send_tele_with_limit_per_hour(msg, chat_id,is_html, show_web_preview, count_
             user_info['last_sent_time'] = current_time
 
         
-        send(str(chat_id), msg, is_html, show_web_preview)
+        # ✅ Tự động thêm prefix_channel vào message
+        formatted_msg = format_telegram_message(msg, is_html)
+        send(str(chat_id), formatted_msg, is_html, show_web_preview)
     else:
         
         print(f"--> Same mess")
