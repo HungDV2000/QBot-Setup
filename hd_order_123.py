@@ -472,18 +472,25 @@ def do_it():
             
             # ✅ [ĐIỀU KIỆN 3] KIỂM TRA TRẠNG THÁI CHO PHÉP ĐẶT LỆNH (Cột L)
             # Cột L (index 11) - Trạng thái cho phép đặt lệnh (Y/N)
-            allow_order = True  # Mặc định cho phép nếu không có giá trị
+            # ✅ CHỈ đặt lệnh nếu cột L = "Y", nếu rỗng hoặc khác "Y" thì KHÔNG đặt
+            allow_order = False  # ✅ Mặc định KHÔNG cho phép (chỉ cho phép khi L = "Y")
             try:
                 if len(row) > 11 and row[11]:
                     status_str = str(row[11]).strip().upper()
                     allow_order = (status_str == "Y")
-                    if not allow_order:
+                    if allow_order:
+                        logger.info(f"{symbol}: Trạng thái cột L = '{status_str}' → Cho phép đặt lệnh")
+                    else:
                         logger.info(f"{symbol}: Trạng thái cột L = '{status_str}' (không phải Y) → Bỏ qua, không đặt lệnh")
+                else:
+                    # Cột L rỗng hoặc không tồn tại → KHÔNG cho phép
+                    logger.info(f"{symbol}: Cột L rỗng hoặc không tồn tại → Bỏ qua, không đặt lệnh")
             except Exception as e:
-                logger.debug(f"{symbol}: Lỗi đọc trạng thái từ cột L: {e}, mặc định cho phép")
+                logger.warning(f"{symbol}: Lỗi đọc trạng thái từ cột L: {e} → Bỏ qua, không đặt lệnh (safety first)")
+                allow_order = False  # ✅ Lỗi thì không cho phép (an toàn)
             
             if not allow_order:
-                logger.debug(f"{symbol}: Không được phép đặt lệnh (cột L ≠ Y), bỏ qua")
+                logger.info(f"{symbol}: Không được phép đặt lệnh (cột L ≠ Y hoặc rỗng), bỏ qua")
                 continue
             
             print(f"🔍 Xử lý: {symbol} | Side: {side} | Entry: {entry_price} | Need SL: {need_sl}, TP: {need_tp}", flush=True)
