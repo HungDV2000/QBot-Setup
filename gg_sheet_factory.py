@@ -32,66 +32,202 @@ def init_sheet_api():
   global creds, service, spreadsheets_service, _service_initialized
   
   # ✅ LUÔN LUÔN kiểm tra token validity, ngay cả khi service đã khởi tạo
-  # Load credentials từ file (nếu có)
-  if os.path.exists("token.json"):
-    creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+  # Xác định đường dẫn tuyệt đối của token.json (trong thư mục hiện tại)
+  current_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.getcwd()
+  token_path = os.path.join(current_dir, "token.json")
+  credentials_path = os.path.join(current_dir, "credentials.json")
   
-  # Kiểm tra token có hợp lệ không
-  if not creds or not creds.valid:
-    if creds and creds.expired and creds.refresh_token:
+  print(f"📁 Thư mục làm việc: {current_dir}", flush=True)
+  print(f"📄 Đường dẫn token.json: {token_path}", flush=True)
+  print(f"📄 Token.json tồn tại: {os.path.exists(token_path)}", flush=True)
+  logger.info(f"Thư mục làm việc: {current_dir}, Token path: {token_path}, Exists: {os.path.exists(token_path)}")
+  
+  # Load credentials từ file (nếu có)
+  if os.path.exists(token_path):
+    try:
+      creds = Credentials.from_authorized_user_file(token_path, SCOPES)
+      print("✅ Đã load token từ token.json", flush=True)
+      logger.info("Đã load token từ token.json")
+    except Exception as e:
+      print(f"⚠️ Lỗi khi load token.json: {e}, sẽ tạo token mới", flush=True)
+      logger.warning(f"Lỗi khi load token.json: {e}", exc_info=True)
+      creds = None
+  else:
+    print("⚠️ Không tìm thấy token.json", flush=True)
+    logger.info("Không tìm thấy token.json")
+    creds = None
+  
+  # ✅ Logic kiểm tra token theo thứ tự ưu tiên:
+  # 1. Nếu token hợp lệ (valid và chưa expired) → Dùng luôn
+  # 2. Nếu token expired nhưng có refresh_token → Refresh
+  # 3. Nếu không có token hoặc refresh_token bị mất → Tạo mới
+  
+  if not creds:
+    # Trường hợp 1: Chưa có token, tạo mới
+    print("🔑 Chưa có token, đang tạo mới...", flush=True)
+    logger.info("Chưa có token, đang tạo mới")
+    if not os.path.exists(credentials_path):
+      error_msg = f"❌ Không tìm thấy credentials.json tại {credentials_path}"
+      print(error_msg, flush=True)
+      logger.error(error_msg)
+      raise FileNotFoundError(f"credentials.json không tồn tại tại {credentials_path}")
+    flow = InstalledAppFlow.from_client_secrets_file(
+        credentials_path, SCOPES
+    )
+    creds = flow.run_local_server(port=0)
+    print("✅ Đã tạo token mới thành công.", flush=True)
+    logger.info("Đã tạo token mới thành công")
+    
+    # Lưu token mới
+    with open(token_path, "w") as token:
+      token.write(creds.to_json())
+    print(f"✅ Đã lưu token vào {token_path}", flush=True)
+    logger.info(f"Đã lưu token vào {token_path}")
+    
+    # Reset service để dùng token mới
+    _service_initialized = False
+    spreadsheets_service = None
+    
+  elif creds.expired and creds.refresh_token:
+    # Trường hợp 2: Token expired nhưng có refresh_token → Refresh
+    try:
+      logger.info("Token đã expired, đang refresh...")
+      print("🔄 Token đã expired, đang refresh...", flush=True)
+      creds.refresh(Request())
+      print("✅ Đã làm mới Google token thành công.", flush=True)
+      logger.info("Đã refresh token thành công")
+      
+      # Lưu token mới
+      with open(token_path, "w") as token:
+        token.write(creds.to_json())
+      print(f"✅ Đã lưu token mới vào {token_path}", flush=True)
+      logger.info(f"Đã lưu token mới vào {token_path}")
+      
+      # Reset service để dùng token mới
+      _service_initialized = False
+      spreadsheets_service = None
+      
+    except Exception as e:
+      # Nếu refresh thất bại (token bị revoke), xóa token.json và tạo mới
+      print(f"⚠️ Không thể làm mới token: {e}", flush=True)
+      print("🔄 Xóa token cũ và tạo mới...", flush=True)
+      logger.warning(f"Không thể refresh token: {e}, tạo token mới")
+      
+      if os.path.exists(token_path):
+        os.remove(token_path)
+        print(f"🗑️ Đã xóa token.json cũ tại {token_path}", flush=True)
+        logger.info(f"Đã xóa token.json cũ tại {token_path}")
+      
+      if not os.path.exists(credentials_path):
+        error_msg = f"❌ Không tìm thấy credentials.json tại {credentials_path}"
+        print(error_msg, flush=True)
+        logger.error(error_msg)
+        raise FileNotFoundError(f"credentials.json không tồn tại tại {credentials_path}")
+      
+      flow = InstalledAppFlow.from_client_secrets_file(
+          credentials_path, SCOPES
+      )
+      creds = flow.run_local_server(port=0)
+      print("✅ Đã tạo token mới thành công.", flush=True)
+      logger.info("Đã tạo token mới sau khi refresh thất bại")
+      
+      # Lưu token mới
+      with open(token_path, "w") as token:
+        token.write(creds.to_json())
+      print(f"✅ Đã lưu token mới vào {token_path}", flush=True)
+      logger.info(f"Đã lưu token mới vào {token_path}")
+      
+      # Reset service để dùng token mới
+      _service_initialized = False
+      spreadsheets_service = None
+      
+  elif not creds.valid:
+    # Trường hợp 3: Token không valid nhưng chưa expired (có thể do vấn đề khác)
+    # Thử refresh nếu có refresh_token, nếu không thì tạo mới
+    if creds.refresh_token:
       try:
-        # Thử refresh token
-        logger.info("Token đã expired, đang refresh...")
+        logger.info("Token không valid nhưng có refresh_token, đang refresh...")
+        print("🔄 Token không valid, đang thử refresh...", flush=True)
         creds.refresh(Request())
-        print("✅ Đã làm mới Google token thành công.", flush=True)
+        print("✅ Đã refresh token thành công.", flush=True)
         logger.info("Đã refresh token thành công")
         
         # Lưu token mới
-        with open("token.json", "w") as token:
+        with open(token_path, "w") as token:
           token.write(creds.to_json())
+        print(f"✅ Đã lưu token mới vào {token_path}", flush=True)
+        logger.info(f"Đã lưu token mới vào {token_path}")
         
         # Reset service để dùng token mới
         _service_initialized = False
         spreadsheets_service = None
-        
       except Exception as e:
-        # Nếu refresh thất bại (token bị revoke), xóa token.json và tạo mới
-        print(f"⚠️ Không thể làm mới token: {e}", flush=True)
-        print("🔄 Xóa token cũ và tạo mới...", flush=True)
+        print(f"⚠️ Không thể refresh token: {e}, tạo token mới...", flush=True)
         logger.warning(f"Không thể refresh token: {e}, tạo token mới")
         
-        if os.path.exists("token.json"):
-          os.remove("token.json")
+        if os.path.exists(token_path):
+          os.remove(token_path)
+          print(f"🗑️ Đã xóa token.json cũ tại {token_path}", flush=True)
+          logger.info(f"Đã xóa token.json cũ tại {token_path}")
+        
+        if not os.path.exists(credentials_path):
+          error_msg = f"❌ Không tìm thấy credentials.json tại {credentials_path}"
+          print(error_msg, flush=True)
+          logger.error(error_msg)
+          raise FileNotFoundError(f"credentials.json không tồn tại tại {credentials_path}")
         
         flow = InstalledAppFlow.from_client_secrets_file(
-            "credentials.json", SCOPES
+            credentials_path, SCOPES
         )
         creds = flow.run_local_server(port=0)
         print("✅ Đã tạo token mới thành công.", flush=True)
+        logger.info("Đã tạo token mới sau khi refresh thất bại")
         
         # Lưu token mới
-        with open("token.json", "w") as token:
+        with open(token_path, "w") as token:
           token.write(creds.to_json())
+        print(f"✅ Đã lưu token mới vào {token_path}", flush=True)
+        logger.info(f"Đã lưu token mới vào {token_path}")
         
         # Reset service để dùng token mới
         _service_initialized = False
         spreadsheets_service = None
     else:
-      # Chưa có token hoặc không hợp lệ, tạo mới
-      print("🔑 Chưa có token, đang tạo mới...", flush=True)
+      # Không có refresh_token → Tạo mới
+      print("⚠️ Token không valid và không có refresh_token, tạo token mới...", flush=True)
+      logger.warning("Token không valid và không có refresh_token, tạo token mới")
+      
+      if os.path.exists(token_path):
+        os.remove(token_path)
+        print(f"🗑️ Đã xóa token.json cũ tại {token_path}", flush=True)
+        logger.info(f"Đã xóa token.json cũ tại {token_path}")
+      
+      if not os.path.exists(credentials_path):
+        error_msg = f"❌ Không tìm thấy credentials.json tại {credentials_path}"
+        print(error_msg, flush=True)
+        logger.error(error_msg)
+        raise FileNotFoundError(f"credentials.json không tồn tại tại {credentials_path}")
+      
       flow = InstalledAppFlow.from_client_secrets_file(
-          "credentials.json", SCOPES
+          credentials_path, SCOPES
       )
       creds = flow.run_local_server(port=0)
       print("✅ Đã tạo token mới thành công.", flush=True)
+      logger.info("Đã tạo token mới")
       
       # Lưu token mới
-      with open("token.json", "w") as token:
+      with open(token_path, "w") as token:
         token.write(creds.to_json())
+      print(f"✅ Đã lưu token mới vào {token_path}", flush=True)
+      logger.info(f"Đã lưu token mới vào {token_path}")
       
       # Reset service để dùng token mới
       _service_initialized = False
       spreadsheets_service = None
+  else:
+    # Trường hợp 4: Token hợp lệ và chưa expired → Dùng luôn
+    print("✅ Token hợp lệ, sử dụng token hiện có", flush=True)
+    logger.info("Token hợp lệ, sử dụng token hiện có")
   
   # Tạo service nếu chưa có hoặc đã bị reset
   if not _service_initialized or service is None or spreadsheets_service is None:
