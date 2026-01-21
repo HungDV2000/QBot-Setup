@@ -73,6 +73,18 @@ class BinanceOrderHelper:
             
             # Fallback: Thử phương thức CCXT Standard (endpoint /order)
             try:
+                # [FIX] Làm tròn activation_price theo precision của Binance trước khi gửi
+                # CCXT có thể tự động làm tròn, nhưng để đảm bảo chính xác, ta làm tròn trước
+                try:
+                    activation_price_rounded_str = self.exchange.price_to_precision(symbol, activation_price)
+                    activation_price_rounded = float(activation_price_rounded_str)
+                    logger.info(f"📊 [FALLBACK] Activation price sau khi làm tròn: {activation_price} → {activation_price_rounded} (string: '{activation_price_rounded_str}')")
+                    if abs(activation_price_rounded - activation_price) > 0.0001:
+                        logger.warning(f"⚠️ [FALLBACK] Giá bị làm tròn khác: {activation_price} → {activation_price_rounded}")
+                    activation_price = activation_price_rounded
+                except Exception as e_precision:
+                    logger.warning(f"⚠️ [FALLBACK] Không thể làm tròn activation_price: {e_precision}, dùng giá gốc")
+                
                 # Standard API dùng 'activationPrice' (có đuôi ion)
                 str_activation_price = self._to_str(activation_price)
                 params = {
@@ -82,6 +94,8 @@ class BinanceOrderHelper:
                 if reduce_only:
                     params['reduceOnly'] = True
 
+                logger.info(f"📤 [FALLBACK] Payload gửi đi (CCXT): activationPrice={str_activation_price}, callbackRate={callback_rate}")
+
                 order = self.exchange.create_order(
                     symbol=symbol,
                     type='TRAILING_STOP_MARKET',
@@ -90,6 +104,15 @@ class BinanceOrderHelper:
                     price=activation_price, # CCXT cần cái này để pass validation
                     params=params
                 )
+                
+                # [FIX] Log giá từ response để so sánh
+                if 'info' in order and isinstance(order['info'], dict):
+                    activate_price_from_response = order['info'].get('activatePrice') or order['info'].get('activationPrice')
+                    if activate_price_from_response:
+                        logger.info(f"📥 [FALLBACK] Activation price từ Binance response: {activate_price_from_response}")
+                        if abs(float(activate_price_from_response) - activation_price) > 0.0001:
+                            logger.warning(f"⚠️ [FALLBACK] CHÊNH LỆCH GIÁ! Gửi: {activation_price}, Nhận: {activate_price_from_response}")
+                
                 logger.info(f"✅ Tạo lệnh Trailing Stop thành công (Fallback CCXT): Order ID {order.get('id')}")
                 return order
             except Exception as e_std:
@@ -111,7 +134,8 @@ class BinanceOrderHelper:
         - Type: TRAILING_STOP_MARKET
         - Param: activatePrice
         """
-        binance_symbol = symbol.replace('/', '')
+        # [FIX] Loại bỏ cả '/' và ':USDT' để có format đúng: SXT/USDT:USDT -> SXTUSDT
+        binance_symbol = symbol.replace('/', '').replace(':USDT', '')
         
         params = {
             'symbol': binance_symbol,
