@@ -194,10 +194,32 @@ def execute_with_retry(func, *args, max_retries=2, **kwargs):
         raise
         
     except HttpError as e:
-      # Lỗi khác từ Google API (không phải refresh token)
-      logger.error(f"HttpError: {e}")
-      print(f"An error occurred: {e}", flush=True)
-      raise
+      # ✅ Xử lý lỗi 403 (Permission denied) - có thể do token hết hạn
+      if e.resp.status == 403:
+        logger.error(f"❌ HttpError 403 - Permission denied (lần thử {attempt + 1}/{max_retries + 1}): {e}")
+        print(f"❌ HttpError 403 - Permission denied (lần thử {attempt + 1}/{max_retries + 1}): {e}", flush=True)
+        
+        if attempt < max_retries:
+          # Thử force refresh token khi gặp 403
+          print(f"🔄 Đang thử refresh token do lỗi 403 (lần {attempt + 1})...", flush=True)
+          if force_refresh_token():
+            print("✅ Refresh token thành công, thử lại API call...", flush=True)
+            logger.info("Đã refresh token thành công sau lỗi 403, thử lại API call")
+            continue
+          else:
+            print("❌ Không thể refresh token, dừng retry", flush=True)
+            logger.error("Không thể refresh token sau lỗi 403")
+            raise
+        else:
+          # Hết số lần thử
+          print(f"❌ Đã thử {max_retries + 1} lần nhưng vẫn lỗi 403", flush=True)
+          logger.critical(f"Không thể giải quyết lỗi 403 sau {max_retries + 1} lần thử")
+          raise
+      else:
+        # Lỗi HttpError khác (không phải 403)
+        logger.error(f"HttpError (status {e.resp.status}): {e}")
+        print(f"An error occurred: {e}", flush=True)
+        raise
       
     except Exception as e:
       # Lỗi không xác định

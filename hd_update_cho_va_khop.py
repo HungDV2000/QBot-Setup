@@ -10,6 +10,7 @@ import requests
 import hmac
 import hashlib
 import urllib.parse
+from googleapiclient.errors import HttpError
 
 file_name = os.path.basename(os.path.abspath(__file__))  
 os.system(f"title {file_name} - {cst.key_name}")
@@ -655,6 +656,19 @@ def do_it():
         print(f"✅ Hoàn thành! Đã cập nhật {len(tab_100_ma_2d_arr)} dòng vào sheet (đã giữ lại rate)", flush=True)
         logger.info(f"✅ Hoàn thành cập nhật sheet: {len(tab_100_ma_2d_arr)} dòng (đã merge rate)")
         
+    except HttpError as e:
+        # ✅ Xử lý đặc biệt cho lỗi 403 (Permission denied)
+        if e.resp.status == 403:
+            error_msg = f"❌ Lỗi 403 - Permission denied khi cập nhật sheet: {e}"
+            print(error_msg, flush=True)
+            logger.error(error_msg, exc_info=True)
+            print("⚠️  Lưu ý: Token có thể đã hết hạn hoặc không có quyền truy cập sheet", flush=True)
+            print("   Bot sẽ tự động thử refresh token ở lần scan tiếp theo", flush=True)
+            logger.warning("Lỗi 403 - Bot sẽ thử lại ở lần scan tiếp theo sau khi refresh token")
+        else:
+            error_msg = f"❌ HttpError (status {e.resp.status}) khi cập nhật sheet: {e}"
+            print(error_msg, flush=True)
+            logger.error(error_msg, exc_info=True)
     except Exception as e:
         print(f"❌ Lỗi khi cập nhật sheet: {e}", flush=True)
         logger.error(f"Lỗi cập nhật sheet: {e}", exc_info=True)
