@@ -245,11 +245,10 @@ def get_algo_orders_for_symbol(symbol):
         elif isinstance(response, dict):
             if 'data' in response:
                 return response['data']
-            elif response.get('code') == 200:
-                return response
-            else:
-                logger.warning(f"[API] Response code khác 200 cho {symbol}: {response}")
-                return None  # Không chắc chắn → trả None
+            if response.get('code') == 200:
+                return []  # Thành công nhưng không có data (không có order)
+            logger.warning(f"[API] Response code khác 200 cho {symbol}: {response}")
+            return None  # Không chắc chắn → trả None
         else:
             logger.warning(f"[API] Response format không đúng cho {symbol}: {type(response)}")
             return None
