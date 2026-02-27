@@ -18,6 +18,7 @@ import requests
 import hmac
 import hashlib
 import urllib.parse
+import json
 from googleapiclient.errors import HttpError  # ✅ Thêm import HttpError để handle lỗi Google API
 
 # Cấu hình stdout để output realtime (unbuffered)
@@ -81,6 +82,83 @@ except Exception as e:
 # Khởi tạo order helper
 order_helper = BinanceOrderHelper(exchange)
 
+# ===================================================================
+# LOCAL ORDER CACHE - Chống lặp đơn khi Binance API lỗi/timeout
+# Cache lưu {symbol: {'algo_id': str, 'placed_at': float}}
+# Được persist vào file để giữ qua lần restart bot
+# ===================================================================
+_order_cache: dict = {}
+_cache_lock = threading.Lock()
+_CACHE_FILE = Path('data/order_cache.json')
+_CACHE_TTL_SECONDS = 86400  # 24 giờ - thời gian order còn có thể valid
+
+
+def _load_order_cache():
+    """Load cache từ file JSON khi bot khởi động"""
+    global _order_cache
+    try:
+        _CACHE_FILE.parent.mkdir(exist_ok=True)
+        if _CACHE_FILE.exists():
+            with open(_CACHE_FILE, 'r', encoding='utf-8') as f:
+                _order_cache = json.load(f)
+            logger.info(f"[CACHE] Đã load {len(_order_cache)} entries từ {_CACHE_FILE}")
+            print(f"✅ [CACHE] Đã load {len(_order_cache)} symbol từ cache file", flush=True)
+        else:
+            _order_cache = {}
+            logger.info("[CACHE] Chưa có cache file, khởi tạo rỗng")
+    except Exception as e:
+        logger.error(f"[CACHE] Lỗi load cache: {e}", exc_info=True)
+        _order_cache = {}
+
+
+def _save_order_cache():
+    """Lưu cache ra file JSON (gọi bên trong _cache_lock)"""
+    try:
+        _CACHE_FILE.parent.mkdir(exist_ok=True)
+        with open(_CACHE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(_order_cache, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error(f"[CACHE] Lỗi save cache: {e}", exc_info=True)
+
+
+def add_to_order_cache(symbol: str, algo_id: str):
+    """Thêm order vừa đặt thành công vào cache"""
+    with _cache_lock:
+        _order_cache[symbol] = {
+            'algo_id': str(algo_id),
+            'placed_at': time.time()
+        }
+        _save_order_cache()
+    logger.info(f"[CACHE] Đã thêm {symbol} (algoId={algo_id}) vào cache")
+
+
+def remove_from_order_cache(symbol: str):
+    """Xóa symbol khỏi cache khi API xác nhận không còn order"""
+    with _cache_lock:
+        if symbol in _order_cache:
+            del _order_cache[symbol]
+            _save_order_cache()
+            logger.info(f"[CACHE] Đã xóa {symbol} khỏi cache (API xác nhận hết order)")
+
+
+def is_in_order_cache(symbol: str) -> tuple:
+    """
+    Kiểm tra symbol có trong cache và còn hiệu lực không.
+    Returns: (True/False, algo_id hoặc None)
+    """
+    with _cache_lock:
+        if symbol not in _order_cache:
+            return False, None
+        entry = _order_cache[symbol]
+        age = time.time() - entry.get('placed_at', 0)
+        if age > _CACHE_TTL_SECONDS:
+            del _order_cache[symbol]
+            _save_order_cache()
+            logger.info(f"[CACHE] {symbol} đã hết hạn cache ({age/3600:.1f}h), xóa")
+            return False, None
+        return True, entry.get('algo_id')
+
+
 def is_same_pair(sym1, sym2):
     """
     So sánh 2 symbols có giống nhau không (bỏ qua format)
@@ -91,68 +169,77 @@ def is_same_pair(sym1, sym2):
     sym2 = sym2.replace("/", "").replace(":USDT", "").upper().strip()
     return sym1 == sym2
 
-def call_binance_api_direct(method, endpoint, params=None):
+def call_binance_api_direct(method, endpoint, params=None, max_retries=3):
     """
-    Gọi Binance API trực tiếp bằng requests (để lấy algo orders)
-    Tham khảo từ test_fetch_conditional_orders.py
+    Gọi Binance API trực tiếp bằng requests.
+    Có retry với exponential backoff (2s, 4s, 8s).
+    Returns:
+        dict/list → Thành công
+        None      → Tất cả retry đều thất bại
     """
     base_url = 'https://fapi.binance.com'
     url = f"{base_url}{endpoint}"
-    
-    if params is None:
-        params = {}
-    
-    # Thêm timestamp
-    params['timestamp'] = int(time.time() * 1000)
-    
-    # Tạo query string
-    query_string = urllib.parse.urlencode(params)
-    
-    # Tạo signature
-    signature = hmac.new(
-        cst.secret_binance.encode('utf-8'),
-        query_string.encode('utf-8'),
-        hashlib.sha256
-    ).hexdigest()
-    
-    params['signature'] = signature
-    
-    # Headers
-    headers = {
-        'X-MBX-APIKEY': cst.key_binance
-    }
-    
-    try:
-        response = requests.get(url, params=params, headers=headers, timeout=10)
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        logger.error(f"Lỗi khi gọi Binance API trực tiếp: {e}")
-        return None
+    headers = {'X-MBX-APIKEY': cst.key_binance}
+
+    for attempt in range(max_retries):
+        try:
+            # Tạo fresh copy params mỗi lần (tránh timestamp bị trùng giữa các retry)
+            req_params = dict(params) if params else {}
+            req_params['timestamp'] = int(time.time() * 1000)
+
+            query_string = urllib.parse.urlencode(req_params)
+            signature = hmac.new(
+                cst.secret_binance.encode('utf-8'),
+                query_string.encode('utf-8'),
+                hashlib.sha256
+            ).hexdigest()
+            req_params['signature'] = signature
+
+            response = requests.get(url, params=req_params, headers=headers, timeout=10)
+            response.raise_for_status()
+            return response.json()
+
+        except requests.exceptions.Timeout:
+            wait = 2 ** (attempt + 1)
+            logger.warning(f"[API] Timeout lần {attempt+1}/{max_retries} ({endpoint}), chờ {wait}s...")
+            if attempt < max_retries - 1:
+                time.sleep(wait)
+
+        except requests.exceptions.HTTPError as e:
+            status_code = e.response.status_code if e.response is not None else 0
+            wait = 2 ** (attempt + 1)
+            logger.warning(f"[API] HTTP {status_code} lần {attempt+1}/{max_retries} ({endpoint}): {e}")
+            if attempt < max_retries - 1:
+                time.sleep(wait)
+
+        except Exception as e:
+            wait = 2 ** (attempt + 1)
+            logger.warning(f"[API] Lỗi lần {attempt+1}/{max_retries} ({endpoint}): {e}")
+            if attempt < max_retries - 1:
+                time.sleep(wait)
+
+    logger.error(f"[API] Tất cả {max_retries} lần retry đều thất bại cho {endpoint}")
+    return None
 
 def get_algo_orders_for_symbol(symbol):
     """
-    Lấy algo orders cho một symbol cụ thể từ Binance API
-    Dùng endpoint: /fapi/v1/allAlgoOrders (Query All Algo Orders)
-    Trả về: List các algo orders (bao gồm CANCELED, FINISHED, NEW)
-    Tham khảo từ test_fetch_conditional_orders.py
+    Lấy algo orders cho một symbol cụ thể từ Binance API.
+
+    Returns:
+        None  → API gặp lỗi (không thể xác định trạng thái)
+        []    → API thành công, không có orders nào
+        [..] → API thành công, có danh sách orders
     """
     try:
-        # [FIX] Binance API yêu cầu symbol format: HOMEUSDT (không có / và :USDT)
-        # HOME/USDT:USDT -> HOMEUSDT
-        # BID/USDT -> BIDUSDT
         symbol_clean = symbol.replace('/', '').replace(':USDT', '')
-        
-        params = {
-            'symbol': symbol_clean
-        }
-        
+        params = {'symbol': symbol_clean}
+
         response = call_binance_api_direct('GET', '/fapi/v1/allAlgoOrders', params)
-        
-        if not response:
-            return []
-        
-        # Binance trả về có thể là array hoặc dict
+
+        # None = tất cả retry đều thất bại → trả None (khác với [] = thành công + không có order)
+        if response is None:
+            return None
+
         if isinstance(response, list):
             return response
         elif isinstance(response, dict):
@@ -161,15 +248,15 @@ def get_algo_orders_for_symbol(symbol):
             elif response.get('code') == 200:
                 return response
             else:
-                logger.warning(f"Response có code khác 200 cho {symbol}: {response}")
-                return []
+                logger.warning(f"[API] Response code khác 200 cho {symbol}: {response}")
+                return None  # Không chắc chắn → trả None
         else:
-            logger.warning(f"Response format không đúng cho {symbol}: {type(response)}")
-            return []
-            
+            logger.warning(f"[API] Response format không đúng cho {symbol}: {type(response)}")
+            return None
+
     except Exception as e:
         logger.error(f"Lỗi khi lấy algo orders cho {symbol}: {e}", exc_info=True)
-        return []
+        return None
 
 def cancel_all_open_orders(symbol):
     open_orders = exchange.fetch_open_orders(symbol)
@@ -284,60 +371,63 @@ def has_position(sym):
 
 def has_pending_trailing_stop_order(symbol):
     """
-    Kiểm tra symbol đã có order TRAILING_STOP chưa (bất kể pending hay filled)
-    Logic: Trùng lặp = cùng 1 mã có nhiều orders cùng loại trong 1 đợt đặt lệnh
-    
-    Dùng Binance Algo Orders API (/fapi/v1/allAlgoOrders) để lấy chính xác algo orders
-    Tham khảo từ test_fetch_conditional_orders.py
+    Kiểm tra symbol đã có order TRAILING_STOP chưa.
+
+    Chiến lược FAIL-SAFE (không đặt lệnh khi không chắc chắn):
+    ┌─────────────────────────────────────────────────────────────┐
+    │  API thành công + có orders  → CHẶN (theo kết quả API)     │
+    │  API thành công + không có   → CHO PHÉP (xóa cache)        │
+    │  API lỗi (None) + có cache   → CHẶN (dùng cache làm backup)│
+    │  API lỗi (None) + không cache→ CHẶN (không chắc = chặn)    │
+    │  Exception bất kỳ            → CHẶN (fail-safe)            │
+    └─────────────────────────────────────────────────────────────┘
     """
     try:
-        # Lấy algo orders từ Binance API trực tiếp
         logger.info(f"[CHECK PENDING] {symbol}: Đang kiểm tra algo orders...")
         algo_orders = get_algo_orders_for_symbol(symbol)
-        
+
+        # ── TRƯỜNG HỢP API LỖI (None sau tất cả retry) ──────────────────
+        if algo_orders is None:
+            in_cache, cached_algo_id = is_in_order_cache(symbol)
+            if in_cache:
+                logger.warning(f"[CHECK PENDING] {symbol}: API lỗi + có cache (algoId={cached_algo_id}) → CHẶN")
+                print(f"⛔ {symbol}: API lỗi nhưng có cache lệnh cũ → CHẶN để tránh lặp đơn", flush=True)
+            else:
+                logger.warning(f"[CHECK PENDING] {symbol}: API lỗi + không có cache → CHẶN phòng ngừa (fail-safe)")
+                print(f"⛔ {symbol}: API lỗi, không xác định được trạng thái → CHẶN phòng ngừa", flush=True)
+            return True  # Fail-safe: LUÔN chặn khi API lỗi
+
+        # ── TRƯỜNG HỢP API THÀNH CÔNG + KHÔNG CÓ ORDERS ────────────────
         if not algo_orders:
+            remove_from_order_cache(symbol)  # Xóa cache lỗi thời nếu có
             logger.info(f"[CHECK PENDING] {symbol}: Không có algo orders → Cho phép tạo lệnh mới")
             return False
-        
+
+        # ── TRƯỜNG HỢP API THÀNH CÔNG + CÓ ORDERS ──────────────────────
         logger.info(f"[CHECK PENDING] {symbol}: Tìm thấy {len(algo_orders)} algo order(s)")
-        
-        # ✅ [FIX BUG] KHÔNG return False ngay nếu không có active orders
-        # Vì có thể có orders TRIGGERED/CANCELED gần đây cần check
-        # Đếm TRAILING_STOP orders (active + recent)
-        # Theo test: algoType='CONDITIONAL' hoặc 'VP' là TRAILING_STOP
+
         trailing_stop_count = 0
         trailing_stop_details = []
-        
-        # ✅ [FIX BUG LẶP ĐƠN] Kiểm tra TẤT CẢ orders (NEW, TRIGGERED, CANCELED gần đây)
-        # Vì lệnh có thể đã trigger nhưng chưa kịp check position
-        # Hoặc lệnh bị cancel nhưng vẫn còn trong history
-        import time
-        current_time = int(time.time() * 1000)  # milliseconds
-        recent_window = 10 * 60 * 1000  # ✅ Nâng lên 10 phút (thay vì 2 phút) để tránh lặp đơn
-        
-        for order in algo_orders:  # Check TẤT CẢ orders, không chỉ active
+        current_time = int(time.time() * 1000)
+        recent_window = 10 * 60 * 1000  # 10 phút
+
+        for order in algo_orders:
             algo_id = order.get('algoId', 'N/A')
             algo_type = order.get('algoType', '').upper()
             algo_status = order.get('algoStatus', '').upper()
             activate_price = order.get('activatePrice', None)
             callback_rate = order.get('callbackRate', order.get('priceRate', None))
             create_time = order.get('createTime', 0)
-            
-            # TRAILING_STOP: algoType = 'CONDITIONAL' hoặc 'VP' (theo test results)
+
             is_trailing_stop = algo_type in ['CONDITIONAL', 'VP']
-            
+
             if is_trailing_stop:
-                # ✅ [FIX] Chấp nhận:
-                # 1. Orders NEW (active/pending) - LUÔN chặn
-                # 2. Orders TRIGGERED gần đây (< 10 phút) - Có thể đã vào lệnh, cần chặn
-                # 3. Orders CANCELED gần đây (< 10 phút) - Có thể vừa bị cancel, cần chặn để tránh tạo ngay sau
                 is_active = (algo_status == 'NEW')
                 age_ms = current_time - create_time
-                is_recent = (age_ms < recent_window)  # Gần đây (< 10 phút)
+                is_recent = (age_ms < recent_window)
                 is_recent_triggered = (algo_status == 'TRIGGERED' and is_recent)
                 is_recent_canceled = (algo_status == 'CANCELED' and is_recent)
-                
-                # ✅ CHẶN nếu: NEW hoặc TRIGGERED gần đây hoặc CANCELED gần đây
+
                 if is_active or is_recent_triggered or is_recent_canceled:
                     trailing_stop_count += 1
                     trailing_stop_details.append({
@@ -349,41 +439,37 @@ def has_pending_trailing_stop_order(symbol):
                         'create_time': create_time,
                         'age_seconds': age_ms / 1000
                     })
-                    
                     if is_recent_triggered:
-                        logger.info(f"⚠️  {symbol}: Phát hiện lệnh TRIGGERED gần đây (algoId={algo_id}, {age_ms/1000:.0f}s ago)")
+                        logger.info(f"⚠️  {symbol}: Lệnh TRIGGERED gần đây (algoId={algo_id}, {age_ms/1000:.0f}s ago)")
                     elif is_recent_canceled:
-                        logger.info(f"⚠️  {symbol}: Phát hiện lệnh CANCELED gần đây (algoId={algo_id}, {age_ms/1000:.0f}s ago) - Chặn để tránh tạo lại ngay")
+                        logger.info(f"⚠️  {symbol}: Lệnh CANCELED gần đây (algoId={algo_id}, {age_ms/1000:.0f}s ago)")
                 else:
-                    # Log các algo orders khác để debug
-                    logger.debug(f"[CHECK PENDING] {symbol}: Found non-trailing algo order: type={algo_type}, status={algo_status}")
-        
-        # ✅ Nếu có ít nhất 1 TRAILING_STOP order active/recent = đã có order (tránh trùng lặp)
+                    logger.debug(f"[CHECK PENDING] {symbol}: order type={algo_type}, status={algo_status} (cũ, bỏ qua)")
+
         if trailing_stop_count > 0:
-            detail_str = ", ".join([f"AlgoId: {d['algo_id']}, Status: {d['algo_status']}, Age: {d['age_seconds']:.0f}s" 
-                                   for d in trailing_stop_details])
+            detail_str = ", ".join([
+                f"AlgoId: {d['algo_id']}, Status: {d['algo_status']}, Age: {d['age_seconds']:.0f}s"
+                for d in trailing_stop_details
+            ])
             logger.info(f"✅ {symbol} đã có {trailing_stop_count} TRAILING_STOP algo order(s) - {detail_str}")
-            print(f"⏭️  {symbol} đã có {trailing_stop_count} lệnh TRAILING_STOP (NEW/TRIGGERED/CANCELED gần đây), bỏ qua", flush=True)
+            print(f"⏭️  {symbol} đã có {trailing_stop_count} lệnh TRAILING_STOP, bỏ qua", flush=True)
             return True
-        
-        # ✅ Log chi tiết nếu không có TRAILING_STOP orders nào
+
+        # API thành công nhưng không có trailing stop order → Xóa cache cũ nếu có
+        remove_from_order_cache(symbol)
         logger.info(f"[CHECK PENDING] {symbol}: Không có TRAILING_STOP orders (NEW/TRIGGERED/CANCELED < 10 phút) → Cho phép tạo lệnh mới")
-        if algo_orders:
-            # Log tất cả orders để debug
-            for o in algo_orders:
-                algo_type = o.get('algoType', '').upper()
-                algo_status = o.get('algoStatus', '').upper()
-                algo_id = o.get('algoId', 'N/A')
-                create_time = o.get('createTime', 0)
-                age_seconds = (current_time - create_time) / 1000 if create_time > 0 else 0
-                logger.debug(f"[CHECK PENDING] {symbol}: Found order - Type: {algo_type}, Status: {algo_status}, AlgoId: {algo_id}, Age: {age_seconds:.0f}s")
-        
         return False
-        
+
     except Exception as e:
         logger.error(f"Lỗi khi kiểm tra algo orders cho {symbol}: {e}", exc_info=True)
-        # Khi có lỗi, return False để không block việc đặt lệnh (sẽ tự fail nếu duplicate)
-        return False
+        # Fail-safe: CHẶN khi có exception bất kỳ
+        in_cache, cached_algo_id = is_in_order_cache(symbol)
+        if in_cache:
+            logger.warning(f"[CHECK PENDING] {symbol}: Exception + có cache → CHẶN")
+        else:
+            logger.warning(f"[CHECK PENDING] {symbol}: Exception không xác định → CHẶN phòng ngừa")
+        print(f"⛔ {symbol}: Lỗi kiểm tra → CHẶN phòng ngừa", flush=True)
+        return True
 
 def execute_command(commands):
     try:
@@ -1002,6 +1088,11 @@ def do_it():
             printf(symbol, order)
             print(f"✅ Đã tạo lệnh TRAILING_STOP cho {symbol}", flush=True)
             logger.info(f"✅ Lệnh TRAILING_STOP đã được tạo thành công cho {symbol} (Order ID: {order.get('id', 'N/A')})")
+
+            # Cập nhật local cache ngay sau khi đặt lệnh thành công
+            _cached_algo_id = order.get('info', {}).get('algoId') or order.get('id', 'unknown')
+            add_to_order_cache(sym, _cached_algo_id)
+
             telegram_factory.send_tele(msg, cst.chat_id, True, True)
 
         except Exception as e:
@@ -1076,6 +1167,19 @@ try:
 except Exception as e:
     print(f"⚠️ Lỗi khởi tạo Google Sheets API: {e}", flush=True)
     logger.error(f"Lỗi khởi tạo Google Sheets API: {e}", exc_info=True)
+
+# ✅ Load order cache từ file (chống lặp đơn qua restart)
+_load_order_cache()
+
+# ✅ Khởi động Telegram Command Bot trong thread riêng
+try:
+    import tele_command
+    tele_command.start_tele_command_thread()
+    print("✅ Telegram command bot đã khởi động", flush=True)
+    logger.info("Telegram command bot đã khởi động")
+except Exception as e:
+    print(f"⚠️ Lỗi khởi động Telegram command bot: {e}", flush=True)
+    logger.error(f"Lỗi khởi động tele_command: {e}", exc_info=True)
 
 while True:
     try:
