@@ -1171,15 +1171,19 @@ except Exception as e:
 # ✅ Load order cache từ file (chống lặp đơn qua restart)
 _load_order_cache()
 
-# ✅ Khởi động Telegram Command Bot trong thread riêng
-try:
-    import tele_command
-    tele_command.start_tele_command_thread()
-    print("✅ Telegram command bot đã khởi động", flush=True)
-    logger.info("Telegram command bot đã khởi động")
-except Exception as e:
-    print(f"⚠️ Lỗi khởi động Telegram command bot: {e}", flush=True)
-    logger.error(f"Lỗi khởi động tele_command: {e}", exc_info=True)
+# ✅ Khởi động Telegram Command Bot (chỉ khi run_tele_command = true; folder khác set false để không chạy listener)
+if getattr(cst, 'run_tele_command', True):
+    try:
+        import tele_command
+        tele_command.start_tele_command_thread()
+        print("✅ Telegram command bot đã khởi động", flush=True)
+        logger.info("Telegram command bot đã khởi động")
+    except Exception as e:
+        print(f"⚠️ Lỗi khởi động Telegram command bot: {e}", flush=True)
+        logger.error(f"Lỗi khởi động tele_command: {e}", exc_info=True)
+else:
+    print("⏭️ Telegram command bot tắt (run_tele_command = false)", flush=True)
+    logger.info("Telegram command bot không chạy (run_tele_command = false)")
 
 while True:
     try:

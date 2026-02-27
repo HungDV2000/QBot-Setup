@@ -37,3 +37,6 @@ max_increase_decrease_4h_day_count = config.getint('global', 'max_increase_decre
 delay_track_30_prices = config.getint('global', 'delay_track_30_prices')
 delay_periodic_report = config.getint('global', 'delay_periodic_report')
 
+# Telegram command bot: True = folder này chạy listener (nhận lệnh); False = chỉ chạy hd_order, không nhận lệnh
+run_tele_command = config.getboolean('global', 'run_tele_command', fallback=True)
+

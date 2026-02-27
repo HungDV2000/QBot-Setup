@@ -494,6 +494,36 @@ def update_single_value(tab_name, range, value):
   
   return execute_with_retry(_execute)
 
+
+def update_single_value_to_sheet(sheet_spreadsheet_id: str, sheet_tab_name: str, range: str, value: str):
+  """
+  Ghi một ô vào sheet bất kỳ (theo spreadsheet_id + tab).
+  Dùng khi 1 bot điều khiển nhiều sheet (multi-sheet): ghi đúng sheet theo mã.
+  Cùng dùng credentials hiện tại (token.json).
+  """
+  RANGE_NAME = f"'{sheet_tab_name}'!{range}"
+  init_sheet_api()
+
+  def _execute():
+    values = [[value]]
+    body = {"values": values}
+    result = (
+      spreadsheets_service
+      .values()
+      .update(
+        spreadsheetId=sheet_spreadsheet_id,
+        range=RANGE_NAME,
+        valueInputOption="USER_ENTERED",
+        body=body,
+      )
+      .execute()
+    )
+    logger.info(f"[SHEET] Đã ghi {RANGE_NAME} = '{value}' (spreadsheet {sheet_spreadsheet_id[:8]}...)")
+    return result
+
+  return execute_with_retry(_execute)
+
+
 def replace_nan(array, replace_value):
     nan_indices = np.isnan(array)
     array[nan_indices] = replace_value
