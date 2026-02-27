@@ -38,5 +38,6 @@ delay_track_30_prices = config.getint('global', 'delay_track_30_prices')
 delay_periodic_report = config.getint('global', 'delay_periodic_report')
 
 # Telegram command bot: True = folder này chạy listener (nhận lệnh); False = chỉ chạy hd_order, không nhận lệnh
-run_tele_command = config.getboolean('global', 'run_tele_command', fallback=True)
+# Mặc định False: nếu config.ini chưa có run_tele_command thì không chạy (tránh bật nhầm)
+run_tele_command = config.getboolean('global', 'run_tele_command', fallback=False)
 

@@ -1171,8 +1171,8 @@ except Exception as e:
 # ✅ Load order cache từ file (chống lặp đơn qua restart)
 _load_order_cache()
 
-# ✅ Khởi động Telegram Command Bot (chỉ khi run_tele_command = true; folder khác set false để không chạy listener)
-if getattr(cst, 'run_tele_command', True):
+# ✅ Khởi động Telegram Command Bot (chỉ khi run_tele_command = true; mặc định false nếu chưa cấu hình)
+if getattr(cst, 'run_tele_command', False):
     try:
         import tele_command
         tele_command.start_tele_command_thread()

@@ -47,3 +47,17 @@ delay_update_all = 120
 delay_track_30_prices = 60
 delay_periodic_report = 300
 
+# ─── Telegram Command Bot (điều khiển từ xa: /stop, /pause, /long, /short...) ───
+# Mặc định false: nếu không khai báo run_tele_command thì bot KHÔNG chạy listener (chỉ scan sheet).
+run_tele_command = false
+
+# Chế độ nhiều sheet (1 bot, 1 nhóm, nhiều folder/sheet): chỉ 1 folder đặt true và cấu hình bên dưới.
+; tele_multi_sheet = false
+; tele_slugs = A, B, C
+; tele_sheet_A_id = <spreadsheet_id_của_sheet_A>
+; tele_sheet_A_tab = ĐẶT LỆNH (100 MÃ)
+; tele_sheet_B_id = <spreadsheet_id_của_sheet_B>
+; tele_sheet_B_tab = ĐẶT LỆNH (100 MÃ)
+; tele_sheet_C_id = <spreadsheet_id_của_sheet_C>
+; tele_sheet_C_tab = ĐẶT LỆNH (100 MÃ)
+
