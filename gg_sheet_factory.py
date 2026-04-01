@@ -10,6 +10,7 @@ tab_white_list = "list"
 tab_dat_lenh = cst.tab_dat_lenh
 
 import os.path
+import math
 import numpy as np
 
 from google.auth.transport.requests import Request
@@ -465,9 +466,8 @@ def update(tab_name, array_index, value_array):
   init_sheet_api()
   
   def _execute():
-    values = [
-            value_array
-    ]
+    row = [sanitize_for_google_sheets(v) for v in value_array]
+    values = [row]
     body = {"values": values}
     print(body)
     result = (
@@ -491,9 +491,7 @@ def update_single_value(tab_name, range, value):
   init_sheet_api()
   
   def _execute():
-    values = [
-            [value]
-    ]
+    values = [[sanitize_for_google_sheets(value)]]
     body = {"values": values}
     print(body)
     result = (
@@ -523,7 +521,7 @@ def update_single_value_to_sheet(sheet_spreadsheet_id: str, sheet_tab_name: str,
   init_sheet_api()
 
   def _execute():
-    values = [[value]]
+    values = [[sanitize_for_google_sheets(value)]]
     body = {"values": values}
     result = (
       spreadsheets_service
@@ -547,6 +545,51 @@ def replace_nan(array, replace_value):
     array[nan_indices] = replace_value
     return array
 
+
+def sanitize_for_google_sheets(value):
+  """
+  Google Sheets API JSON không chấp nhận NaN/Infinity (payload invalid).
+  Đưa về ô trống hoặc kiểu an toàn.
+  """
+  if value is None:
+    return ""
+  if isinstance(value, str):
+    return value
+  if isinstance(value, bool):
+    return value
+  if isinstance(value, np.generic):
+    try:
+      value = value.item()
+    except Exception:
+      return ""
+  if isinstance(value, int) and not isinstance(value, bool):
+    return value
+  if isinstance(value, float):
+    if not math.isfinite(value):
+      return ""
+    return value
+  try:
+    f = float(value)
+    if not math.isfinite(f):
+      return ""
+    return f
+  except (TypeError, ValueError):
+    return value
+
+
+def sanitize_sheet_values_2d(array_2d):
+  """Áp dụng sanitize cho từng ô trong ma trận ghi Sheet."""
+  if not array_2d:
+    return array_2d
+  out = []
+  for row in array_2d:
+    if row is None:
+      out.append([])
+      continue
+    out.append([sanitize_for_google_sheets(c) for c in row])
+  return out
+
+
 def update_multi(tab_name, array_index, array_2d, from_column_alphabet_name):
   # Fix: Nếu array_index < 0, dùng abs để ghi từ hàng đó trực tiếp
   # Nếu array_index >= 0, dùng công thức 2 + array_index (giữ backward compatibility)
@@ -555,7 +598,7 @@ def update_multi(tab_name, array_index, array_2d, from_column_alphabet_name):
   else:
       index = 2 + array_index
   
-  # Fix: Mở rộng range đến cột AZ để đủ chứa tất cả data (52 cột)
+  # Fix: Mở rộng range đến cột AZ để đủ chứa tất cả data (A..AH = 34 cột, AZ = 52)
   RANGE_NAME = f"'{tab_name}'!{from_column_alphabet_name}{index}:AZ1000"
   
   
@@ -564,7 +607,7 @@ def update_multi(tab_name, array_index, array_2d, from_column_alphabet_name):
   init_sheet_api()
 
   def _execute():
-    values = array_2d
+    values = sanitize_sheet_values_2d(array_2d)
     body = {"values": values}
     result = (
         spreadsheets_service  # ✅ Dùng cached resource
