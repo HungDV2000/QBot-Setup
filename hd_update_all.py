@@ -15,6 +15,7 @@ import utils
 import numpy as np
 import json
 import os
+import math
 from data_collector import DataCollector, get_data_collector
 
 file_name = os.path.basename(os.path.abspath(__file__))  
@@ -76,6 +77,96 @@ exchange = exchange_class({
     }
 })
 exchange.setSandboxMode(False)
+# Tránh treo vĩnh viễn khi Binance/mạng không phản hồi (mặc định ccxt có thể không timeout)
+exchange.timeout = 30000
+
+# Một lần fetch 1d đủ cho BB1d + Min/Max 40d + RSI 1d + AB-AC + biên độ 30d + BB width AD-AE
+_OHLCV_1D_LIMIT = 450
+
+
+def _bb_upper_lower_from_closes(closing_prices, multiplier=2.0):
+    """BB(20, multiplier) từ danh sách close (cùng logic get_bb)."""
+    if len(closing_prices) < 20:
+        return float("nan"), float("nan")
+    arr = np.array(closing_prices[-20:], dtype=float)
+    ma = float(np.mean(arr))
+    std = float(np.std(arr))
+    return ma + multiplier * std, ma - multiplier * std
+
+
+def _rsi_simple_from_closes(closes, period=14):
+    """RSI SMA gain/loss — cùng công thức cột S / data_collector."""
+    if len(closes) < period + 1:
+        return None
+    gains, losses = [], []
+    for i in range(1, len(closes)):
+        ch = closes[i] - closes[i - 1]
+        gains.append(max(0.0, ch))
+        losses.append(max(0.0, -ch))
+    ag = float(np.mean(gains))
+    al = float(np.mean(losses))
+    rs = ag / al if al != 0 else 0
+    return float(100 - (100 / (1 + rs)))
+
+
+def _max_daily_volatility_from_ohlcv(ohlcv):
+    """(max_vol_pct, date_str) từ list nến 1d — thay fetch riêng trong get_row_result."""
+    if not ohlcv or len(ohlcv) == 0:
+        return 0.0, "N/A"
+    df = pd.DataFrame(ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"])
+    op = df["open"].replace(0, np.nan)
+    vp = (df["high"] - df["low"]) / op * 100
+    if not np.isfinite(vp).any():
+        return 0.0, "N/A"
+    imax = int(np.nanargmax(vp.values))
+    ts = int(df.iloc[imax]["timestamp"])
+    return round(float(vp.iloc[imax]), 2), datetime.fromtimestamp(ts / 1000).strftime("%Y-%m-%d")
+
+
+def _amplitude_range_from_ohlcv_slice(ohlcv_slice):
+    """Giống calculate_price_range nhưng không fetch — dùng cho P/Q 30d từ cache 1d."""
+    if not ohlcv_slice or len(ohlcv_slice) == 0:
+        return float("nan"), float("nan")
+    df = pd.DataFrame(ohlcv_slice, columns=["timestamp", "open", "high", "low", "close", "volume"])
+    df["price_change"] = df["close"] - df["open"]
+    df["direction"] = df["price_change"].apply(
+        lambda x: "Tăng" if x > 0 else "Giảm" if x < 0 else "Đứng giá"
+    )
+    max_price = df.apply(
+        lambda row: max(row["close"], row["open"]) if row["direction"] == "Giảm" else min(row["close"], row["open"]),
+        axis=1,
+    )
+    df["amplitude_percent"] = (df["high"] - df["low"]) / max_price * 100
+    inc = df[df["direction"] == "Tăng"]["amplitude_percent"].max()
+    dec = df[df["direction"] == "Giảm"]["amplitude_percent"].max()
+    max_inc = round(float(inc), 2) if pd.notna(inc) else float("nan")
+    max_dec = round(float(dec), 2) if pd.notna(dec) else float("nan")
+    return max_inc, max_dec
+
+
+def _bb_width_3d_and_now_from_ohlcv(ohlcv_1d, period=20, std_dev=2):
+    """(width 3 phiên trước, width hiện tại) — (U-L)/Mid khung 1d."""
+    if not ohlcv_1d or len(ohlcv_1d) < period + 3:
+        return None, None
+    df = pd.DataFrame(ohlcv_1d, columns=["timestamp", "open", "high", "low", "close", "volume"])
+    close = df["close"]
+    sma = close.rolling(window=period).mean()
+    std = close.rolling(window=period).std()
+    upper = sma + std_dev * std
+    lower = sma - std_dev * std
+    mid = sma.replace(0, np.nan)
+    width = (upper - lower) / mid
+    cur, ago = width.iloc[-1], width.iloc[-4]
+
+    def _ok(x):
+        try:
+            fx = float(x)
+            return math.isfinite(fx)
+        except (TypeError, ValueError):
+            return False
+
+    return (float(ago) if _ok(ago) else None), (float(cur) if _ok(cur) else None)
+
 
 def calculate_max_increase_decrease_4h(pair, timeframe='4h', days=cst.max_increase_decrease_4h_day_count):
     
@@ -615,143 +706,137 @@ def do_it():
     
 
     def get_row_result(symbol):
-        
-        price = tickers[symbol]['last']
+        """
+        Gộp fetch OHLCV để giảm ~15+ request/mã (rate limit Binance) xuống còn vài request,
+        tránh “đơ” lâu giữa các dòng log.
+        """
+        price = tickers[symbol]["last"]
+        pct = tickers[symbol]["percentage"]
+        pair = symbol.replace(":USDT", "")
 
-        print(f"🔄 {symbol} - %24h: {tickers[symbol]['percentage']:.2f}%, giá: {price}", flush=True)
-        pair= symbol.replace(":USDT", "")
-        row = [pair, tickers[symbol]['percentage'], price]
-        
-        # Bollinger Bands chỉ 2 khung: 1h và 1d (giống file cũ)
-        result_bb_array = get_bb(pair,  timeframes = [ '1h', '1d'])
-        row.extend(result_bb_array)  # D-G (4 cột)
+        print(f"🔄 {symbol} - %24h: {pct:.2f}%, giá: {price}", flush=True)
+        logger.info(f"get_row_result bắt đầu: {symbol}")
+        row = [pair, pct, price]
 
-        # Biên độ 1h max tăng/giảm tuần (7 ngày)
-        max_price_increase_month1, max_price_decrease_month1 = calculate_price_range(pair, 7, '1h')
-        
-        max_price_increase_month1 = "" if np.isnan(max_price_increase_month1) else max_price_increase_month1
-        max_price_decrease_month1 = "" if np.isnan(max_price_decrease_month1) else max_price_decrease_month1
-
-        row.append(max_price_increase_month1)  # H
-        row.append(max_price_decrease_month1)  # I
-
-        # Giá cao/thấp 40 ngày (giống file cũ)
-        high, low = calculate_high_low_30d(symbol)
-        row.append(high)  # J
-        row.append(low)   # K
-
-        # Biên độ tăng/giảm 4h/60 ngày
-        increase, decrease = calculate_max_increase_decrease_4h(symbol)
-        row.append(increase)  # L
-        row.append(decrease)  # M
-        
-        # Cột N-O: BB 1 tuần (thêm mới cho tất cả các mã)
-        bb_1w = get_bb(pair, timeframes=['1w'])
-        row.extend(bb_1w)  # N-O (2 cột)
-        
-        # Cột P-Q: Biên độ 30 ngày (thêm mới)
-        bd = get_bien_do_max(pair)
-        row.append(bd[4])  # P: Biên độ 30d tăng
-        row.append(bd[5])  # Q: Biên độ 30d giảm
-        
-        # Cột R-S: Volume 24h và RSI (thêm mới)
+        # --- 1) Một lần 1d: BB1d + Min/Max 40d + RSI 1d + AB-AC + P/Q 30d + AD-AE ---
+        ohlcv_1d = []
         try:
-            # Volume 24h từ ticker
-            volume_24h = tickers[symbol].get('quoteVolume', 0)  # R
+            ohlcv_1d = exchange.fetch_ohlcv(pair, "1d", limit=_OHLCV_1D_LIMIT)
+        except Exception as e:
+            logger.warning(f"[{pair}] fetch_ohlcv 1d: {e}")
+
+        closes_1d = [x[4] for x in ohlcv_1d] if ohlcv_1d else []
+        bb1d_u, bb1d_l = _bb_upper_lower_from_closes(closes_1d) if len(closes_1d) >= 20 else (float("nan"), float("nan"))
+
+        # --- 2) Một lần 1h (20 nến): BB1h + Vol X + AG + AH ---
+        ohlcv_1h = []
+        try:
+            ohlcv_1h = exchange.fetch_ohlcv(pair, "1h", limit=20)
+        except Exception as e:
+            logger.warning(f"[{pair}] fetch_ohlcv 1h: {e}")
+
+        closes_1h = [x[4] for x in ohlcv_1h] if ohlcv_1h else []
+        bb1h_u, bb1h_l = _bb_upper_lower_from_closes(closes_1h) if len(closes_1h) >= 20 else (float("nan"), float("nan"))
+        result_bb_array = [bb1h_u, bb1h_l, bb1d_u, bb1d_l]
+        row.extend(result_bb_array)  # D-G
+
+        # H-I: biên độ 1h tuần (vẫn cần fetch 7d 1h)
+        max_price_increase_month1, max_price_decrease_month1 = calculate_price_range(pair, 7, "1h")
+        max_price_increase_month1 = "" if pd.isna(max_price_increase_month1) else max_price_increase_month1
+        max_price_decrease_month1 = "" if pd.isna(max_price_decrease_month1) else max_price_decrease_month1
+        row.append(max_price_increase_month1)
+        row.append(max_price_decrease_month1)
+
+        # J-K: cao/thấp N ngày từ cache 1d (thay fetch riêng)
+        nhl = min(calculate_high_low_day_total, len(ohlcv_1d))
+        if nhl >= 1:
+            sl = ohlcv_1d[-nhl:]
+            high = max(c[2] for c in sl)
+            low = min(c[3] for c in sl)
+        else:
+            high, low = 0.0, 0.0
+        row.append(high)
+        row.append(low)
+
+        increase, decrease = calculate_max_increase_decrease_4h(symbol)
+        row.append(increase)
+        row.append(decrease)
+
+        bb_1w = get_bb(pair, timeframes=["1w"])
+        row.extend(bb_1w)
+
+        # P-Q: biên độ 30d từ 30 nến 1d cuối (không gọi get_bien_do_max cho 1d)
+        if len(ohlcv_1d) >= 30:
+            p30, q30 = _amplitude_range_from_ohlcv_slice(ohlcv_1d[-30:])
+        else:
+            p30, q30 = calculate_price_range(pair, 30, "1d")
+        row.append("" if pd.isna(p30) else p30)
+        row.append("" if pd.isna(q30) else q30)
+
+        try:
+            volume_24h = tickers[symbol].get("quoteVolume", 0)
             row.append(volume_24h)
-            
-            # RSI 14 (tính từ 1d)
-            ohlcv_rsi = exchange.fetch_ohlcv(pair, '1d', limit=15)
-            closes = [x[4] for x in ohlcv_rsi]
-            gains = []
-            losses = []
-            for i in range(1, len(closes)):
-                change = closes[i] - closes[i-1]
-                gains.append(max(0, change))
-                losses.append(max(0, -change))
-            avg_gain = np.mean(gains)
-            avg_loss = np.mean(losses)
-            rs = avg_gain / avg_loss if avg_loss != 0 else 0
-            rsi = 100 - (100 / (1 + rs))
-            row.append(round(rsi, 2))  # S: RSI
-        except:
-            row.extend([0, 0])  # R-S trống nếu lỗi
-        
-        # Cột T: Trống (dự phòng)
+            rsi_1d = _rsi_simple_from_closes(closes_1d, period=14) if len(closes_1d) >= 15 else None
+            row.append(round(rsi_1d, 2) if rsi_1d is not None else "")
+        except Exception:
+            row.extend([0, 0])
+
         row.append("")
-            
-        # Cột U: % vị trí trong range 40 ngày
-        # Công thức: (Giá thấp nhất / Min 40 ngày)
-        # Theo yêu cầu: U = O/K
-        # O là Giá thấp nhất (BB1w lower ở cột O)
-        # K là Min 40 ngày
+
         if low != 0:
-            ratio = round((bb_1w[1] / low), 4)  # O/K
-            row.append(ratio)  # U
+            row.append(round((bb_1w[1] / low), 4))
         else:
             row.append("")
-        
-        # Cột V-Z: Dữ liệu bổ sung (5 cột)
-        # V: Khoảng cách từ giá hiện tại đến BB1h trên
+
         distance_to_bb_up = round(((result_bb_array[0] - price) / price) * 100, 2) if price != 0 else 0
-        row.append(distance_to_bb_up)  # V
-        
-        # W: Khoảng cách từ giá hiện tại đến BB1h dưới
         distance_to_bb_down = round(((price - result_bb_array[1]) / price) * 100, 2) if price != 0 else 0
-        row.append(distance_to_bb_down)  # W
-        
-        # X-Y: Volume 1h và 4h
+        row.append(distance_to_bb_up)
+        row.append(distance_to_bb_down)
+
+        # X: vol nến 1h hiện tại; Y + AF: một lần 4h
+        vol_1h_last = round(float(ohlcv_1h[-1][5]), 2) if ohlcv_1h else 0.0
+        row.append(vol_1h_last)
+
+        ohlcv_4h = []
         try:
-            vol_1h = data_collector.get_volumes_multi_timeframe(pair, timeframes=['1h']).get('1h', 0)
-            vol_4h = data_collector.get_volumes_multi_timeframe(pair, timeframes=['4h']).get('4h', 0)
-            row.append(vol_1h)  # X
-            row.append(vol_4h)  # Y
-        except:
-            row.extend([0, 0])
-        
-        # Z: Trống (dự phòng)
+            ohlcv_4h = exchange.fetch_ohlcv(pair, "4h", limit=20)
+        except Exception as e:
+            logger.warning(f"[{pair}] fetch_ohlcv 4h: {e}")
+        vol_4h_last = round(float(ohlcv_4h[-1][5]), 2) if ohlcv_4h else 0.0
+        row.append(vol_4h_last)
+
         row.append("")
-        
-        # AA: Marker (trống - có thể dùng sau)
         row.append("")
-        
-        # AB-AC: Biên độ giá ngày lớn nhất (MỚI)
+
         try:
-            logger.debug(f"[{pair}] Đang tính biên độ giá ngày lớn nhất...")
-            max_vol, max_date = calculate_max_daily_volatility(pair, lookback_days=365)
+            cutoff_ms = exchange.milliseconds() - 365 * 24 * 60 * 60 * 1000
+            ohlcv_ab = [c for c in ohlcv_1d if c[0] >= cutoff_ms] or ohlcv_1d
+            max_vol, max_date = _max_daily_volatility_from_ohlcv(ohlcv_ab)
             logger.info(f"✅ [{pair}] Biên độ lớn nhất: {max_vol}% vào {max_date}")
             print(f"   └─ AB={max_vol}%, AC={max_date}", flush=True)
-            row.append(max_vol)   # AB: Biên độ % lớn nhất
-            row.append(max_date)  # AC: Ngày có biên độ lớn nhất
+            row.append(max_vol)
+            row.append(max_date)
         except Exception as e:
-            logger.error(f"❌ [{pair}] Lỗi tính biên độ giá ngày: {e}", exc_info=True)
+            logger.error(f"❌ [{pair}] Lỗi AB-AC: {e}", exc_info=True)
             print(f"   └─ ❌ Lỗi AB-AC: {e}", flush=True)
             row.extend([0, "N/A"])
 
-        # AD-AH: BB width 1d (3 ngày trước / hiện tại), RSI 4h, Vol 1h, Vol 1h MA20
-        try:
-            bw_3d, bw_now = data_collector.get_bb_bandwidth_1d_current_and_3days_ago(pair)
-            row.append(round(bw_3d, 6) if bw_3d is not None else "")
-            row.append(round(bw_now, 6) if bw_now is not None else "")
-        except Exception as e:
-            logger.debug(f"[{pair}] Lỗi AD-AE BB width: {e}")
+        bw_3d, bw_now = _bb_width_3d_and_now_from_ohlcv(ohlcv_1d)
+        row.append(round(bw_3d, 6) if bw_3d is not None else "")
+        row.append(round(bw_now, 6) if bw_now is not None else "")
+
+        closes_4h = [x[4] for x in ohlcv_4h] if ohlcv_4h else []
+        rsi_4h = _rsi_simple_from_closes(closes_4h, period=14)
+        row.append(round(rsi_4h, 2) if rsi_4h is not None else "")
+
+        if ohlcv_1h and len(ohlcv_1h) >= 20:
+            vols = [float(x[5]) for x in ohlcv_1h]
+            row.append(round(vols[-1], 2))
+            row.append(round(float(np.mean(vols)), 2))
+        else:
             row.extend(["", ""])
 
-        try:
-            rsi_4h = data_collector.get_rsi_4h(pair, period=14)
-            row.append(round(rsi_4h, 2) if rsi_4h is not None else "")
-        except Exception as e:
-            logger.debug(f"[{pair}] Lỗi AF RSI 4h: {e}")
-            row.append("")
-
-        try:
-            v1h, v1h_ma20 = data_collector.get_volume_1h_current_and_ma20(pair)
-            row.append(round(v1h, 2) if v1h is not None else "")
-            row.append(round(v1h_ma20, 2) if v1h_ma20 is not None else "")
-        except Exception as e:
-            logger.debug(f"[{pair}] Lỗi AG-AH volume 1h: {e}")
-            row.extend(["", ""])
-
+        logger.info(f"get_row_result xong: {symbol}")
         return row
 
 
@@ -819,7 +904,7 @@ def do_it():
     giam_data = []
     for idx, symbol in enumerate(list_giam_nhieu_nhat, 1):
         print(f"📉 [{idx}/{len(list_giam_nhieu_nhat)}] Xử lý mã giảm: {symbol}", flush=True)
-        logger.debug(f"[{idx}/{len(list_giam_nhieu_nhat)}] Đang xử lý {symbol}")
+        logger.info(f"Mã giảm [{idx}/{len(list_giam_nhieu_nhat)}]: {symbol}")
         giam_data.append(get_row_result(symbol))
         
         if is_test_mode:
@@ -856,7 +941,7 @@ def do_it():
         if is_test_mode:
             break
         print(f"📈 [{idx}/{len(list_tang_nhieu_nhat)}] Xử lý mã tăng: {symbol}", flush=True)
-        logger.debug(f"[{idx}/{len(list_tang_nhieu_nhat)}] Đang xử lý {symbol}")
+        logger.info(f"Mã tăng [{idx}/{len(list_tang_nhieu_nhat)}]: {symbol}")
         tang_data.append(get_row_result(symbol))
     
     # Thêm data tăng vào array
