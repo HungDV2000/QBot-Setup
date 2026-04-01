@@ -572,9 +572,25 @@ def is_valid_for_trading(symbol, tickers):
         
     except Exception as e:
         return False, f"Lỗi kiểm tra: {e}"
-    
 
-    
+
+# Hai mã tham chiếu: luôn đứng đầu mỗi khối (giảm / tăng) trên sheet — yêu cầu khách hàng
+SHEET_LEADER_SYMBOLS = ("BTC/USDT:USDT", "BTCDOM/USDT:USDT")
+
+
+def merge_top_list_with_sheet_leaders(sorted_candidates, tickers, top_count, leaders=SHEET_LEADER_SYMBOLS):
+    """
+    Đặt leaders (có trong tickers) lên đầu, phần sau lấy từ sorted_candidates đã loại trùng.
+    Tổng độ dài = min(top_count, len(front) + len(rest)).
+    """
+    front = [s for s in leaders if s in tickers]
+    for s in leaders:
+        if s not in tickers:
+            logger.warning(f"Mã cố định đầu sheet không có trong tickers: {s}")
+    rest = [s for s in sorted_candidates if s not in front]
+    need = max(0, top_count - len(front))
+    return front + rest[:need]
+
 
 def do_it():
     print(f"\n{'='*80}", flush=True)
@@ -840,7 +856,6 @@ def do_it():
         return row
 
 
-    list_them = ["BTC/USDT:USDT", "BTCDOM/USDT:USDT"]
     logger.info("Bước 5: Tạo top lists...")
 
     tab_100_ma_2d_arr = []
@@ -855,20 +870,44 @@ def do_it():
     print(f"📊 Phân loại: {len(giam_symbols)} mã giảm, {len(tang_symbols)} mã tăng", flush=True)
     logger.info(f"Phân loại: {len(giam_symbols)} mã giảm, {len(tang_symbols)} mã tăng")
     
-    # Top GIẢM: Sort % tăng dần (% âm nhất lên trước), lấy tối đa 50
-    list_giam_nhieu_nhat = sorted(giam_symbols, key=lambda x: tickers[x]['percentage'])[:cst.top_count]
-    
-    # Top TĂNG: Sort % giảm dần (% dương nhất lên trước), lấy tối đa 50
-    list_tang_nhieu_nhat = sorted(tang_symbols, reverse=True, key=lambda x: tickers[x]['percentage'])[:cst.top_count]
-    
-    # Log range với error handling
+    # Top GIẢM: sort % âm nhất trước; BTC + BTCDOM luôn 2 dòng đầu (nếu có ticker)
+    sorted_giam = sorted(giam_symbols, key=lambda x: tickers[x]["percentage"])
+    list_giam_nhieu_nhat = merge_top_list_with_sheet_leaders(
+        sorted_giam, tickers, cst.top_count, SHEET_LEADER_SYMBOLS
+    )
+
+    # Top TĂNG: sort % dương nhất trước; cùng 2 mã đầu để khách đối chiếu
+    sorted_tang = sorted(tang_symbols, reverse=True, key=lambda x: tickers[x]["percentage"])
+    list_tang_nhieu_nhat = merge_top_list_with_sheet_leaders(
+        sorted_tang, tickers, cst.top_count, SHEET_LEADER_SYMBOLS
+    )
+
+    # Log (2 mã đầu có thể không thuộc nhóm giảm/tăng cùng ngày — vẫn cố định theo yêu cầu)
     if len(list_giam_nhieu_nhat) > 0:
-        print(f"✅ Top giảm: {len(list_giam_nhieu_nhat)} mã (từ {tickers[list_giam_nhieu_nhat[0]]['percentage']:.2f}% đến {tickers[list_giam_nhieu_nhat[-1]]['percentage']:.2f}%)", flush=True)
+        print(
+            f"✅ Top giảm: {len(list_giam_nhieu_nhat)} mã — 2 dòng đầu cố định BTC & BTCDOM; "
+            f"cột % của chúng có thể không âm trong ngày.",
+            flush=True,
+        )
+        print(
+            f"   Phạm vi % (toàn danh sách): {tickers[list_giam_nhieu_nhat[0]]['percentage']:.2f}% → "
+            f"{tickers[list_giam_nhieu_nhat[-1]]['percentage']:.2f}%",
+            flush=True,
+        )
     else:
         print(f"⚠️  Không có mã giảm giá!", flush=True)
-    
+
     if len(list_tang_nhieu_nhat) > 0:
-        print(f"✅ Top tăng: {len(list_tang_nhieu_nhat)} mã (từ {tickers[list_tang_nhieu_nhat[0]]['percentage']:.2f}% đến {tickers[list_tang_nhieu_nhat[-1]]['percentage']:.2f}%)", flush=True)
+        print(
+            f"✅ Top tăng: {len(list_tang_nhieu_nhat)} mã — 2 dòng đầu cố định BTC & BTCDOM; "
+            f"cột % có thể không dương trong ngày.",
+            flush=True,
+        )
+        print(
+            f"   Phạm vi % (toàn danh sách): {tickers[list_tang_nhieu_nhat[0]]['percentage']:.2f}% → "
+            f"{tickers[list_tang_nhieu_nhat[-1]]['percentage']:.2f}%",
+            flush=True,
+        )
     else:
         print(f"⚠️  Không có mã tăng giá!", flush=True)
     
@@ -877,13 +916,8 @@ def do_it():
 
     # Bỏ tính toán Top 50 gần đỉnh/đáy (không cần trong bản đơn giản)
 
-    list_all = []
-    
-    list_all.extend(list_them[::-1])
-    list_all.append(title1)
-    list_all.extend(list_giam_nhieu_nhat)
-    list_all.append(title2)
-    list_all.extend(list_tang_nhieu_nhat)
+    # list_all.json khớp thứ tự sheet: title giảm → danh sách giảm → title tăng → danh sách tăng
+    list_all = [title1, *list_giam_nhieu_nhat, title2, *list_tang_nhieu_nhat]
 
     with open("list_all.json", "w") as file:
         json.dump(list_all, file)
