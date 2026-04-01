@@ -720,6 +720,30 @@ def do_it():
             print(f"   └─ ❌ Lỗi AB-AC: {e}", flush=True)
             row.extend([0, "N/A"])
 
+        # AD-AH: BB width 1d (3 ngày trước / hiện tại), RSI 4h, Vol 1h, Vol 1h MA20
+        try:
+            bw_3d, bw_now = data_collector.get_bb_bandwidth_1d_current_and_3days_ago(pair)
+            row.append(round(bw_3d, 6) if bw_3d is not None else "")
+            row.append(round(bw_now, 6) if bw_now is not None else "")
+        except Exception as e:
+            logger.debug(f"[{pair}] Lỗi AD-AE BB width: {e}")
+            row.extend(["", ""])
+
+        try:
+            rsi_4h = data_collector.get_rsi_4h(pair, period=14)
+            row.append(round(rsi_4h, 2) if rsi_4h is not None else "")
+        except Exception as e:
+            logger.debug(f"[{pair}] Lỗi AF RSI 4h: {e}")
+            row.append("")
+
+        try:
+            v1h, v1h_ma20 = data_collector.get_volume_1h_current_and_ma20(pair)
+            row.append(round(v1h, 2) if v1h is not None else "")
+            row.append(round(v1h_ma20, 2) if v1h_ma20 is not None else "")
+        except Exception as e:
+            logger.debug(f"[{pair}] Lỗi AG-AH volume 1h: {e}")
+            row.extend(["", ""])
+
         return row
 
 
@@ -779,8 +803,8 @@ def do_it():
     print(f"📉 BẮT ĐẦU XỬ LÝ {len(list_giam_nhieu_nhat)} MÃ GIẢM GIÁ", flush=True)
     print(f"{'='*60}\n", flush=True)
     
-    # Dòng 3: Title GIẢM (cột A) + 28 cột trống (B-AC)
-    title_row_giam = [title1] + [""] * 28  # 1 title + 28 empty = 29 cột
+    # Dòng 3: Title GIẢM (cột A) + cột trống B-AH
+    title_row_giam = [title1] + [""] * 33  # A + B..AH = 34 cột
     tab_100_ma_2d_arr.append(title_row_giam)
     logger.info(f"Đang lấy dữ liệu cho {len(list_giam_nhieu_nhat)} mã giảm...")
     
@@ -798,7 +822,7 @@ def do_it():
     print(f"✅ Đã lấy {len(giam_data)} mã giảm", flush=True)
     
     # PADDING: Thêm dòng trống để đủ 50 dòng (dòng 4-53)
-    empty_row = [""] * 29  # 29 cột (A-AC)
+    empty_row = [""] * 34  # A-AH
     rows_to_pad = cst.top_count - len(giam_data)
     if rows_to_pad > 0:
         if len(giam_data) < cst.top_count:
@@ -814,8 +838,8 @@ def do_it():
     print(f"📈 BẮT ĐẦU XỬ LÝ {len(list_tang_nhieu_nhat)} MÃ TĂNG GIÁ", flush=True)
     print(f"{'='*60}\n", flush=True)
     
-    # Dòng 54: Title TĂNG (cột A) + 28 cột trống (B-AC)
-    title_row_tang = [title2] + [""] * 28  # 1 title + 28 empty = 29 cột
+    # Dòng 54: Title TĂNG (cột A) + cột trống B-AH
+    title_row_tang = [title2] + [""] * 33
     tab_100_ma_2d_arr.append(title_row_tang)
     logger.info(f"Đang lấy dữ liệu cho {len(list_tang_nhieu_nhat)} mã tăng...")
     
@@ -900,7 +924,12 @@ def do_it():
         "",                             # Z: Trống
         "Delist",                       # AA
         "Biên độ giá ngày lớn nhất (%)", # AB: Mới
-        "Ngày biên độ lớn nhất"        # AC: Mới
+        "Ngày biên độ lớn nhất",        # AC: Mới
+        "BB width 1d (3 ngày trước)",   # AD: (U-L)/Mid, khung 1d
+        "BB width 1d (hiện tại)",       # AE
+        "RSI 14 (4h)",                  # AF
+        "Vol 1h (hiện tại)",            # AG
+        "Vol 1h MA20",                  # AH: 20 nến gần nhất gồm nến đang chạy
     ]
     
     # Thêm header vào đầu array

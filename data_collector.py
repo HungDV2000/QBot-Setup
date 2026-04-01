@@ -436,6 +436,87 @@ class DataCollector:
             logger.error(f"Lỗi lấy 30 mức giá cho {symbol}: {e}")
             return []
 
+    def get_bb_bandwidth_1d_current_and_3days_ago(
+        self,
+        symbol: str,
+        period: int = 20,
+        std_dev: int = 2,
+    ) -> Tuple[Optional[float], Optional[float]]:
+        """
+        BB width khung 1d: (Upper - Lower) / Mid.
+        - Hiện tại: nến 1d mới nhất (gồm nến đang chạy), BB(20,2) tại đó.
+        - 3 ngày trước: cùng định nghĩa tại nến đóng cách hiện tại 3 phiên (iloc[-4]).
+        """
+        try:
+            need = period + 15
+            ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe="1d", limit=need)
+            if not ohlcv or len(ohlcv) < period + 3:
+                return None, None
+            df = pd.DataFrame(ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"])
+            close = df["close"]
+            sma = close.rolling(window=period).mean()
+            std = close.rolling(window=period).std()
+            upper = sma + std_dev * std
+            lower = sma - std_dev * std
+            mid = sma.replace(0, np.nan)
+            width = (upper - lower) / mid
+
+            cur = width.iloc[-1]
+            ago = width.iloc[-4] if len(width) >= 4 else np.nan
+
+            def _ok(x) -> bool:
+                return x is not None and not (isinstance(x, float) and (np.isnan(x) or np.isinf(x)))
+
+            cur_f = float(cur) if _ok(cur) else None
+            ago_f = float(ago) if _ok(ago) else None
+            return ago_f, cur_f
+        except Exception as e:
+            logger.error(f"Lỗi BB bandwidth 1d {symbol}: {e}")
+            return None, None
+
+    @staticmethod
+    def _rsi_simple_from_closes(closes: List[float], period: int = 14) -> Optional[float]:
+        """RSI cùng logic SMA gain/loss như cột RSI 1d trong hd_update_all."""
+        if len(closes) < period + 1:
+            return None
+        gains: List[float] = []
+        losses: List[float] = []
+        for i in range(1, len(closes)):
+            change = closes[i] - closes[i - 1]
+            gains.append(max(0.0, change))
+            losses.append(max(0.0, -change))
+        avg_gain = float(np.mean(gains))
+        avg_loss = float(np.mean(losses))
+        rs = avg_gain / avg_loss if avg_loss != 0 else 0
+        return float(100 - (100 / (1 + rs)))
+
+    def get_rsi_4h(self, symbol: str, period: int = 14) -> Optional[float]:
+        try:
+            ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe="4h", limit=period + 1)
+            if not ohlcv or len(ohlcv) < period + 1:
+                return None
+            closes = [float(x[4]) for x in ohlcv]
+            return self._rsi_simple_from_closes(closes, period=period)
+        except Exception as e:
+            logger.error(f"Lỗi RSI 4h {symbol}: {e}")
+            return None
+
+    def get_volume_1h_current_and_ma20(self, symbol: str) -> Tuple[Optional[float], Optional[float]]:
+        """
+        Volume nến 1h mới nhất và MA20 trên 20 nến 1h gần nhất (gồm nến đang chạy).
+        """
+        try:
+            ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe="1h", limit=20)
+            if not ohlcv or len(ohlcv) < 20:
+                return None, None
+            vols = [float(x[5]) for x in ohlcv]
+            cur = vols[-1]
+            ma20 = float(np.mean(vols))
+            return cur, ma20
+        except Exception as e:
+            logger.error(f"Lỗi volume 1h MA20 {symbol}: {e}")
+            return None, None
+
 
 # Singleton instance
 _data_collector = None
