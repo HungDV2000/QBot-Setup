@@ -17,6 +17,16 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+
+# Timeout HTTP tránh treo vô hạn khi mạng/Google chậm (mặc định httplib2 có thể không timeout)
+try:
+  import httplib2
+  from google_auth_httplib2 import AuthorizedHttp
+  _GSHEET_HTTP_TIMEOUT_SEC = 120
+except ImportError:
+  httplib2 = None
+  AuthorizedHttp = None
+  _GSHEET_HTTP_TIMEOUT_SEC = None
 from google.auth.exceptions import RefreshError  # ✅ Thêm import RefreshError
 import logging
 
@@ -232,8 +242,14 @@ def init_sheet_api():
   # Tạo service nếu chưa có hoặc đã bị reset
   if not _service_initialized or service is None or spreadsheets_service is None:
     try:
-      # Tạo service với credentials mới
-      service = build("sheets", "v4", credentials=creds)
+      # Tạo service: dùng HTTP có timeout để không bị "đứng im" khi Sheet API không phản hồi
+      if httplib2 is not None and AuthorizedHttp is not None and _GSHEET_HTTP_TIMEOUT_SEC:
+        http_timeout = httplib2.Http(timeout=_GSHEET_HTTP_TIMEOUT_SEC)
+        authed_http = AuthorizedHttp(creds, http=http_timeout)
+        service = build("sheets", "v4", http=authed_http)
+        logger.info(f"Google Sheets client: HTTP timeout {_GSHEET_HTTP_TIMEOUT_SEC}s")
+      else:
+        service = build("sheets", "v4", credentials=creds)
       # ✅ Cache spreadsheets() resource để không phải tạo lại
       spreadsheets_service = service.spreadsheets()
       _service_initialized = True  # Đánh dấu đã khởi tạo
@@ -410,6 +426,8 @@ def get_100_ma(range):
   
 def get_white_list():
     RANGE_NAME = f"'{tab_white_list}'!A1:A1000"
+    print("📡 Đang đọc whitelist từ Google Sheet (tab 'list')...", flush=True)
+    logger.info("Đang đọc whitelist từ Google Sheet (tab 'list')...")
     init_sheet_api()
     
     def _execute():

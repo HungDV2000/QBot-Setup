@@ -502,9 +502,7 @@ def do_it():
     logger.info("Đang lấy tickers từ Binance...")
     tickers = exchange.fetch_tickers()
     logger.info(f"Đã lấy {len(tickers)} tickers từ Binance")
-
-    
-    
+    print(f"✅ Đã lấy {len(tickers)} tickers — đang lọc USDT futures...", flush=True)
 
     # Bước 1: Lấy tất cả futures USDT
     logger.info("Bước 1: Lọc symbols Futures USDT...")
@@ -517,7 +515,7 @@ def do_it():
     print(f"📊 Tổng số futures USDT trên Binance: {len(all_futures_usdt)}", flush=True)
     logger.info(f"Tổng số futures USDT trên Binance: {len(all_futures_usdt)}")
     
-    # Bước 2: Đọc whitelist (với error handling)
+    # Bước 2: Đọc whitelist (với error handling) — có thể lâu nếu Google Sheet chậm / mạng
     logger.info("Bước 2: Đọc whitelist từ sheet 'list'...")
     try:
         white_list = set(gg_sheet_factory.get_white_list())
@@ -563,7 +561,17 @@ def do_it():
     valid_symbols = []
     invalid_symbols = []
     
-    for symbol in futures_symbols:
+    n_sym = len(futures_symbols)
+    t0_valid = time.time()
+    for idx, symbol in enumerate(futures_symbols, 1):
+        # Mỗi mã ~2 request OHLCV + rate limit — có thể vài chục phút với hàng trăm mã; log để không tưởng bị treo
+        if idx == 1 or idx % 30 == 0 or idx == n_sym:
+            elapsed = time.time() - t0_valid
+            print(
+                f"   ⏳ Bước 4: kiểm tra hợp lệ {idx}/{n_sym} mã (đã {elapsed:.0f}s)...",
+                flush=True,
+            )
+            logger.info(f"Bước 4: kiểm tra hợp lệ {idx}/{n_sym} mã, elapsed {elapsed:.0f}s")
         is_valid, reason = is_valid_for_trading(symbol, tickers)
         if is_valid:
             valid_symbols.append(symbol)
