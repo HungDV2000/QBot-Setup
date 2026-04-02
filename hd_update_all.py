@@ -744,7 +744,7 @@ def do_it():
         closes_1d = [x[4] for x in ohlcv_1d] if ohlcv_1d else []
         bb1d_u, bb1d_l = _bb_upper_lower_from_closes(closes_1d) if len(closes_1d) >= 20 else (float("nan"), float("nan"))
 
-        # --- 2) Một lần 1h (20 nến): BB1h + Vol X + AG + AH ---
+        # --- 2) Một lần 1h (20 nến): BB1h + Vol Z + AI + AJ ---
         ohlcv_1h = []
         try:
             ohlcv_1h = exchange.fetch_ohlcv(pair, "1h", limit=20)
@@ -753,17 +753,28 @@ def do_it():
 
         closes_1h = [x[4] for x in ohlcv_1h] if ohlcv_1h else []
         bb1h_u, bb1h_l = _bb_upper_lower_from_closes(closes_1h) if len(closes_1h) >= 20 else (float("nan"), float("nan"))
-        result_bb_array = [bb1h_u, bb1h_l, bb1d_u, bb1d_l]
-        row.extend(result_bb_array)  # D-G
+        result_bb_array = [bb1h_u, bb1h_l]  # D-E — dùng cho % đến BB1h (cột X/Y)
 
-        # H-I: biên độ 1h tuần (vẫn cần fetch 7d 1h)
+        # Một lần 4h (20 nến): BB4h F-G + tái dùng cho Vol AA / RSI AH
+        ohlcv_4h = []
+        try:
+            ohlcv_4h = exchange.fetch_ohlcv(pair, "4h", limit=20)
+        except Exception as e:
+            logger.warning(f"[{pair}] fetch_ohlcv 4h: {e}")
+        closes_4h = [x[4] for x in ohlcv_4h] if ohlcv_4h else []
+        bb4h_u, bb4h_l = _bb_upper_lower_from_closes(closes_4h) if len(closes_4h) >= 20 else (float("nan"), float("nan"))
+
+        # D-E BB1h, F-G BB4h, H-I BB1d
+        row.extend([bb1h_u, bb1h_l, bb4h_u, bb4h_l, bb1d_u, bb1d_l])
+
+        # J-K: biên độ 1h tuần (vẫn cần fetch 7d 1h)
         max_price_increase_month1, max_price_decrease_month1 = calculate_price_range(pair, 7, "1h")
         max_price_increase_month1 = "" if pd.isna(max_price_increase_month1) else max_price_increase_month1
         max_price_decrease_month1 = "" if pd.isna(max_price_decrease_month1) else max_price_decrease_month1
         row.append(max_price_increase_month1)
         row.append(max_price_decrease_month1)
 
-        # J-K: cao/thấp N ngày từ cache 1d (thay fetch riêng)
+        # L-M: cao/thấp N ngày từ cache 1d (thay fetch riêng)
         nhl = min(calculate_high_low_day_total, len(ohlcv_1d))
         if nhl >= 1:
             sl = ohlcv_1d[-nhl:]
@@ -781,7 +792,7 @@ def do_it():
         bb_1w = get_bb(pair, timeframes=["1w"])
         row.extend(bb_1w)
 
-        # P-Q: biên độ 30d từ 30 nến 1d cuối (không gọi get_bien_do_max cho 1d)
+        # R-S: biên độ 30d từ 30 nến 1d cuối (không gọi get_bien_do_max cho 1d)
         if len(ohlcv_1d) >= 30:
             p30, q30 = _amplitude_range_from_ohlcv_slice(ohlcv_1d[-30:])
         else:
@@ -809,15 +820,10 @@ def do_it():
         row.append(distance_to_bb_up)
         row.append(distance_to_bb_down)
 
-        # X: vol nến 1h hiện tại; Y + AF: một lần 4h
+        # Z: vol nến 1h hiện tại; AA: vol 4h (đã có ohlcv_4h)
         vol_1h_last = round(float(ohlcv_1h[-1][5]), 2) if ohlcv_1h else 0.0
         row.append(vol_1h_last)
 
-        ohlcv_4h = []
-        try:
-            ohlcv_4h = exchange.fetch_ohlcv(pair, "4h", limit=20)
-        except Exception as e:
-            logger.warning(f"[{pair}] fetch_ohlcv 4h: {e}")
         vol_4h_last = round(float(ohlcv_4h[-1][5]), 2) if ohlcv_4h else 0.0
         row.append(vol_4h_last)
 
@@ -829,7 +835,7 @@ def do_it():
             ohlcv_ab = [c for c in ohlcv_1d if c[0] >= cutoff_ms] or ohlcv_1d
             max_vol, max_date = _max_daily_volatility_from_ohlcv(ohlcv_ab)
             logger.info(f"✅ [{pair}] Biên độ lớn nhất: {max_vol}% vào {max_date}")
-            print(f"   └─ AB={max_vol}%, AC={max_date}", flush=True)
+            print(f"   └─ AD={max_vol}%, AE={max_date}", flush=True)
             row.append(max_vol)
             row.append(max_date)
         except Exception as e:
@@ -841,7 +847,6 @@ def do_it():
         row.append(round(bw_3d, 6) if bw_3d is not None else "")
         row.append(round(bw_now, 6) if bw_now is not None else "")
 
-        closes_4h = [x[4] for x in ohlcv_4h] if ohlcv_4h else []
         rsi_4h = _rsi_simple_from_closes(closes_4h, period=14)
         row.append(round(rsi_4h, 2) if rsi_4h is not None else "")
 
@@ -930,8 +935,8 @@ def do_it():
     print(f"📉 BẮT ĐẦU XỬ LÝ {len(list_giam_nhieu_nhat)} MÃ GIẢM GIÁ", flush=True)
     print(f"{'='*60}\n", flush=True)
     
-    # Dòng 3: Title GIẢM (cột A) + cột trống B-AH
-    title_row_giam = [title1] + [""] * 33  # A + B..AH = 34 cột
+    # Dòng 3: Title GIẢM (cột A) + cột trống B-AJ
+    title_row_giam = [title1] + [""] * 35  # A + B..AJ = 36 cột
     tab_100_ma_2d_arr.append(title_row_giam)
     logger.info(f"Đang lấy dữ liệu cho {len(list_giam_nhieu_nhat)} mã giảm...")
     
@@ -949,7 +954,7 @@ def do_it():
     print(f"✅ Đã lấy {len(giam_data)} mã giảm", flush=True)
     
     # PADDING: Thêm dòng trống để đủ 50 dòng (dòng 4-53)
-    empty_row = [""] * 34  # A-AH
+    empty_row = [""] * 36  # A-AJ (thêm BB4h F-G)
     rows_to_pad = cst.top_count - len(giam_data)
     if rows_to_pad > 0:
         if len(giam_data) < cst.top_count:
@@ -965,8 +970,8 @@ def do_it():
     print(f"📈 BẮT ĐẦU XỬ LÝ {len(list_tang_nhieu_nhat)} MÃ TĂNG GIÁ", flush=True)
     print(f"{'='*60}\n", flush=True)
     
-    # Dòng 54: Title TĂNG (cột A) + cột trống B-AH
-    title_row_tang = [title2] + [""] * 33
+    # Dòng 54: Title TĂNG (cột A) + cột trống B-AJ
+    title_row_tang = [title2] + [""] * 35
     tab_100_ma_2d_arr.append(title_row_tang)
     logger.info(f"Đang lấy dữ liệu cho {len(list_tang_nhieu_nhat)} mã tăng...")
     
@@ -1011,8 +1016,8 @@ def do_it():
     
 
 
-    # Không cần ghi thêm dữ liệu bổ sung cho BTC/BTCDOM vào cột N
-    # Vì giờ tất cả các mã đã có đủ cột N-AA rồi
+    # Không cần ghi thêm dữ liệu bổ sung cho BTC/BTCDOM vào cột P (BB1w)
+    # Tất cả các mã có đủ cột A–AJ
 
 
 
@@ -1028,35 +1033,37 @@ def do_it():
         "Giá trị hiện thời",           # C
         "BB1h trên",                    # D
         "BB1h dưới",                    # E
-        "BB1 ngày trên",                # F
-        "BB1 ngày dưới",                # G
-        "Biên độ 1h max tăng tuần",    # H
-        "Biên độ 1h max giảm tuần",    # I
-        "Max 40 ngày",                  # J
-        "Min 40 ngày",                  # K
-        "Max tăng 4h/60 ngày",         # L
-        "Max giảm 4h/60 ngày",         # M
-        "Giá Cao Nhất",                # N: BB1w trên
-        "Giá Thấp Nhất",               # O: BB1w dưới
-        "Biên độ 30d tăng",            # P
-        "Biên độ 30d giảm",            # Q
-        "Volume 24h",                   # R
-        "RSI 14",                       # S
-        "",                             # T: Trống
-        "Min/Min40",                    # U: O/K ratio
-        "% đến BB1h trên",             # V
-        "% đến BB1h dưới",             # W
-        "Vol 1h",                       # X
-        "Vol 4h",                       # Y
-        "",                             # Z: Trống
-        "Delist",                       # AA
-        "Biên độ giá ngày lớn nhất (%)", # AB: Mới
-        "Ngày biên độ lớn nhất",        # AC: Mới
-        "BB width 1d (3 ngày trước)",   # AD: (U-L)/Mid, khung 1d
-        "BB width 1d (hiện tại)",       # AE
-        "RSI 14 (4h)",                  # AF
-        "Vol 1h (hiện tại)",            # AG
-        "Vol 1h MA20",                  # AH: 20 nến gần nhất gồm nến đang chạy
+        "BB4h trên",                    # F
+        "BB4h dưới",                    # G
+        "BB1 ngày trên",                # H
+        "BB1 ngày dưới",                # I
+        "Biên độ 1h max tăng tuần",    # J
+        "Biên độ 1h max giảm tuần",    # K
+        "Max 40 ngày",                  # L
+        "Min 40 ngày",                  # M
+        "Max tăng 4h/60 ngày",         # N
+        "Max giảm 4h/60 ngày",         # O
+        "Giá Cao Nhất",                # P: BB1w trên
+        "Giá Thấp Nhất",               # Q: BB1w dưới
+        "Biên độ 30d tăng",            # R
+        "Biên độ 30d giảm",            # S
+        "Volume 24h",                   # T
+        "RSI 14",                       # U
+        "",                             # V: Trống
+        "Min/Min40",                    # W: BB1w dưới / Min 40 (Q/M)
+        "% đến BB1h trên",             # X
+        "% đến BB1h dưới",             # Y
+        "Vol 1h",                       # Z
+        "Vol 4h",                       # AA
+        "",                             # AB: Trống
+        "Delist",                       # AC
+        "Biên độ giá ngày lớn nhất (%)", # AD
+        "Ngày biên độ lớn nhất",        # AE
+        "BB width 1d (3 ngày trước)",   # AF
+        "BB width 1d (hiện tại)",       # AG
+        "RSI 14 (4h)",                  # AH
+        "Vol 1h (hiện tại)",            # AI
+        "Vol 1h MA20",                  # AJ
     ]
     
     # Thêm header vào đầu array
