@@ -744,7 +744,7 @@ def do_it():
         closes_1d = [x[4] for x in ohlcv_1d] if ohlcv_1d else []
         bb1d_u, bb1d_l = _bb_upper_lower_from_closes(closes_1d) if len(closes_1d) >= 20 else (float("nan"), float("nan"))
 
-        # --- 2) Một lần 1h (20 nến): BB1h + Vol Z + AI + AJ ---
+        # --- 2) Một lần 1h (20 nến): BB1h + Vol X + AG/AH ---
         ohlcv_1h = []
         try:
             ohlcv_1h = exchange.fetch_ohlcv(pair, "1h", limit=20)
@@ -753,19 +753,18 @@ def do_it():
 
         closes_1h = [x[4] for x in ohlcv_1h] if ohlcv_1h else []
         bb1h_u, bb1h_l = _bb_upper_lower_from_closes(closes_1h) if len(closes_1h) >= 20 else (float("nan"), float("nan"))
-        result_bb_array = [bb1h_u, bb1h_l]  # D-E — dùng cho % đến BB1h (cột X/Y)
+        result_bb_array = [bb1h_u, bb1h_l]  # dùng cho % đến BB1h (cột V/W)
 
-        # Một lần 4h (20 nến): BB4h F-G + tái dùng cho Vol AA / RSI AH
+        # Một lần 4h (20 nến): tái dùng cho Vol Y / RSI AF
         ohlcv_4h = []
         try:
             ohlcv_4h = exchange.fetch_ohlcv(pair, "4h", limit=20)
         except Exception as e:
             logger.warning(f"[{pair}] fetch_ohlcv 4h: {e}")
         closes_4h = [x[4] for x in ohlcv_4h] if ohlcv_4h else []
-        bb4h_u, bb4h_l = _bb_upper_lower_from_closes(closes_4h) if len(closes_4h) >= 20 else (float("nan"), float("nan"))
 
-        # D-E BB1h, F-G BB4h, H-I BB1d
-        row.extend([bb1h_u, bb1h_l, bb4h_u, bb4h_l, bb1d_u, bb1d_l])
+        # D-E BB1h, F-G BB1d (không có BB4h — giữ đúng 34 cột A-AH)
+        row.extend([bb1h_u, bb1h_l, bb1d_u, bb1d_l])
 
         # J-K: biên độ 1h tuần (vẫn cần fetch 7d 1h)
         max_price_increase_month1, max_price_decrease_month1 = calculate_price_range(pair, 7, "1h")
@@ -820,7 +819,7 @@ def do_it():
         row.append(distance_to_bb_up)
         row.append(distance_to_bb_down)
 
-        # Z: vol nến 1h hiện tại; AA: vol 4h (đã có ohlcv_4h)
+        # X: vol nến 1h hiện tại; Y: vol 4h (đã có ohlcv_4h)
         vol_1h_last = round(float(ohlcv_1h[-1][5]), 2) if ohlcv_1h else 0.0
         row.append(vol_1h_last)
 
@@ -835,7 +834,7 @@ def do_it():
             ohlcv_ab = [c for c in ohlcv_1d if c[0] >= cutoff_ms] or ohlcv_1d
             max_vol, max_date = _max_daily_volatility_from_ohlcv(ohlcv_ab)
             logger.info(f"✅ [{pair}] Biên độ lớn nhất: {max_vol}% vào {max_date}")
-            print(f"   └─ AD={max_vol}%, AE={max_date}", flush=True)
+            print(f"   └─ AB={max_vol}%, AC={max_date}", flush=True)
             row.append(max_vol)
             row.append(max_date)
         except Exception as e:
@@ -935,8 +934,8 @@ def do_it():
     print(f"📉 BẮT ĐẦU XỬ LÝ {len(list_giam_nhieu_nhat)} MÃ GIẢM GIÁ", flush=True)
     print(f"{'='*60}\n", flush=True)
     
-    # Dòng 3: Title GIẢM (cột A) + cột trống B-AJ
-    title_row_giam = [title1] + [""] * 35  # A + B..AJ = 36 cột
+    # Dòng 3: Title GIẢM (cột A) + cột trống B-AH
+    title_row_giam = [title1] + [""] * 33  # A + B..AH = 34 cột
     tab_100_ma_2d_arr.append(title_row_giam)
     logger.info(f"Đang lấy dữ liệu cho {len(list_giam_nhieu_nhat)} mã giảm...")
     
@@ -954,7 +953,7 @@ def do_it():
     print(f"✅ Đã lấy {len(giam_data)} mã giảm", flush=True)
     
     # PADDING: Thêm dòng trống để đủ 50 dòng (dòng 4-53)
-    empty_row = [""] * 36  # A-AJ (thêm BB4h F-G)
+    empty_row = [""] * 34  # A-AH
     rows_to_pad = cst.top_count - len(giam_data)
     if rows_to_pad > 0:
         if len(giam_data) < cst.top_count:
@@ -970,8 +969,8 @@ def do_it():
     print(f"📈 BẮT ĐẦU XỬ LÝ {len(list_tang_nhieu_nhat)} MÃ TĂNG GIÁ", flush=True)
     print(f"{'='*60}\n", flush=True)
     
-    # Dòng 54: Title TĂNG (cột A) + cột trống B-AJ
-    title_row_tang = [title2] + [""] * 35
+    # Dòng 54: Title TĂNG (cột A) + cột trống B-AH
+    title_row_tang = [title2] + [""] * 33
     tab_100_ma_2d_arr.append(title_row_tang)
     logger.info(f"Đang lấy dữ liệu cho {len(list_tang_nhieu_nhat)} mã tăng...")
     
