@@ -95,7 +95,7 @@ def _bb_upper_lower_from_closes(closing_prices, multiplier=2.0):
 
 
 def _rsi_simple_from_closes(closes, period=14):
-    """RSI SMA gain/loss — cùng công thức cột S / data_collector."""
+    """RSI SMA gain/loss — dùng cho cột S (1d RSI) / data_collector."""
     if len(closes) < period + 1:
         return None
     gains, losses = [], []
@@ -106,6 +106,29 @@ def _rsi_simple_from_closes(closes, period=14):
     ag = float(np.mean(gains))
     al = float(np.mean(losses))
     rs = ag / al if al != 0 else 0
+    return float(100 - (100 / (1 + rs)))
+
+
+def _rsi_wilder_from_closes(closes, period=14):
+    """RSI Wilder's Smoothed EMA — khớp với TradingView RSI 14.
+    Cần ít nhất period*3 nến để warmup đủ chính xác.
+    """
+    if len(closes) < period + 1:
+        return None
+    changes = [closes[i] - closes[i - 1] for i in range(1, len(closes))]
+    gains = [max(0.0, c) for c in changes]
+    losses = [max(0.0, -c) for c in changes]
+
+    # Wilder: SMA cho period đầu tiên, sau đó EMA với alpha = 1/period
+    avg_gain = sum(gains[:period]) / period
+    avg_loss = sum(losses[:period]) / period
+    for i in range(period, len(gains)):
+        avg_gain = (avg_gain * (period - 1) + gains[i]) / period
+        avg_loss = (avg_loss * (period - 1) + losses[i]) / period
+
+    if avg_loss == 0:
+        return 100.0
+    rs = avg_gain / avg_loss
     return float(100 - (100 / (1 + rs)))
 
 
@@ -758,7 +781,8 @@ def do_it():
         # Một lần 4h (20 nến): tái dùng cho Vol Y / RSI AF
         ohlcv_4h = []
         try:
-            ohlcv_4h = exchange.fetch_ohlcv(pair, "4h", limit=20)
+            # 100 nến để Wilder's RSI (14) có đủ warmup (~50+ nến extra)
+            ohlcv_4h = exchange.fetch_ohlcv(pair, "4h", limit=100)
         except Exception as e:
             logger.warning(f"[{pair}] fetch_ohlcv 4h: {e}")
         closes_4h = [x[4] for x in ohlcv_4h] if ohlcv_4h else []
@@ -820,11 +844,11 @@ def do_it():
         row.append(distance_to_bb_up)
         row.append(distance_to_bb_down)
 
-        # Z: vol nến 1h hiện tại; AA: vol 4h (đã có ohlcv_4h)
-        vol_1h_last = round(float(ohlcv_1h[-1][5]), 2) if ohlcv_1h else 0.0
+        # Z: vol nến 1h hiện tại (USDT); AA: vol 4h (USDT) — base × close price
+        vol_1h_last = round(float(ohlcv_1h[-1][5]) * float(ohlcv_1h[-1][4]), 2) if ohlcv_1h else 0.0
         row.append(vol_1h_last)
 
-        vol_4h_last = round(float(ohlcv_4h[-1][5]), 2) if ohlcv_4h else 0.0
+        vol_4h_last = round(float(ohlcv_4h[-1][5]) * float(ohlcv_4h[-1][4]), 2) if ohlcv_4h else 0.0
         row.append(vol_4h_last)
 
         row.append("")
@@ -847,13 +871,14 @@ def do_it():
         row.append(round(bw_3d * 100, 2) if bw_3d is not None else "")   # cột AD: BB Width 3d trước (%)
         row.append(round(bw_now * 100, 2) if bw_now is not None else "")  # cột AE: BB Width hiện tại (%)
 
-        rsi_4h = _rsi_simple_from_closes(closes_4h, period=14)
+        rsi_4h = _rsi_wilder_from_closes(closes_4h, period=14)
         row.append(round(rsi_4h, 2) if rsi_4h is not None else "")
 
         if ohlcv_1h and len(ohlcv_1h) >= 20:
-            vols = [float(x[5]) for x in ohlcv_1h]
-            row.append(round(vols[-1], 2))
-            row.append(round(float(np.mean(vols)), 2))
+            # Vol 1h tính bằng USDT: base_vol × close_price của từng nến
+            vols_usdt = [float(x[5]) * float(x[4]) for x in ohlcv_1h]
+            row.append(round(vols_usdt[-1], 2))           # AI: Vol 1h hiện tại (USDT)
+            row.append(round(float(np.mean(vols_usdt)), 2))  # AJ: Vol 1h MA20 (USDT)
         else:
             row.extend(["", ""])
 
