@@ -843,8 +843,8 @@ def do_it():
             row.extend([0, "N/A"])
 
         bw_3d, bw_now = _bb_width_3d_and_now_from_ohlcv(ohlcv_1d)
-        row.append(round(bw_3d, 6) if bw_3d is not None else "")
-        row.append(round(bw_now, 6) if bw_now is not None else "")
+        row.append(round(bw_3d * 100, 2) if bw_3d is not None else "")   # cột AD: BB Width 3d trước (%)
+        row.append(round(bw_now * 100, 2) if bw_now is not None else "")  # cột AE: BB Width hiện tại (%)
 
         rsi_4h = _rsi_simple_from_closes(closes_4h, period=14)
         row.append(round(rsi_4h, 2) if rsi_4h is not None else "")
