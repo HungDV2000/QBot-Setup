@@ -763,8 +763,9 @@ def do_it():
             logger.warning(f"[{pair}] fetch_ohlcv 4h: {e}")
         closes_4h = [x[4] for x in ohlcv_4h] if ohlcv_4h else []
 
-        # D-E BB1h, F-G BB1d (không có BB4h — giữ đúng 34 cột A-AH)
-        row.extend([bb1h_u, bb1h_l, bb1d_u, bb1d_l])
+        # D-E BB1h, F-G BB4h, H-I BB1d → tổng 36 cột A-AJ khớp header
+        bb4h_u, bb4h_l = _bb_upper_lower_from_closes(closes_4h) if len(closes_4h) >= 20 else (float("nan"), float("nan"))
+        row.extend([bb1h_u, bb1h_l, bb4h_u, bb4h_l, bb1d_u, bb1d_l])
 
         # J-K: biên độ 1h tuần (vẫn cần fetch 7d 1h)
         max_price_increase_month1, max_price_decrease_month1 = calculate_price_range(pair, 7, "1h")
@@ -819,7 +820,7 @@ def do_it():
         row.append(distance_to_bb_up)
         row.append(distance_to_bb_down)
 
-        # X: vol nến 1h hiện tại; Y: vol 4h (đã có ohlcv_4h)
+        # Z: vol nến 1h hiện tại; AA: vol 4h (đã có ohlcv_4h)
         vol_1h_last = round(float(ohlcv_1h[-1][5]), 2) if ohlcv_1h else 0.0
         row.append(vol_1h_last)
 
@@ -934,8 +935,8 @@ def do_it():
     print(f"📉 BẮT ĐẦU XỬ LÝ {len(list_giam_nhieu_nhat)} MÃ GIẢM GIÁ", flush=True)
     print(f"{'='*60}\n", flush=True)
     
-    # Dòng 3: Title GIẢM (cột A) + cột trống B-AH
-    title_row_giam = [title1] + [""] * 33  # A + B..AH = 34 cột
+    # Dòng 3: Title GIẢM (cột A) + cột trống B-AJ
+    title_row_giam = [title1] + [""] * 35  # A + B..AJ = 36 cột
     tab_100_ma_2d_arr.append(title_row_giam)
     logger.info(f"Đang lấy dữ liệu cho {len(list_giam_nhieu_nhat)} mã giảm...")
     
@@ -953,7 +954,7 @@ def do_it():
     print(f"✅ Đã lấy {len(giam_data)} mã giảm", flush=True)
     
     # PADDING: Thêm dòng trống để đủ 50 dòng (dòng 4-53)
-    empty_row = [""] * 34  # A-AH
+    empty_row = [""] * 36  # A-AJ
     rows_to_pad = cst.top_count - len(giam_data)
     if rows_to_pad > 0:
         if len(giam_data) < cst.top_count:
@@ -969,8 +970,8 @@ def do_it():
     print(f"📈 BẮT ĐẦU XỬ LÝ {len(list_tang_nhieu_nhat)} MÃ TĂNG GIÁ", flush=True)
     print(f"{'='*60}\n", flush=True)
     
-    # Dòng 54: Title TĂNG (cột A) + cột trống B-AH
-    title_row_tang = [title2] + [""] * 33
+    # Dòng 54: Title TĂNG (cột A) + cột trống B-AJ
+    title_row_tang = [title2] + [""] * 35
     tab_100_ma_2d_arr.append(title_row_tang)
     logger.info(f"Đang lấy dữ liệu cho {len(list_tang_nhieu_nhat)} mã tăng...")
     
