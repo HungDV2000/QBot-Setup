@@ -168,13 +168,17 @@ def _amplitude_range_from_ohlcv_slice(ohlcv_slice):
 
 
 def _bb_width_3d_and_now_from_ohlcv(ohlcv_1d, period=20, std_dev=2):
-    """(width 3 phiên trước, width hiện tại) — (U-L)/Mid khung 1d."""
-    if not ohlcv_1d or len(ohlcv_1d) < period + 3:
+    """(width 3 phiên trước, width hiện tại) — (U-L)/Mid khung 1d.
+    Dùng nến đã đóng (bỏ nến đang hình thành) + population std (ddof=0) để khớp TradingView.
+    """
+    # Loại nến đang hình thành (phần tử cuối): chỉ bỏ nếu có đủ nến để tính
+    ohlcv_closed = ohlcv_1d[:-1] if ohlcv_1d and len(ohlcv_1d) > period + 3 else ohlcv_1d
+    if not ohlcv_closed or len(ohlcv_closed) < period + 3:
         return None, None
-    df = pd.DataFrame(ohlcv_1d, columns=["timestamp", "open", "high", "low", "close", "volume"])
+    df = pd.DataFrame(ohlcv_closed, columns=["timestamp", "open", "high", "low", "close", "volume"])
     close = df["close"]
     sma = close.rolling(window=period).mean()
-    std = close.rolling(window=period).std()
+    std = close.rolling(window=period).std(ddof=0)  # population std — khớp TradingView
     upper = sma + std_dev * std
     lower = sma - std_dev * std
     mid = sma.replace(0, np.nan)
@@ -765,7 +769,10 @@ def do_it():
             logger.warning(f"[{pair}] fetch_ohlcv 1d: {e}")
 
         closes_1d = [x[4] for x in ohlcv_1d] if ohlcv_1d else []
-        bb1d_u, bb1d_l = _bb_upper_lower_from_closes(closes_1d) if len(closes_1d) >= 20 else (float("nan"), float("nan"))
+        # BB1d: dùng nến ĐÃ ĐÓNG (loại nến đang hình thành) để khớp TradingView.
+        # Với coin crash mạnh trong ngày (như STO -86%), nến đang hình thành kéo BB xuống sai.
+        closes_1d_closed = closes_1d[:-1] if len(closes_1d) > 20 else closes_1d
+        bb1d_u, bb1d_l = _bb_upper_lower_from_closes(closes_1d_closed) if len(closes_1d_closed) >= 20 else (float("nan"), float("nan"))
 
         # --- 2) Một lần 1h (20 nến): BB1h + Vol X + AG/AH ---
         ohlcv_1h = []
@@ -777,6 +784,13 @@ def do_it():
         closes_1h = [x[4] for x in ohlcv_1h] if ohlcv_1h else []
         bb1h_u, bb1h_l = _bb_upper_lower_from_closes(closes_1h) if len(closes_1h) >= 20 else (float("nan"), float("nan"))
         result_bb_array = [bb1h_u, bb1h_l]  # dùng cho % đến BB1h (cột V/W)
+
+        # Cập nhật giá tươi từ nến 1h gần nhất (nến đang hình thành = live price)
+        # Tránh giá bị trễ 10-15 phút khi tickers[] được fetch 1 lần ở đầu cho 100 mã
+        if ohlcv_1h:
+            price = float(ohlcv_1h[-1][4])
+            row[2] = price  # cập nhật col C với giá tươi hơn
+            logger.debug(f"[{pair}] Giá cập nhật từ 1h close: {price}")
 
         # Một lần 4h (20 nến): tái dùng cho Vol Y / RSI AF
         ohlcv_4h = []
