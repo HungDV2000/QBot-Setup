@@ -21,9 +21,11 @@ from data_collector import DataCollector, get_data_collector
 file_name = os.path.basename(os.path.abspath(__file__))  
 os.system(f"title {file_name} - {cst.key_name}")
 
-# Tạo thư mục logs/ nếu chưa có
+# Tạo thư mục logs/ và logs/data/ nếu chưa có
 logs_dir = Path('logs')
 logs_dir.mkdir(exist_ok=True)
+data_logs_dir = logs_dir / 'data'
+data_logs_dir.mkdir(exist_ok=True)
 
 # Tạo tên file log với timestamp: hd_update_all_dd_mm_yyyy_H_M_S.txt
 log_timestamp = datetime.now().strftime('%d_%m_%Y_%H_%M_%S')
@@ -52,6 +54,98 @@ error_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(na
 logger.addHandler(error_handler)
 
 is_test_mode = False
+ENABLE_DEBUG_DATA = True  # Ghi file logs/data/<SYMBOL>_dd_mm_yyyy.txt — tắt khi không cần debug
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DEBUG: Tên cột theo thứ tự A→AJ (khớp với header_row trong do_it)
+# ─────────────────────────────────────────────────────────────────────────────
+_DEBUG_COL_NAMES = [
+    "Mã",                              # A
+    "% 24h",                           # B
+    "Giá trị hiện thời",               # C
+    "BB1h trên",                       # D
+    "BB1h dưới",                       # E
+    "BB4h trên",                       # F
+    "BB4h dưới",                       # G
+    "BB1 ngày trên",                   # H
+    "BB1 ngày dưới",                   # I
+    "Biên độ 1h max tăng tuần",        # J
+    "Biên độ 1h max giảm tuần",        # K
+    "Max 40 ngày",                     # L
+    "Min 40 ngày",                     # M
+    "Max tăng 4h/60 ngày",             # N
+    "Max giảm 4h/60 ngày",             # O
+    "Giá Cao Nhất (BB1w trên)",        # P
+    "Giá Thấp Nhất (BB1w dưới)",       # Q
+    "Biên độ 30d tăng",                # R
+    "Biên độ 30d giảm",                # S
+    "Volume 24h",                      # T
+    "RSI 14",                          # U
+    "(trống V)",                       # V
+    "Min/Min40 (BB1w dưới / Min40)",   # W
+    "% đến BB1h trên",                 # X
+    "% đến BB1h dưới",                 # Y
+    "Vol 1h",                          # Z
+    "Vol 4h",                          # AA
+    "(trống AB)",                      # AB
+    "(trống AC)",                      # AC
+    "Biên độ giá ngày lớn nhất (%)",   # AD
+    "Ngày biên độ lớn nhất",           # AE
+    "BB width 1d (3 ngày trước)",      # AF
+    "BB width 1d (hiện tại)",          # AG
+    "RSI 14 (4h)",                     # AH
+    "Vol 1h (hiện tại)",               # AI
+    "Vol 1h MA20",                     # AJ
+]
+
+
+def _col_letter(idx: int) -> str:
+    """Chuyển index 0-based → chữ cột (A, B, …, Z, AA, AB, …)."""
+    if idx < 26:
+        return chr(ord("A") + idx)
+    return "A" + chr(ord("A") + idx - 26)
+
+
+def write_symbol_debug_log(symbol: str, row: list) -> None:
+    """
+    Ghi file logs/data/<SYMBOL>_dd_mm_yyyy.txt chứa giá trị từng cột.
+    Ví dụ: logs/data/BTC_USDT_02_04_2026.txt
+    Ghi đè mỗi lần chạy trong ngày (append nếu chạy nhiều lần).
+    """
+    try:
+        # Chuẩn hoá tên file: BTC/USDT:USDT → BTC_USDT
+        safe_name = symbol.replace("/", "_").replace(":", "_").replace("USDT_USDT", "USDT").rstrip("_")
+        date_str = datetime.now().strftime("%d_%m_%Y")
+        filepath = data_logs_dir / f"{safe_name}_{date_str}.txt"
+
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        lines = [
+            f"{'='*60}",
+            f"  {symbol}  —  {now_str}",
+            f"{'='*60}",
+        ]
+
+        for i, col_name in enumerate(_DEBUG_COL_NAMES):
+            letter = _col_letter(i)
+            value = row[i] if i < len(row) else "(thiếu)"
+            # Format số thực: giữ tối đa 6 chữ số thập phân
+            if isinstance(value, float):
+                if math.isfinite(value):
+                    formatted = f"{value:,.6f}".rstrip("0").rstrip(".")
+                else:
+                    formatted = str(value)   # nan / inf
+            else:
+                formatted = str(value) if value != "" else "(trống)"
+            lines.append(f"  {letter:<3} | {col_name:<35} : {formatted}")
+
+        lines.append("")  # dòng trống cuối
+
+        # append — nếu chạy nhiều lần trong ngày sẽ có nhiều block
+        with open(filepath, "a", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+
+    except Exception as e:
+        logger.warning(f"[write_symbol_debug_log] Không ghi được file debug cho {symbol}: {e}")
 
 calculate_high_low_day_total = 40
 
@@ -897,6 +991,8 @@ def do_it():
             row.extend(["", ""])
 
         logger.info(f"get_row_result xong: {symbol}")
+        if ENABLE_DEBUG_DATA:
+            write_symbol_debug_log(symbol, row)
         return row
 
 
