@@ -783,45 +783,15 @@ def do_it():
         logger.info(f"Whitelist trống → Sử dụng TẤT CẢ {len(all_futures_usdt)} mã từ Binance")
         futures_symbols = all_futures_usdt
     
-    # Bước 4: Lọc các mã hợp lệ (loại bỏ mã mới listing/không đủ data)
-    logger.info(f"Bước 4: Kiểm tra tính hợp lệ của {len(futures_symbols)} mã...")
-    print(f"🔍 Đang kiểm tra tính hợp lệ của {len(futures_symbols)} mã...", flush=True)
-    valid_symbols = []
-    invalid_symbols = []
-    
-    n_sym = len(futures_symbols)
-    t0_valid = time.time()
-    for idx, symbol in enumerate(futures_symbols, 1):
-        # Mỗi mã ~2 request OHLCV + rate limit — có thể vài chục phút với hàng trăm mã; log để không tưởng bị treo
-        if idx == 1 or idx % 30 == 0 or idx == n_sym:
-            elapsed = time.time() - t0_valid
-            print(
-                f"   ⏳ Bước 4: kiểm tra hợp lệ {idx}/{n_sym} mã (đã {elapsed:.0f}s)...",
-                flush=True,
-            )
-            logger.info(f"Bước 4: kiểm tra hợp lệ {idx}/{n_sym} mã, elapsed {elapsed:.0f}s")
-        is_valid, reason = is_valid_for_trading(symbol, tickers)
-        if is_valid:
-            valid_symbols.append(symbol)
-        else:
-            invalid_symbols.append((symbol, reason))
-    
-    print(f"✅ Số mã hợp lệ: {len(valid_symbols)}", flush=True)
-    logger.info(f"Số mã hợp lệ: {len(valid_symbols)}")
-    if invalid_symbols:
-        print(f"⚠️  Số mã bị loại: {len(invalid_symbols)}", flush=True)
-        logger.info(f"Số mã bị loại: {len(invalid_symbols)}")
-        # Log tối đa 10 mã bị loại để không làm rối log
-        for symbol, reason in invalid_symbols[:10]:
-            print(f"   ❌ {symbol}: {reason}", flush=True)
-            logger.debug(f"Mã bị loại: {symbol} - {reason}")
-        if len(invalid_symbols) > 10:
-            print(f"   ... và {len(invalid_symbols) - 10} mã khác", flush=True)
-            logger.info(f"Và {len(invalid_symbols) - 10} mã khác bị loại")
-    
-    # Cập nhật danh sách symbols thành danh sách hợp lệ
-    futures_symbols = valid_symbols
-    logger.info(f"Tiếp tục xử lý với {len(futures_symbols)} mã hợp lệ")
+    # Bước 4: Lọc nhanh theo volume 24h từ tickers (không gọi API thêm)
+    # is_valid_for_trading() cũ gọi 2 fetch_ohlcv/mã × 600 mã = 1200+ request thừa → bỏ
+    logger.info(f"Bước 4: Lọc nhanh {len(futures_symbols)} mã theo volume 24h (min 100k USDT)...")
+    futures_symbols = [
+        s for s in futures_symbols
+        if tickers[s].get("quoteVolume", 0) >= 100_000
+    ]
+    print(f"✅ Số mã sau lọc volume 24h ≥ 100k USDT: {len(futures_symbols)}", flush=True)
+    logger.info(f"Tiếp tục xử lý với {len(futures_symbols)} mã")
 
     
 
@@ -900,9 +870,13 @@ def do_it():
         row.extend([bb1h_u, bb1h_l, bb4h_u, bb4h_l, bb1d_u, bb1d_l])
 
         # J-K: biên độ 1h tuần (vẫn cần fetch 7d 1h)
-        max_price_increase_month1, max_price_decrease_month1 = calculate_price_range(pair, 7, "1h")
-        max_price_increase_month1 = "" if pd.isna(max_price_increase_month1) else max_price_increase_month1
-        max_price_decrease_month1 = "" if pd.isna(max_price_decrease_month1) else max_price_decrease_month1
+        try:
+            max_price_increase_month1, max_price_decrease_month1 = calculate_price_range(pair, 7, "1h")
+            max_price_increase_month1 = "" if pd.isna(max_price_increase_month1) else max_price_increase_month1
+            max_price_decrease_month1 = "" if pd.isna(max_price_decrease_month1) else max_price_decrease_month1
+        except Exception as e:
+            logger.warning(f"[{pair}] calculate_price_range 7d/1h: {e}")
+            max_price_increase_month1, max_price_decrease_month1 = "", ""
         row.append(max_price_increase_month1)
         row.append(max_price_decrease_month1)
 
@@ -917,18 +891,30 @@ def do_it():
         row.append(high)
         row.append(low)
 
-        increase, decrease = calculate_max_increase_decrease_4h(symbol)
+        try:
+            increase, decrease = calculate_max_increase_decrease_4h(pair)
+        except Exception as e:
+            logger.warning(f"[{pair}] calculate_max_increase_decrease_4h: {e}")
+            increase, decrease = "", ""
         row.append(increase)
         row.append(decrease)
 
-        bb_1w = get_bb(pair, timeframes=["1w"])
+        try:
+            bb_1w = get_bb(pair, timeframes=["1w"])
+        except Exception as e:
+            logger.warning(f"[{pair}] get_bb 1w: {e}")
+            bb_1w = [float("nan"), float("nan")]
         row.extend(bb_1w)
 
         # R-S: biên độ 30d từ 30 nến 1d cuối (không gọi get_bien_do_max cho 1d)
-        if len(ohlcv_1d) >= 30:
-            p30, q30 = _amplitude_range_from_ohlcv_slice(ohlcv_1d[-30:])
-        else:
-            p30, q30 = calculate_price_range(pair, 30, "1d")
+        try:
+            if len(ohlcv_1d) >= 30:
+                p30, q30 = _amplitude_range_from_ohlcv_slice(ohlcv_1d[-30:])
+            else:
+                p30, q30 = calculate_price_range(pair, 30, "1d")
+        except Exception as e:
+            logger.warning(f"[{pair}] biên độ 30d: {e}")
+            p30, q30 = float("nan"), float("nan")
         row.append("" if pd.isna(p30) else p30)
         row.append("" if pd.isna(q30) else q30)
 
@@ -1212,13 +1198,16 @@ def do_it():
     logger.info(f"Tổng số dòng dữ liệu: {len(tab_100_ma_2d_arr)}")
     
     # Ghi tất cả dữ liệu từ hàng 1
-    print(f"💾 Đang ghi {len(tab_100_ma_2d_arr)} dòng vào Google Sheet...", flush=True)
-    logger.info("Bước 7: Ghi dữ liệu vào Google Sheet...")
+    write_start = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"💾 [{write_start}] Đang ghi {len(tab_100_ma_2d_arr)} dòng vào Google Sheet...", flush=True)
+    logger.info(f"Bước 7: Ghi dữ liệu vào Google Sheet (bắt đầu ghi: {write_start})...")
     gg_sheet_factory.update_multi(gg_sheet_factory.tab_list_all_ma, -1, tab_100_ma_2d_arr, "A")
     print(f"✅ Đã ghi xong dữ liệu vào sheet!", flush=True)
     logger.info("Đã ghi dữ liệu vào sheet")
     
-    # Ghi timestamp vào A1 (ghi đè lên header)
+    # Ghi timestamp vào A1 — lấy datetime.now() SAU KHI update_multi xong
+    # (tránh timestamp bị "cũ" nếu update_multi mất nhiều thời gian do retry/Google API chậm)
+    time_string = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"🕐 Ghi timestamp {time_string} vào A1...", flush=True)
     gg_sheet_factory.update_single_value(gg_sheet_factory.tab_list_all_ma, "A1", time_string)
     logger.info(f"Đã ghi timestamp vào A1: {time_string}")
