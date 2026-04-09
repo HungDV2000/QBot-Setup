@@ -1019,115 +1019,99 @@ def do_it():
     tab_100_ma_2d_arr = []
     title1 = f"Top {cst.top_count} có % giảm giá nhiều nhất trong 24h"
     title2 = f"Top {cst.top_count} có % tăng giá nhiều nhất trong 24h"
+    empty_row = [""] * 36  # A-AJ
 
-    
-    # Lọc RIÊNG các mã giảm (% âm) và mã tăng (% dương)
-    giam_symbols = [s for s in futures_symbols if tickers[s]['percentage'] < 0]
-    tang_symbols = [s for s in futures_symbols if tickers[s]['percentage'] > 0]
-    
-    print(f"📊 Phân loại: {len(giam_symbols)} mã giảm, {len(tang_symbols)} mã tăng", flush=True)
+    # ── Hàng 3 & 4: BTCDOM và BTC cố định (luôn hiển thị bất kể tăng/giảm) ──
+    # Thứ tự: BTCDOM trước (hàng 3), BTC sau (hàng 4)
+    logger.info("Bước 6a: Lấy dữ liệu BTC/BTCDOM cố định (hàng 3-4)...")
+    print(f"\n{'='*60}", flush=True)
+    print(f"📌 XỬ LÝ 2 MÃ CỐ ĐỊNH: BTCDOM (hàng 3) + BTC (hàng 4)", flush=True)
+    print(f"{'='*60}\n", flush=True)
+
+    for fixed_sym in ("BTCDOM/USDT:USDT", "BTC/USDT:USDT"):
+        if fixed_sym in tickers:
+            print(f"📌 Lấy dữ liệu {fixed_sym}...", flush=True)
+            tab_100_ma_2d_arr.append(get_row_result(fixed_sym))
+        else:
+            logger.warning(f"{fixed_sym} không có trong tickers, ghi dòng trống")
+            tab_100_ma_2d_arr.append(empty_row)
+
+    # ── Danh sách giảm / tăng: loại BTC và BTCDOM ra (đã có ở hàng 3-4) ──
+    excluded = set(SHEET_LEADER_SYMBOLS)
+    giam_symbols = [s for s in futures_symbols
+                    if tickers[s]['percentage'] < 0 and s not in excluded]
+    tang_symbols = [s for s in futures_symbols
+                    if tickers[s]['percentage'] > 0 and s not in excluded]
+
+    print(f"📊 Phân loại: {len(giam_symbols)} mã giảm, {len(tang_symbols)} mã tăng (không gồm BTC/BTCDOM)", flush=True)
     logger.info(f"Phân loại: {len(giam_symbols)} mã giảm, {len(tang_symbols)} mã tăng")
-    
-    # Top GIẢM: sort % âm nhất trước; BTC + BTCDOM luôn 2 dòng đầu (nếu có ticker)
-    sorted_giam = sorted(giam_symbols, key=lambda x: tickers[x]["percentage"])
-    list_giam_nhieu_nhat = merge_top_list_with_sheet_leaders(
-        sorted_giam, tickers, cst.top_count, SHEET_LEADER_SYMBOLS
-    )
 
-    # Top TĂNG: sort % dương nhất trước; cùng 2 mã đầu để khách đối chiếu
-    sorted_tang = sorted(tang_symbols, reverse=True, key=lambda x: tickers[x]["percentage"])
-    list_tang_nhieu_nhat = merge_top_list_with_sheet_leaders(
-        sorted_tang, tickers, cst.top_count, SHEET_LEADER_SYMBOLS
-    )
+    list_giam_nhieu_nhat = sorted(giam_symbols, key=lambda x: tickers[x]["percentage"])[:cst.top_count]
+    list_tang_nhieu_nhat = sorted(tang_symbols, reverse=True, key=lambda x: tickers[x]["percentage"])[:cst.top_count]
 
-    # Log (2 mã đầu có thể không thuộc nhóm giảm/tăng cùng ngày — vẫn cố định theo yêu cầu)
-    if len(list_giam_nhieu_nhat) > 0:
-        print(
-            f"✅ Top giảm: {len(list_giam_nhieu_nhat)} mã — 2 dòng đầu cố định BTC & BTCDOM; "
-            f"cột % của chúng có thể không âm trong ngày.",
-            flush=True,
-        )
-        print(
-            f"   Phạm vi % (toàn danh sách): {tickers[list_giam_nhieu_nhat[0]]['percentage']:.2f}% → "
-            f"{tickers[list_giam_nhieu_nhat[-1]]['percentage']:.2f}%",
-            flush=True,
-        )
+    if list_giam_nhieu_nhat:
+        print(f"✅ Top giảm: {len(list_giam_nhieu_nhat)} mã | "
+              f"Phạm vi %: {tickers[list_giam_nhieu_nhat[0]]['percentage']:.2f}% → "
+              f"{tickers[list_giam_nhieu_nhat[-1]]['percentage']:.2f}%", flush=True)
     else:
         print(f"⚠️  Không có mã giảm giá!", flush=True)
 
-    if len(list_tang_nhieu_nhat) > 0:
-        print(
-            f"✅ Top tăng: {len(list_tang_nhieu_nhat)} mã — 2 dòng đầu cố định BTC & BTCDOM; "
-            f"cột % có thể không dương trong ngày.",
-            flush=True,
-        )
-        print(
-            f"   Phạm vi % (toàn danh sách): {tickers[list_tang_nhieu_nhat[0]]['percentage']:.2f}% → "
-            f"{tickers[list_tang_nhieu_nhat[-1]]['percentage']:.2f}%",
-            flush=True,
-        )
+    if list_tang_nhieu_nhat:
+        print(f"✅ Top tăng: {len(list_tang_nhieu_nhat)} mã | "
+              f"Phạm vi %: {tickers[list_tang_nhieu_nhat[0]]['percentage']:.2f}% → "
+              f"{tickers[list_tang_nhieu_nhat[-1]]['percentage']:.2f}%", flush=True)
     else:
         print(f"⚠️  Không có mã tăng giá!", flush=True)
-    
-    logger.info(f"Top giảm: {len(list_giam_nhieu_nhat)} mã")
-    logger.info(f"Top tăng: {len(list_tang_nhieu_nhat)} mã")
 
-    # Bỏ tính toán Top 50 gần đỉnh/đáy (không cần trong bản đơn giản)
+    logger.info(f"Top giảm: {len(list_giam_nhieu_nhat)} mã | Top tăng: {len(list_tang_nhieu_nhat)} mã")
 
-    # list_all.json khớp thứ tự sheet: title giảm → danh sách giảm → title tăng → danh sách tăng
+    # list_all.json khớp thứ tự sheet
     list_all = [title1, *list_giam_nhieu_nhat, title2, *list_tang_nhieu_nhat]
-
     with open("list_all.json", "w") as file:
         json.dump(list_all, file)
 
+    logger.info("Bước 6b: Lấy dữ liệu cho từng symbol...")
 
-    logger.info("Bước 6: Lấy dữ liệu cho từng symbol...")
-    
-    # PHẦN 1: TOP 50 GIẢM (dòng 3-53)
+    # ── Hàng 5: Tiêu đề GIẢM | Hàng 6-55: Top 50 giảm ──
     print(f"\n{'='*60}", flush=True)
-    print(f"📉 BẮT ĐẦU XỬ LÝ {len(list_giam_nhieu_nhat)} MÃ GIẢM GIÁ", flush=True)
+    print(f"📉 BẮT ĐẦU XỬ LÝ {len(list_giam_nhieu_nhat)} MÃ GIẢM GIÁ (hàng 6-55)", flush=True)
     print(f"{'='*60}\n", flush=True)
-    
-    # Dòng 3: Title GIẢM (cột A) + cột trống B-AJ
+
     title_row_giam = [title1] + [""] * 35  # A + B..AJ = 36 cột
-    tab_100_ma_2d_arr.append(title_row_giam)
+    tab_100_ma_2d_arr.append(title_row_giam)  # hàng 5
     logger.info(f"Đang lấy dữ liệu cho {len(list_giam_nhieu_nhat)} mã giảm...")
-    
+
     giam_data = []
     for idx, symbol in enumerate(list_giam_nhieu_nhat, 1):
         print(f"📉 [{idx}/{len(list_giam_nhieu_nhat)}] Xử lý mã giảm: {symbol}", flush=True)
         logger.info(f"Mã giảm [{idx}/{len(list_giam_nhieu_nhat)}]: {symbol}")
         giam_data.append(get_row_result(symbol))
-        
         if is_test_mode:
             break
-    
-    # Thêm data giảm vào array
+
     tab_100_ma_2d_arr.extend(giam_data)
     print(f"✅ Đã lấy {len(giam_data)} mã giảm", flush=True)
-    
-    # PADDING: Thêm dòng trống để đủ 50 dòng (dòng 4-53)
-    empty_row = [""] * 36  # A-AJ
+
+    # Padding để đủ 50 dòng (hàng 6-55)
     rows_to_pad = cst.top_count - len(giam_data)
     if rows_to_pad > 0:
         if len(giam_data) < cst.top_count:
             print(f"⚠️  Chỉ có {len(giam_data)}/{cst.top_count} mã giảm trên thị trường", flush=True)
             logger.warning(f"Chỉ có {len(giam_data)}/{cst.top_count} mã giảm")
-        print(f"   └─ Padding {rows_to_pad} dòng trống để cố định vị trí (dòng {4+len(giam_data)} → 53)", flush=True)
+        print(f"   └─ Padding {rows_to_pad} dòng trống (hàng {6+len(giam_data)} → 55)", flush=True)
         logger.info(f"Padding {rows_to_pad} dòng trống cho phần giảm")
         for _ in range(rows_to_pad):
             tab_100_ma_2d_arr.append(empty_row)
-    
-    # PHẦN 2: TOP 50 TĂNG (dòng 54-104)
+
+    # ── Hàng 56: Tiêu đề TĂNG | Hàng 57-106: Top 50 tăng ──
     print(f"\n{'='*60}", flush=True)
-    print(f"📈 BẮT ĐẦU XỬ LÝ {len(list_tang_nhieu_nhat)} MÃ TĂNG GIÁ", flush=True)
+    print(f"📈 BẮT ĐẦU XỬ LÝ {len(list_tang_nhieu_nhat)} MÃ TĂNG GIÁ (hàng 57-106)", flush=True)
     print(f"{'='*60}\n", flush=True)
-    
-    # Dòng 54: Title TĂNG (cột A) + cột trống B-AJ
+
     title_row_tang = [title2] + [""] * 35
-    tab_100_ma_2d_arr.append(title_row_tang)
+    tab_100_ma_2d_arr.append(title_row_tang)  # hàng 56
     logger.info(f"Đang lấy dữ liệu cho {len(list_tang_nhieu_nhat)} mã tăng...")
-    
+
     tang_data = []
     for idx, symbol in enumerate(list_tang_nhieu_nhat, 1):
         if is_test_mode:
@@ -1135,24 +1119,24 @@ def do_it():
         print(f"📈 [{idx}/{len(list_tang_nhieu_nhat)}] Xử lý mã tăng: {symbol}", flush=True)
         logger.info(f"Mã tăng [{idx}/{len(list_tang_nhieu_nhat)}]: {symbol}")
         tang_data.append(get_row_result(symbol))
-    
-    # Thêm data tăng vào array
+
     tab_100_ma_2d_arr.extend(tang_data)
     print(f"✅ Đã lấy {len(tang_data)} mã tăng", flush=True)
-    
-    # PADDING: Thêm dòng trống để đủ 50 dòng (dòng 55-104)
+
+    # Padding để đủ 50 dòng (hàng 57-106)
     rows_to_pad = cst.top_count - len(tang_data)
     if rows_to_pad > 0:
         if len(tang_data) < cst.top_count:
             print(f"⚠️  Chỉ có {len(tang_data)}/{cst.top_count} mã tăng trên thị trường", flush=True)
             logger.warning(f"Chỉ có {len(tang_data)}/{cst.top_count} mã tăng")
-        print(f"   └─ Padding {rows_to_pad} dòng trống để cố định vị trí (dòng {55+len(tang_data)} → 104)", flush=True)
+        print(f"   └─ Padding {rows_to_pad} dòng trống (hàng {57+len(tang_data)} → 106)", flush=True)
         logger.info(f"Padding {rows_to_pad} dòng trống cho phần tăng")
         for _ in range(rows_to_pad):
             tab_100_ma_2d_arr.append(empty_row)
-    
+
     logger.info("Hoàn thành lấy dữ liệu cho top lists")
-    logger.info(f"Tổng số dòng sau khi padding: {len(tab_100_ma_2d_arr)} (mong đợi: 2 title + 100 data = 102 dòng)")
+    # Cấu trúc: 2 cố định + 1 title_giam + 50 giảm + 1 title_tang + 50 tăng = 104 dòng
+    logger.info(f"Tổng số dòng sau khi padding: {len(tab_100_ma_2d_arr)} (mong đợi: 2 cố định + 2 title + 100 data = 104 dòng)")
 
     # Lấy thông tin tài khoản (data_collector đã được khởi tạo ở đầu hàm)
     logger.info("Đang lấy thông tin tài khoản...")
