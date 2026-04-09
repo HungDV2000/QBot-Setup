@@ -787,14 +787,13 @@ def do_it():
     # Loại bỏ:
     #   - Volume 24h < 100k USDT (thanh khoản quá thấp)
     #   - last = None / 0 / NaN  → pre-launch, expired, index contract (PORT3, RVV, BSW, SKATE…)
-    #   - bid = None / 0          → không có orderbook → không giao dịch được
+    # Không dùng bid: fetch_tickers() Binance Futures thường không trả về bid trong snapshot
     logger.info(f"Bước 4: Lọc nhanh {len(futures_symbols)} mã (volume + giá hợp lệ)...")
     before = len(futures_symbols)
     futures_symbols = [
         s for s in futures_symbols
         if (tickers[s].get("quoteVolume") or 0) >= 100_000
         and (tickers[s].get("last") or 0) > 0
-        and (tickers[s].get("bid") or 0) > 0
     ]
     removed = before - len(futures_symbols)
     print(
