@@ -874,6 +874,20 @@ def do_it():
             row[2] = price  # cập nhật col C với giá tươi hơn
             logger.debug(f"[{pair}] Giá cập nhật từ 1h close: {price}")
 
+        # Zombie coin guard: BB1h upper ≈ BB1h lower → giá đóng băng (token đang delist)
+        # Binance giữ các token này trong fetch_tickers() với last>0 và volume cũ còn cao,
+        # nhưng ohlcv chỉ trả về nến có giá cố định → std=0 → upper=lower=last
+        # Không cần API call thêm vì ohlcv_1h đã có sẵn ở trên
+        if (math.isfinite(bb1h_u) and math.isfinite(bb1h_l)
+                and bb1h_u > 0
+                and abs(bb1h_u - bb1h_l) < bb1h_u * 0.0001):
+            logger.warning(f"[{symbol}] BB1h upper≈lower ({bb1h_u:.6f}) — zombie/delisted coin, bỏ qua")
+            print(f"⏭️  [{symbol}] BB1h trùng nhau → token đang delist, bỏ qua", flush=True)
+            empty = [""] * len(_DEBUG_COL_NAMES)
+            empty[0] = pair
+            empty[1] = pct
+            return empty
+
         # Một lần 4h (20 nến): tái dùng cho Vol Y / RSI AF
         ohlcv_4h = []
         try:
