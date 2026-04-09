@@ -783,15 +783,26 @@ def do_it():
         logger.info(f"Whitelist trống → Sử dụng TẤT CẢ {len(all_futures_usdt)} mã từ Binance")
         futures_symbols = all_futures_usdt
     
-    # Bước 4: Lọc nhanh theo volume 24h từ tickers (không gọi API thêm)
-    # is_valid_for_trading() cũ gọi 2 fetch_ohlcv/mã × 600 mã = 1200+ request thừa → bỏ
-    logger.info(f"Bước 4: Lọc nhanh {len(futures_symbols)} mã theo volume 24h (min 100k USDT)...")
+    # Bước 4: Lọc nhanh từ tickers — không gọi API thêm
+    # Loại bỏ:
+    #   - Volume 24h < 100k USDT (thanh khoản quá thấp)
+    #   - last = None / 0 / NaN  → pre-launch, expired, index contract (PORT3, RVV, BSW, SKATE…)
+    #   - bid = None / 0          → không có orderbook → không giao dịch được
+    logger.info(f"Bước 4: Lọc nhanh {len(futures_symbols)} mã (volume + giá hợp lệ)...")
+    before = len(futures_symbols)
     futures_symbols = [
         s for s in futures_symbols
-        if tickers[s].get("quoteVolume", 0) >= 100_000
+        if (tickers[s].get("quoteVolume") or 0) >= 100_000
+        and (tickers[s].get("last") or 0) > 0
+        and (tickers[s].get("bid") or 0) > 0
     ]
-    print(f"✅ Số mã sau lọc volume 24h ≥ 100k USDT: {len(futures_symbols)}", flush=True)
-    logger.info(f"Tiếp tục xử lý với {len(futures_symbols)} mã")
+    removed = before - len(futures_symbols)
+    print(
+        f"✅ Số mã hợp lệ sau lọc: {len(futures_symbols)}"
+        f" (loại {removed} mã không có giá / thanh khoản thấp)",
+        flush=True,
+    )
+    logger.info(f"Tiếp tục xử lý với {len(futures_symbols)} mã (đã loại {removed} mã)")
 
     
 
@@ -817,9 +828,17 @@ def do_it():
         Gộp fetch OHLCV để giảm ~15+ request/mã (rate limit Binance) xuống còn vài request,
         tránh “đơ” lâu giữa các dòng log.
         """
-        price = tickers[symbol]["last"]
-        pct = tickers[symbol]["percentage"]
-        pair = symbol.replace(":USDT", "")
+        price = float(tickers[symbol].get("last") or 0)
+        pct   = float(tickers[symbol].get("percentage") or 0)
+        pair  = symbol.replace(":USDT", "")
+
+        # Guard: symbol không có giá hợp lệ → trả về row trống, log cảnh báo
+        if price <= 0:
+            logger.warning(f"[{symbol}] last price = {price} — bỏ qua")
+            empty = [""] * len(_DEBUG_COL_NAMES)
+            empty[0] = pair
+            empty[1] = pct
+            return empty
 
         print(f"🔄 {symbol} - %24h: {pct:.2f}%, giá: {price}", flush=True)
         logger.info(f"get_row_result bắt đầu: {symbol}")
@@ -1189,11 +1208,7 @@ def do_it():
     
     # Thêm header vào đầu array
     tab_100_ma_2d_arr = [header_row] + tab_100_ma_2d_arr
-    
-    # Thêm timestamp vào A1 sau khi có header
-    current_time = datetime.now()
-    time_string = current_time.strftime("%Y-%m-%d %H:%M:%S")
-    
+
     print(f"📊 Tổng số dòng dữ liệu: {len(tab_100_ma_2d_arr)}", flush=True)
     logger.info(f"Tổng số dòng dữ liệu: {len(tab_100_ma_2d_arr)}")
     
