@@ -87,8 +87,8 @@ _DEBUG_COL_NAMES = [
     "% đến BB1h dưới",                 # Y
     "Vol 1h",                          # Z
     "Vol 4h",                          # AA
-    "(trống AB)",                      # AB
-    "(trống AC)",                      # AC
+    "Futures (trạng thái)",            # AB — exchangeInfo USDT-M
+    "Spot (trạng thái)",               # AC — exchangeInfo spot
     "Biên độ giá ngày lớn nhất (%)",   # AD
     "Ngày biên độ lớn nhất",           # AE
     "BB width 1d (3 ngày trước)",      # AF
@@ -174,8 +174,46 @@ exchange.setSandboxMode(False)
 # Tránh treo vĩnh viễn khi Binance/mạng không phản hồi (mặc định ccxt có thể không timeout)
 exchange.timeout = 30000
 
-# Một lần fetch 1d đủ cho BB1d + Min/Max 40d + RSI 1d + AB-AC + biên độ 30d + BB width AD-AE
+# Một lần fetch 1d đủ cho BB1d + Min/Max 40d + RSI 1d + biên độ 30d + BB width AF-AG
 _OHLCV_1D_LIMIT = 450
+
+
+def _listing_status_cell(market, max_len=200):
+    """
+    Chuỗi ngắn cho cột sheet: trạng thái niêm yết Binance (từ market['info'] + active).
+    Dùng cho AB (Futures) và AC (Spot).
+    """
+    if not market:
+        return ""
+    info = market.get("info") or {}
+    parts: list[str] = []
+    st = info.get("status")
+    if st is not None and st != "":
+        parts.append(str(st))
+    else:
+        parts.append("ACTIVE" if market.get("active") else "INACTIVE")
+    ctype = info.get("contractType")
+    if ctype:
+        parts.append(str(ctype))
+    for key, label in (("deliveryDate", "delivery"), ("onboardDate", "listed")):
+        raw = info.get(key)
+        if raw is None or str(raw) in ("0", "", "None"):
+            continue
+        try:
+            ms = int(raw)
+            if ms <= 0:
+                continue
+            if ms < 1_000_000_000_000:  # giây vs ms
+                sec = ms
+            else:
+                sec = ms // 1000
+            parts.append(f"{label} {datetime.fromtimestamp(sec).strftime('%Y-%m-%d')}")
+        except (TypeError, ValueError, OSError):
+            parts.append(f"{label} {raw}")
+    s = " | ".join(parts)
+    if len(s) > max_len:
+        s = s[: max_len - 3] + "..."
+    return s
 
 
 def _bb_upper_lower_from_closes(closing_prices, multiplier=2.0):
@@ -803,6 +841,33 @@ def do_it():
     )
     logger.info(f"Tiếp tục xử lý với {len(futures_symbols)} mã (đã loại {removed} mã)")
 
+    # Bước 4b: load markets một lần — AB (Futures) / AC (Spot) từ exchangeInfo qua CCXT
+    spot_markets_by_pair = {}
+    try:
+        spot_ex = exchange_class(
+            {
+                "enableRateLimit": True,
+                "options": {"defaultType": "spot"},
+            }
+        )
+        spot_ex.timeout = 30000
+        spot_ex.load_markets()
+        for sym, m in spot_ex.markets.items():
+            if not m or m.get("quote") != "USDT":
+                continue
+            if m.get("spot") and ":" not in sym and sym.endswith("/USDT"):
+                spot_markets_by_pair[sym] = m
+        print(f"📋 Spot USDT markets (cho cột AC): {len(spot_markets_by_pair)} cặp", flush=True)
+        logger.info(f"Đã tải spot markets: {len(spot_markets_by_pair)} cặp USDT")
+    except Exception as e:
+        logger.warning(f"Không tải được spot markets (cột AC): {e}")
+
+    try:
+        exchange.load_markets()
+        logger.info(f"Đã tải futures markets: {len(exchange.markets)} entries")
+    except Exception as e:
+        logger.warning(f"load_markets futures: {e}")
+
     
 
 
@@ -843,7 +908,7 @@ def do_it():
         logger.info(f"get_row_result bắt đầu: {symbol}")
         row = [pair, pct, price]
 
-        # --- 1) Một lần 1d: BB1d + Min/Max 40d + RSI 1d + AB-AC + P/Q 30d + AD-AE ---
+        # --- 1) Một lần 1d: BB1d + Min/Max 40d + RSI 1d + P/Q 30d + AD-AE ---
         ohlcv_1d = []
         try:
             ohlcv_1d = exchange.fetch_ohlcv(pair, "1d", limit=_OHLCV_1D_LIMIT)
@@ -977,25 +1042,28 @@ def do_it():
         vol_4h_last = round(float(ohlcv_4h[-1][5]) * float(ohlcv_4h[-1][4]), 2) if ohlcv_4h else 0.0
         row.append(vol_4h_last)
 
-        row.append("")
-        row.append("")
+        # AB: Futures (symbol đúng dạng BTC/USDT:USDT) | AC: Spot cùng base (BTC/USDT)
+        fut_m = exchange.markets.get(symbol) if getattr(exchange, "markets", None) else None
+        row.append(_listing_status_cell(fut_m))
+        spot_m = spot_markets_by_pair.get(pair)
+        row.append(_listing_status_cell(spot_m) if spot_m else "Không có spot")
 
         try:
             cutoff_ms = exchange.milliseconds() - 365 * 24 * 60 * 60 * 1000
             ohlcv_ab = [c for c in ohlcv_1d if c[0] >= cutoff_ms] or ohlcv_1d
             max_vol, max_date = _max_daily_volatility_from_ohlcv(ohlcv_ab)
             logger.info(f"✅ [{pair}] Biên độ lớn nhất: {max_vol}% vào {max_date}")
-            print(f"   └─ AB={max_vol}%, AC={max_date}", flush=True)
+            print(f"   └─ AD={max_vol}%, AE={max_date}", flush=True)
             row.append(max_vol)
             row.append(max_date)
         except Exception as e:
-            logger.error(f"❌ [{pair}] Lỗi AB-AC: {e}", exc_info=True)
-            print(f"   └─ ❌ Lỗi AB-AC: {e}", flush=True)
+            logger.error(f"❌ [{pair}] Lỗi AD-AE (biên độ ngày): {e}", exc_info=True)
+            print(f"   └─ ❌ Lỗi AD-AE: {e}", flush=True)
             row.extend([0, "N/A"])
 
         bw_3d, bw_now = _bb_width_3d_and_now_from_ohlcv(ohlcv_1d)
-        row.append(round(bw_3d * 100, 2) if bw_3d is not None else "")   # cột AD: BB Width 3d trước (%)
-        row.append(round(bw_now * 100, 2) if bw_now is not None else "")  # cột AE: BB Width hiện tại (%)
+        row.append(round(bw_3d * 100, 2) if bw_3d is not None else "")   # AF: BB Width 3d trước (%)
+        row.append(round(bw_now * 100, 2) if bw_now is not None else "")  # AG: BB Width hiện tại (%)
 
         rsi_4h = _rsi_wilder_from_closes(closes_4h, period=14)
         row.append(round(rsi_4h, 2) if rsi_4h is not None else "")
@@ -1192,8 +1260,8 @@ def do_it():
         "% đến BB1h dưới",             # Y
         "Vol 1h",                       # Z
         "Vol 4h",                       # AA
-        "",                             # AB: Trống
-        "Delist",                       # AC
+        "Futures (trạng thái)",         # AB — Binance USDT-M exchangeInfo
+        "Spot (trạng thái)",            # AC — Binance Spot exchangeInfo
         "Biên độ giá ngày lớn nhất (%)", # AD
         "Ngày biên độ lớn nhất",        # AE
         "BB width 1d (3 ngày trước)",   # AF
