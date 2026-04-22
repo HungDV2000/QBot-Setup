@@ -15,7 +15,9 @@ import utils
 import numpy as np
 import json
 import os
+import re
 import math
+import requests
 from data_collector import DataCollector, get_data_collector
 
 file_name = os.path.basename(os.path.abspath(__file__))  
@@ -57,7 +59,7 @@ is_test_mode = False
 ENABLE_DEBUG_DATA = True  # Ghi file logs/data/<SYMBOL>_dd_mm_yyyy.txt — tắt khi không cần debug
 
 # ─────────────────────────────────────────────────────────────────────────────
-# DEBUG: Tên cột theo thứ tự A→AJ (khớp với header_row trong do_it)
+# DEBUG: Tên cột theo thứ tự A→AK (khớp với header_row trong do_it)
 # ─────────────────────────────────────────────────────────────────────────────
 _DEBUG_COL_NAMES = [
     "Mã",                              # A
@@ -96,6 +98,7 @@ _DEBUG_COL_NAMES = [
     "RSI 14 (4h)",                     # AH
     "Vol 1h (hiện tại)",               # AI
     "Vol 1h MA20",                     # AJ
+    "Cảnh báo delist sắp tới",         # AK — từ thông báo Binance (Support)
 ]
 
 
@@ -214,6 +217,162 @@ def _listing_status_cell(market, max_len=200):
     if len(s) > max_len:
         s = s[: max_len - 3] + "..."
     return s
+
+
+# Binance Support — Delisting (catalogId=161), API dùng bởi trang announcement
+_BINANCE_CMS_LIST = "https://www.binance.com/bapi/apex/v1/public/apex/cms/article/list/query"
+_BINANCE_DELIST_CATALOG_ID = 161
+_CMS_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "lang": "en",
+    "Accept-Language": "en",
+}
+
+
+def _venue_from_delist_title(title: str) -> str:
+    t = title.lower()
+    if "binance futures" in t or "futures will delist" in t or "usdt-m" in t or "usdⓈ-m" in t:
+        return "FUT"
+    if "margin" in t and "futures" not in t and "futures will" not in t:
+        return "MG"
+    return "SPOT"
+
+
+def _extract_dates_from_text(text: str) -> list:
+    return re.findall(r"\d{4}-\d{2}-\d{2}", text or "")
+
+
+def _pick_upcoming_date(dates, today_d):
+    """Chọn mốc ngày gần nhất còn >= hôm nay (theo lịch)."""
+    if not dates:
+        return None
+    parsed = []
+    for d in dates:
+        try:
+            dt = datetime.strptime(d, "%Y-%m-%d").date()
+            parsed.append((dt, d))
+        except ValueError:
+            continue
+    future = [(dt, s) for dt, s in parsed if dt >= today_d]
+    if not future:
+        return None
+    future.sort(key=lambda x: x[0])
+    return future[0][1]
+
+
+def _symbol_tokens_from_delist_title(title: str) -> set:
+    """
+    Cố lấy mã base từ tiêu đề thông báo (USDT Perp: XXXUSDT; Spot: A, B, C; …).
+    Các bài 'Multiple…' không có cặp cụ thể → tập rỗng.
+    """
+    t = (title or "").upper()
+    bases: set = set()
+    for m in re.finditer(r"\b([A-Z0-9]{2,32})USDT\b", t):
+        b = m.group(1)
+        if b in ("USD", "USDC"):
+            continue
+        bases.add(b)
+    for m in re.finditer(r"\b([A-Z0-9]{2,20})USD\b", t):
+        b = m.group(1)
+        if b in ("USD", "USDT", "BUSD", "TUSD", "USDC", "USDD"):
+            continue
+        bases.add(b)
+    m = re.search(
+        r"(?:BINANCE )?WILL DELIST\s+(.+?)(?:\s+ON\s+\d{4}-\d{2}-\d{2}|\s+ON\s+\(|\(|\Z)",
+        t,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if m:
+        chunk = m.group(1)
+        chunk = re.sub(r"\s+", " ", chunk)
+        for noise in [
+            "MULTIPLE", "CONTRACTS", "PERPETUAL", "MARGIN", "LOAN", "SUPPORT", "REBRAND",
+            "AIRDROP", "PLAN", "USDT", "U.S.", "DOLLAR",
+        ]:
+            chunk = re.sub(rf"\b{noise}\b", " ", chunk, flags=re.I)
+        for part in re.split(r"[,;]|\s+AND\s+|\s+FROM\s+", chunk):
+            part = re.sub(r"[\(\)\[\]—\-]", " ", part).strip()
+            if not part:
+                continue
+            tok = re.sub(r"[^A-Z0-9]", "", part) if part else ""
+            if 2 <= len(tok) <= 20 and tok.isalnum() and not tok.isdigit():
+                bases.add(tok)
+    noise2 = {
+        "BINANCE", "FUTURES", "SPOT", "WILL", "NOTIFY", "NOTICE", "MARGIN", "REMOVAL",
+        "TRADING", "USDT", "USDC", "BUSD", "LOAN", "PAIR", "PAIRS", "DELIST", "SUPPORT", "ON",
+    }
+    bases = {b for b in bases if b not in noise2}
+    return bases
+
+
+def _build_upcoming_delist_by_pair() -> dict:
+    """
+    Trả về map: 'BASE/USDT' -> chuỗi hiển thị (FUT/SPOT/MG + ngày).
+    Chỉ dùng thông tin có trong tiêu đề; bài 'Multiple…' không tách được mã → bỏ qua.
+    """
+    today_d = datetime.now().date()
+    by_pair_venue: dict = {}  # pair -> {FUT: set(dates), SPOT: set(), MG: set()}
+
+    try:
+        r = requests.get(
+            _BINANCE_CMS_LIST,
+            params={
+                "type": 1,
+                "pageNo": 1,
+                "pageSize": 200,
+                "catalogId": _BINANCE_DELIST_CATALOG_ID,
+            },
+            headers=_CMS_HEADERS,
+            timeout=45,
+        )
+        r.raise_for_status()
+        data = r.json()
+        arts = (data.get("data") or {}).get("catalogs")
+        if not arts:
+            logger.warning("binance delist: không có catalogs")
+            return {}
+        articles = arts[0].get("articles") or []
+    except Exception as e:
+        logger.warning(f"binance delist: không tải được CMS: {e}")
+        return {}
+
+    for art in articles:
+        title = (art.get("title") or "").strip()
+        if not title:
+            continue
+        if re.search(r"Delist|Delisting|REMOVAL|Remove\s+(?:of|Spot|Margin)", title, re.I) is None:
+            continue
+        if re.search(
+            r"multiple|several|various",
+            title,
+            re.I,
+        ) and not re.search(r"([A-Z0-9]{2,32})USDT", title, re.I):
+            continue
+        dates = _extract_dates_from_text(title)
+        d_use = _pick_upcoming_date(dates, today_d)
+        if not d_use:
+            continue
+        venue = _venue_from_delist_title(title)
+        syms = _symbol_tokens_from_delist_title(title)
+        if not syms:
+            continue
+        for b in syms:
+            pkey = f"{b}/USDT"
+            by_pair_venue.setdefault(pkey, {})
+            by_pair_venue[pkey].setdefault(venue, set()).add(d_use)
+
+    flat: dict = {}
+    for pkey, venues in by_pair_venue.items():
+        parts: list = []
+        for v in ("FUT", "MG", "SPOT"):
+            if v not in venues:
+                continue
+            d_sorted = sorted(venues[v])[:3]
+            parts.append(f"{v} {', '.join(d_sorted)}")
+        if parts:
+            s = " | ".join(parts)
+            flat[pkey] = s[: 320] if len(s) > 320 else s
+    return flat
 
 
 def _bb_upper_lower_from_closes(closing_prices, multiplier=2.0):
@@ -887,6 +1046,11 @@ def do_it():
     
     
 
+    print("📣 Đang tải cảnh báo delist sắp tới (Binance Support, catalog 161)...", flush=True)
+    delist_warn_by_pair = _build_upcoming_delist_by_pair()
+    print(f"   └─ {len(delist_warn_by_pair)} cặp có cảnh báo từ tiêu đề thông báo", flush=True)
+    logger.info(f"Delist cảnh báo (map): {len(delist_warn_by_pair)} cặp")
+
     def get_row_result(symbol):
         """
         Gộp fetch OHLCV để giảm ~15+ request/mã (rate limit Binance) xuống còn vài request,
@@ -1076,6 +1240,9 @@ def do_it():
         else:
             row.extend(["", ""])
 
+        # AK: sắp delist theo thông báo (tiêu đề); bài "Multiple" không tách mã sẽ không có
+        row.append(delist_warn_by_pair.get(pair, ""))
+
         logger.info(f"get_row_result xong: {symbol}")
         if ENABLE_DEBUG_DATA:
             write_symbol_debug_log(symbol, row)
@@ -1087,7 +1254,7 @@ def do_it():
     tab_100_ma_2d_arr = []
     title1 = f"Top {cst.top_count} có % giảm giá nhiều nhất trong 24h"
     title2 = f"Top {cst.top_count} có % tăng giá nhiều nhất trong 24h"
-    empty_row = [""] * 36  # A-AJ
+    empty_row = [""] * 37  # A-AK
 
     # ── Hàng 3 & 4: BTCDOM và BTC cố định (luôn hiển thị bất kể tăng/giảm) ──
     # Thứ tự: BTCDOM trước (hàng 3), BTC sau (hàng 4)
@@ -1145,7 +1312,7 @@ def do_it():
     print(f"📉 BẮT ĐẦU XỬ LÝ {len(list_giam_nhieu_nhat)} MÃ GIẢM GIÁ (hàng 6-55)", flush=True)
     print(f"{'='*60}\n", flush=True)
 
-    title_row_giam = [title1] + [""] * 35  # A + B..AJ = 36 cột
+    title_row_giam = [title1] + [""] * 36  # A + B..AK
     tab_100_ma_2d_arr.append(title_row_giam)  # hàng 5
     logger.info(f"Đang lấy dữ liệu cho {len(list_giam_nhieu_nhat)} mã giảm...")
 
@@ -1176,7 +1343,7 @@ def do_it():
     print(f"📈 BẮT ĐẦU XỬ LÝ {len(list_tang_nhieu_nhat)} MÃ TĂNG GIÁ (hàng 57-106)", flush=True)
     print(f"{'='*60}\n", flush=True)
 
-    title_row_tang = [title2] + [""] * 35
+    title_row_tang = [title2] + [""] * 36
     tab_100_ma_2d_arr.append(title_row_tang)  # hàng 56
     logger.info(f"Đang lấy dữ liệu cho {len(list_tang_nhieu_nhat)} mã tăng...")
 
@@ -1222,7 +1389,7 @@ def do_it():
 
 
     # Không cần ghi thêm dữ liệu bổ sung cho BTC/BTCDOM vào cột P (BB1w)
-    # Tất cả các mã có đủ cột A–AJ
+    # Tất cả các mã có đủ cột A–AK
 
 
 
@@ -1269,6 +1436,7 @@ def do_it():
         "RSI 14 (4h)",                  # AH
         "Vol 1h (hiện tại)",            # AI
         "Vol 1h MA20",                  # AJ
+        "Cảnh báo delist sắp tới",      # AK thông báo Support (FUT/SPOT/MG + ngày)
     ]
     
     # Thêm header vào đầu array
