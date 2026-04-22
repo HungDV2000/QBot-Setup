@@ -226,6 +226,8 @@ _CMS_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "lang": "en",
     "Accept-Language": "en",
+    "clienttype": "web",
+    "Referer": "https://www.binance.com/en/support/announcement/list/161",
 }
 
 
@@ -242,8 +244,12 @@ def _extract_dates_from_text(text: str) -> list:
     return re.findall(r"\d{4}-\d{2}-\d{2}", text or "")
 
 
-def _pick_upcoming_date(dates, today_d):
-    """Chọn mốc ngày gần nhất còn >= hôm nay (theo lịch)."""
+def _pick_delist_date_for_article(dates, today_d):
+    """
+    Ưu tiên: ngày trong tiêu đề >= hôm nay (mốc sắp tới gần nhất).
+    Fallback: nếu không còn mốc tương lai, lấy ngày lớn nhất trong tiêu đề
+    nếu vẫn trong vòng 120 ngày gần đây (thông báo / delist vừa diễn ra — tránh cột AK trống hoàn toàn).
+    """
     if not dates:
         return None
     parsed = []
@@ -253,26 +259,33 @@ def _pick_upcoming_date(dates, today_d):
             parsed.append((dt, d))
         except ValueError:
             continue
-    future = [(dt, s) for dt, s in parsed if dt >= today_d]
-    if not future:
+    if not parsed:
         return None
-    future.sort(key=lambda x: x[0])
-    return future[0][1]
+    future = [(dt, s) for dt, s in parsed if dt >= today_d]
+    if future:
+        future.sort(key=lambda x: x[0])
+        return future[0][1]
+    # Không còn mốc tương lai: dùng ngày gần đây nhất (max) nếu trong 120 ngày
+    parsed.sort(key=lambda x: x[0])
+    last_dt, last_s = parsed[-1]
+    if (today_d - last_dt).days <= 120:
+        return last_s
+    return None
 
 
 def _symbol_tokens_from_delist_title(title: str) -> set:
     """
     Cố lấy mã base từ tiêu đề thông báo (USDT Perp: XXXUSDT; Spot: A, B, C; …).
-    Các bài 'Multiple…' không có cặp cụ thể → tập rỗng.
+    Lưu ý: \\b trước USDT không khớp RVVUSDT (V và U cùng \\w) — dùng lookaround.
     """
     t = (title or "").upper()
     bases: set = set()
-    for m in re.finditer(r"\b([A-Z0-9]{2,32})USDT\b", t):
+    for m in re.finditer(r"(?<![A-Z0-9])([A-Z0-9]{2,32})USDT(?![A-Z0-9])", t):
         b = m.group(1)
         if b in ("USD", "USDC"):
             continue
         bases.add(b)
-    for m in re.finditer(r"\b([A-Z0-9]{2,20})USD\b", t):
+    for m in re.finditer(r"(?<![A-Z0-9])([A-Z0-9]{2,20})USD(?![A-Z0-9])", t):
         b = m.group(1)
         if b in ("USD", "USDT", "BUSD", "TUSD", "USDC", "USDD"):
             continue
@@ -327,15 +340,20 @@ def _build_upcoming_delist_by_pair() -> dict:
         )
         r.raise_for_status()
         data = r.json()
+        if data.get("code") not in (None, "000000", 0, "0"):
+            logger.warning(f"binance delist: API code={data.get('code')} msg={data.get('message')}")
+            return {}
         arts = (data.get("data") or {}).get("catalogs")
         if not arts:
             logger.warning("binance delist: không có catalogs")
             return {}
         articles = arts[0].get("articles") or []
+        logger.info(f"binance delist: đọc được {len(articles)} bài catalog 161")
     except Exception as e:
         logger.warning(f"binance delist: không tải được CMS: {e}")
         return {}
 
+    articles_matched = 0
     for art in articles:
         title = (art.get("title") or "").strip()
         if not title:
@@ -346,21 +364,23 @@ def _build_upcoming_delist_by_pair() -> dict:
             r"multiple|several|various",
             title,
             re.I,
-        ) and not re.search(r"([A-Z0-9]{2,32})USDT", title, re.I):
+        ) and not re.search(r"(?<![A-Z0-9])([A-Z0-9]{2,32})USDT(?![A-Z0-9])", title, re.I):
             continue
         dates = _extract_dates_from_text(title)
-        d_use = _pick_upcoming_date(dates, today_d)
+        d_use = _pick_delist_date_for_article(dates, today_d)
         if not d_use:
             continue
         venue = _venue_from_delist_title(title)
         syms = _symbol_tokens_from_delist_title(title)
         if not syms:
             continue
+        articles_matched += 1
         for b in syms:
-            pkey = f"{b}/USDT"
+            pkey = f"{b.upper()}/USDT"
             by_pair_venue.setdefault(pkey, {})
             by_pair_venue[pkey].setdefault(venue, set()).add(d_use)
 
+    logger.info(f"binance delist: {articles_matched} bài có mã + ngày hợp lệ → {len(by_pair_venue)} cặp")
     flat: dict = {}
     for pkey, venues in by_pair_venue.items():
         parts: list = []
@@ -373,6 +393,21 @@ def _build_upcoming_delist_by_pair() -> dict:
             s = " | ".join(parts)
             flat[pkey] = s[: 320] if len(s) > 320 else s
     return flat
+
+
+def _delist_warn_lookup(dmap, pair):
+    """Khớp cặp BASE/USDT với map (không phân biệt hoa thường)."""
+    if not dmap or not pair:
+        return ""
+    if pair in dmap:
+        return dmap[pair]
+    pu = pair.upper()
+    if pu in dmap:
+        return dmap[pu]
+    for k, v in dmap.items():
+        if str(k).upper() == pu:
+            return v
+    return ""
 
 
 def _bb_upper_lower_from_closes(closing_prices, multiplier=2.0):
@@ -1240,8 +1275,8 @@ def do_it():
         else:
             row.extend(["", ""])
 
-        # AK: sắp delist theo thông báo (tiêu đề); bài "Multiple" không tách mã sẽ không có
-        row.append(delist_warn_by_pair.get(pair, ""))
+        # AK: sắp delist / delist gần đây theo thông báo (tiêu đề)
+        row.append(_delist_warn_lookup(delist_warn_by_pair, pair))
 
         logger.info(f"get_row_result xong: {symbol}")
         if ENABLE_DEBUG_DATA:
