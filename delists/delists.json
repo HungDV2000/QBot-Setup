@@ -1,0 +1,2882 @@
+[
+    {
+        "symbol": "DEGEN",
+        "delist_time": "2026-04-28 09:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/1d2b6970facd470dbba6a674e1595bd4",
+        "scraped_at": "2026-04-24 15:28:47"
+    },
+    {
+        "symbol": "1INCH",
+        "delist_time": "2026-04-24 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c498db770fa844e188bbad8cc5986674",
+        "scraped_at": "2026-04-24 15:28:47"
+    },
+    {
+        "symbol": "DEGO",
+        "delist_time": "2026-04-28 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/d067b373496c44a4ab8d28f3e90b66ad",
+        "scraped_at": "2026-04-24 15:28:54"
+    },
+    {
+        "symbol": "DENT",
+        "delist_time": "2026-04-28 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/d067b373496c44a4ab8d28f3e90b66ad",
+        "scraped_at": "2026-04-24 15:28:54"
+    },
+    {
+        "symbol": "TRU",
+        "delist_time": "2026-04-28 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/d067b373496c44a4ab8d28f3e90b66ad",
+        "scraped_at": "2026-04-24 15:28:54"
+    },
+    {
+        "symbol": "BAR",
+        "delist_time": "2026-04-17 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/bb7238d13db14c9ebce9fa8704e3098f",
+        "scraped_at": "2026-04-24 15:29:03"
+    },
+    {
+        "symbol": "PIVX",
+        "delist_time": "2026-04-17 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/bb7238d13db14c9ebce9fa8704e3098f",
+        "scraped_at": "2026-04-24 15:29:03"
+    },
+    {
+        "symbol": "XVG",
+        "delist_time": "2026-04-17 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/bb7238d13db14c9ebce9fa8704e3098f",
+        "scraped_at": "2026-04-24 15:29:03"
+    },
+    {
+        "symbol": "UTK",
+        "delist_time": "2026-04-14 14:30:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/895c114d247a41159cc7e4c913f42c36",
+        "scraped_at": "2026-04-24 15:29:03"
+    },
+    {
+        "symbol": "BIFI",
+        "delist_time": "2026-04-23 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/d26a627649ee44fca27e07672add9ac2",
+        "scraped_at": "2026-04-24 15:29:03"
+    },
+    {
+        "symbol": "FIO",
+        "delist_time": "2026-04-23 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/d26a627649ee44fca27e07672add9ac2",
+        "scraped_at": "2026-04-24 15:29:03"
+    },
+    {
+        "symbol": "FUN",
+        "delist_time": "2026-04-23 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/d26a627649ee44fca27e07672add9ac2",
+        "scraped_at": "2026-04-24 15:29:03"
+    },
+    {
+        "symbol": "MDT",
+        "delist_time": "2026-04-23 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/d26a627649ee44fca27e07672add9ac2",
+        "scraped_at": "2026-04-24 15:29:03"
+    },
+    {
+        "symbol": "OXT",
+        "delist_time": "2026-04-23 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/d26a627649ee44fca27e07672add9ac2",
+        "scraped_at": "2026-04-24 15:29:03"
+    },
+    {
+        "symbol": "WAN",
+        "delist_time": "2026-04-23 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/d26a627649ee44fca27e07672add9ac2",
+        "scraped_at": "2026-04-24 15:29:03"
+    },
+    {
+        "symbol": "WAN",
+        "delist_time": "2026-04-10 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/f263d2f8ac7e488ead84b181b12bb69d",
+        "scraped_at": "2026-04-24 15:29:10"
+    },
+    {
+        "symbol": "GRT",
+        "delist_time": "2026-04-10 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/946c744172a942399a6ce96506e03fce",
+        "scraped_at": "2026-04-24 15:29:10"
+    },
+    {
+        "symbol": "SOL",
+        "delist_time": "2026-04-10 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/946c744172a942399a6ce96506e03fce",
+        "scraped_at": "2026-04-24 15:29:10"
+    },
+    {
+        "symbol": "TRUMP",
+        "delist_time": "2026-04-10 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/946c744172a942399a6ce96506e03fce",
+        "scraped_at": "2026-04-24 15:29:10"
+    },
+    {
+        "symbol": "ALT",
+        "delist_time": "2026-04-02 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/262ee892d2db4fb6b4d2f152db53001c",
+        "scraped_at": "2026-04-24 15:29:20"
+    },
+    {
+        "symbol": "ARB",
+        "delist_time": "2026-04-02 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/262ee892d2db4fb6b4d2f152db53001c",
+        "scraped_at": "2026-04-24 15:29:20"
+    },
+    {
+        "symbol": "GALA",
+        "delist_time": "2026-04-02 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/262ee892d2db4fb6b4d2f152db53001c",
+        "scraped_at": "2026-04-24 15:29:20"
+    },
+    {
+        "symbol": "INJ",
+        "delist_time": "2026-04-02 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/262ee892d2db4fb6b4d2f152db53001c",
+        "scraped_at": "2026-04-24 15:29:20"
+    },
+    {
+        "symbol": "SOLV",
+        "delist_time": "2026-04-02 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/262ee892d2db4fb6b4d2f152db53001c",
+        "scraped_at": "2026-04-24 15:29:20"
+    },
+    {
+        "symbol": "XRP",
+        "delist_time": "2026-04-02 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/262ee892d2db4fb6b4d2f152db53001c",
+        "scraped_at": "2026-04-24 15:29:20"
+    },
+    {
+        "symbol": "ALT",
+        "delist_time": "2026-03-27 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c8fb39371ed44553b27d9e4419ca86d0",
+        "scraped_at": "2026-04-24 15:29:20"
+    },
+    {
+        "symbol": "CYBER",
+        "delist_time": "2026-03-27 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c8fb39371ed44553b27d9e4419ca86d0",
+        "scraped_at": "2026-04-24 15:29:20"
+    },
+    {
+        "symbol": "LSK",
+        "delist_time": "2026-03-27 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c8fb39371ed44553b27d9e4419ca86d0",
+        "scraped_at": "2026-04-24 15:29:20"
+    },
+    {
+        "symbol": "SAND",
+        "delist_time": "2026-03-27 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c8fb39371ed44553b27d9e4419ca86d0",
+        "scraped_at": "2026-04-24 15:29:20"
+    },
+    {
+        "symbol": "VET",
+        "delist_time": "2026-03-27 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c8fb39371ed44553b27d9e4419ca86d0",
+        "scraped_at": "2026-04-24 15:29:20"
+    },
+    {
+        "symbol": "A2Z",
+        "delist_time": "2026-04-01 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/ddac99c0e5044c13a13c7c113e530e2b",
+        "scraped_at": "2026-04-24 15:29:28"
+    },
+    {
+        "symbol": "FORTH",
+        "delist_time": "2026-04-01 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/ddac99c0e5044c13a13c7c113e530e2b",
+        "scraped_at": "2026-04-24 15:29:28"
+    },
+    {
+        "symbol": "HOOK",
+        "delist_time": "2026-04-01 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/ddac99c0e5044c13a13c7c113e530e2b",
+        "scraped_at": "2026-04-24 15:29:28"
+    },
+    {
+        "symbol": "IDEX",
+        "delist_time": "2026-04-01 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/ddac99c0e5044c13a13c7c113e530e2b",
+        "scraped_at": "2026-04-24 15:29:28"
+    },
+    {
+        "symbol": "LRC",
+        "delist_time": "2026-04-01 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/ddac99c0e5044c13a13c7c113e530e2b",
+        "scraped_at": "2026-04-24 15:29:28"
+    },
+    {
+        "symbol": "NTRN",
+        "delist_time": "2026-04-01 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/ddac99c0e5044c13a13c7c113e530e2b",
+        "scraped_at": "2026-04-24 15:29:28"
+    },
+    {
+        "symbol": "RDNT",
+        "delist_time": "2026-04-01 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/ddac99c0e5044c13a13c7c113e530e2b",
+        "scraped_at": "2026-04-24 15:29:28"
+    },
+    {
+        "symbol": "SXP",
+        "delist_time": "2026-04-01 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/ddac99c0e5044c13a13c7c113e530e2b",
+        "scraped_at": "2026-04-24 15:29:28"
+    },
+    {
+        "symbol": "ALCX",
+        "delist_time": "2026-03-30 00:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/6643b898afa54f3a9d96a53f432e068d",
+        "scraped_at": "2026-04-24 15:29:41"
+    },
+    {
+        "symbol": "MIRROR",
+        "delist_time": "2026-03-12 12:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e27183f5c08c48bd940bdd2d7f81eca4",
+        "scraped_at": "2026-04-24 15:29:49"
+    },
+    {
+        "symbol": "SHARDS",
+        "delist_time": "2026-03-12 12:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e27183f5c08c48bd940bdd2d7f81eca4",
+        "scraped_at": "2026-04-24 15:29:49"
+    },
+    {
+        "symbol": "FST",
+        "delist_time": "2026-03-12 12:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e27183f5c08c48bd940bdd2d7f81eca4",
+        "scraped_at": "2026-04-24 15:29:49"
+    },
+    {
+        "symbol": "DGC",
+        "delist_time": "2026-03-12 12:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e27183f5c08c48bd940bdd2d7f81eca4",
+        "scraped_at": "2026-04-24 15:29:49"
+    },
+    {
+        "symbol": "COA",
+        "delist_time": "2026-03-12 12:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e27183f5c08c48bd940bdd2d7f81eca4",
+        "scraped_at": "2026-04-24 15:29:49"
+    },
+    {
+        "symbol": "ULTI",
+        "delist_time": "2026-03-12 12:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e27183f5c08c48bd940bdd2d7f81eca4",
+        "scraped_at": "2026-04-24 15:29:49"
+    },
+    {
+        "symbol": "TGT",
+        "delist_time": "2026-03-12 12:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e27183f5c08c48bd940bdd2d7f81eca4",
+        "scraped_at": "2026-04-24 15:29:49"
+    },
+    {
+        "symbol": "AGON",
+        "delist_time": "2026-03-12 12:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e27183f5c08c48bd940bdd2d7f81eca4",
+        "scraped_at": "2026-04-24 15:29:49"
+    },
+    {
+        "symbol": "AFT",
+        "delist_time": "2026-03-12 12:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e27183f5c08c48bd940bdd2d7f81eca4",
+        "scraped_at": "2026-04-24 15:29:49"
+    },
+    {
+        "symbol": "PFVS",
+        "delist_time": "2026-03-12 12:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e27183f5c08c48bd940bdd2d7f81eca4",
+        "scraped_at": "2026-04-24 15:29:49"
+    },
+    {
+        "symbol": "SGC",
+        "delist_time": "2026-03-12 12:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e27183f5c08c48bd940bdd2d7f81eca4",
+        "scraped_at": "2026-04-24 15:29:49"
+    },
+    {
+        "symbol": "RDO",
+        "delist_time": "2026-03-12 12:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e27183f5c08c48bd940bdd2d7f81eca4",
+        "scraped_at": "2026-04-24 15:29:49"
+    },
+    {
+        "symbol": "ELDE",
+        "delist_time": "2026-03-12 12:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e27183f5c08c48bd940bdd2d7f81eca4",
+        "scraped_at": "2026-04-24 15:29:49"
+    },
+    {
+        "symbol": "MILK",
+        "delist_time": "2026-03-12 12:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e27183f5c08c48bd940bdd2d7f81eca4",
+        "scraped_at": "2026-04-24 15:29:49"
+    },
+    {
+        "symbol": "TAT",
+        "delist_time": "2026-03-12 12:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e27183f5c08c48bd940bdd2d7f81eca4",
+        "scraped_at": "2026-04-24 15:29:49"
+    },
+    {
+        "symbol": "BOT",
+        "delist_time": "2026-03-12 12:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e27183f5c08c48bd940bdd2d7f81eca4",
+        "scraped_at": "2026-04-24 15:29:49"
+    },
+    {
+        "symbol": "SSS",
+        "delist_time": "2026-03-12 12:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e27183f5c08c48bd940bdd2d7f81eca4",
+        "scraped_at": "2026-04-24 15:29:49"
+    },
+    {
+        "symbol": "SUBHUB",
+        "delist_time": "2026-03-12 12:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e27183f5c08c48bd940bdd2d7f81eca4",
+        "scraped_at": "2026-04-24 15:29:49"
+    },
+    {
+        "symbol": "PLANCK",
+        "delist_time": "2026-03-12 12:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e27183f5c08c48bd940bdd2d7f81eca4",
+        "scraped_at": "2026-04-24 15:29:49"
+    },
+    {
+        "symbol": "OOOO",
+        "delist_time": "2026-03-12 12:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e27183f5c08c48bd940bdd2d7f81eca4",
+        "scraped_at": "2026-04-24 15:29:49"
+    },
+    {
+        "symbol": "DODO",
+        "delist_time": "2026-03-13 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/cdc24bc5c7444ccebee3253a169cb67e",
+        "scraped_at": "2026-04-24 15:29:49"
+    },
+    {
+        "symbol": "GMT",
+        "delist_time": "2026-03-13 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/cdc24bc5c7444ccebee3253a169cb67e",
+        "scraped_at": "2026-04-24 15:29:49"
+    },
+    {
+        "symbol": "ARDR",
+        "delist_time": "2026-03-12 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/37a8026d1bbb4385916513623135ee2b",
+        "scraped_at": "2026-04-24 15:29:49"
+    },
+    {
+        "symbol": "ALCX",
+        "delist_time": "2026-02-27 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/4fccf352384c4f32b54d8f3184fe2af7",
+        "scraped_at": "2026-04-24 15:30:06"
+    },
+    {
+        "symbol": "AT",
+        "delist_time": "2026-02-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/d2c0b9f4c1e94260b04be48036522cfe",
+        "scraped_at": "2026-04-24 15:30:06"
+    },
+    {
+        "symbol": "AVAX",
+        "delist_time": "2026-02-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/d2c0b9f4c1e94260b04be48036522cfe",
+        "scraped_at": "2026-04-24 15:30:06"
+    },
+    {
+        "symbol": "BANANA",
+        "delist_time": "2026-02-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/d2c0b9f4c1e94260b04be48036522cfe",
+        "scraped_at": "2026-04-24 15:30:06"
+    },
+    {
+        "symbol": "COTI",
+        "delist_time": "2026-02-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/d2c0b9f4c1e94260b04be48036522cfe",
+        "scraped_at": "2026-04-24 15:30:06"
+    },
+    {
+        "symbol": "FF",
+        "delist_time": "2026-02-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/d2c0b9f4c1e94260b04be48036522cfe",
+        "scraped_at": "2026-04-24 15:30:06"
+    },
+    {
+        "symbol": "HIVE",
+        "delist_time": "2026-02-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/d2c0b9f4c1e94260b04be48036522cfe",
+        "scraped_at": "2026-04-24 15:30:06"
+    },
+    {
+        "symbol": "IO",
+        "delist_time": "2026-02-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/d2c0b9f4c1e94260b04be48036522cfe",
+        "scraped_at": "2026-04-24 15:30:06"
+    },
+    {
+        "symbol": "LRC",
+        "delist_time": "2026-02-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/d2c0b9f4c1e94260b04be48036522cfe",
+        "scraped_at": "2026-04-24 15:30:06"
+    },
+    {
+        "symbol": "MANA",
+        "delist_time": "2026-02-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/d2c0b9f4c1e94260b04be48036522cfe",
+        "scraped_at": "2026-04-24 15:30:06"
+    },
+    {
+        "symbol": "SAGA",
+        "delist_time": "2026-02-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/d2c0b9f4c1e94260b04be48036522cfe",
+        "scraped_at": "2026-04-24 15:30:06"
+    },
+    {
+        "symbol": "XPL",
+        "delist_time": "2026-02-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/d2c0b9f4c1e94260b04be48036522cfe",
+        "scraped_at": "2026-04-24 15:30:06"
+    },
+    {
+        "symbol": "ZK",
+        "delist_time": "2026-02-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/d2c0b9f4c1e94260b04be48036522cfe",
+        "scraped_at": "2026-04-24 15:30:06"
+    },
+    {
+        "symbol": "QNT",
+        "delist_time": "2026-02-13 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/42fa3f9c987b406b83f35f4460ca2714",
+        "scraped_at": "2026-04-24 15:30:06"
+    },
+    {
+        "symbol": "GRT",
+        "delist_time": "2026-02-13 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/42fa3f9c987b406b83f35f4460ca2714",
+        "scraped_at": "2026-04-24 15:30:06"
+    },
+    {
+        "symbol": "CFX",
+        "delist_time": "2026-02-13 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/42fa3f9c987b406b83f35f4460ca2714",
+        "scraped_at": "2026-04-24 15:30:06"
+    },
+    {
+        "symbol": "IOTA",
+        "delist_time": "2026-02-13 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/42fa3f9c987b406b83f35f4460ca2714",
+        "scraped_at": "2026-04-24 15:30:06"
+    },
+    {
+        "symbol": "ROSE",
+        "delist_time": "2026-02-13 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/42fa3f9c987b406b83f35f4460ca2714",
+        "scraped_at": "2026-04-24 15:30:06"
+    },
+    {
+        "symbol": "THETA",
+        "delist_time": "2026-02-13 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/42fa3f9c987b406b83f35f4460ca2714",
+        "scraped_at": "2026-04-24 15:30:06"
+    },
+    {
+        "symbol": "SAND",
+        "delist_time": "2026-02-13 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/42fa3f9c987b406b83f35f4460ca2714",
+        "scraped_at": "2026-04-24 15:30:06"
+    },
+    {
+        "symbol": "RUNE",
+        "delist_time": "2026-02-13 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/42fa3f9c987b406b83f35f4460ca2714",
+        "scraped_at": "2026-04-24 15:30:06"
+    },
+    {
+        "symbol": "ALGO",
+        "delist_time": "2026-02-13 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/42fa3f9c987b406b83f35f4460ca2714",
+        "scraped_at": "2026-04-24 15:30:06"
+    },
+    {
+        "symbol": "LPT",
+        "delist_time": "2026-02-13 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/42fa3f9c987b406b83f35f4460ca2714",
+        "scraped_at": "2026-04-24 15:30:06"
+    },
+    {
+        "symbol": "ARDR",
+        "delist_time": "2026-02-10 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/fa494850a7a34b4ebdc6e55beb40f63f",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "BB",
+        "delist_time": "2026-02-10 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/fa494850a7a34b4ebdc6e55beb40f63f",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "BERA",
+        "delist_time": "2026-02-10 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/fa494850a7a34b4ebdc6e55beb40f63f",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "DIA",
+        "delist_time": "2026-02-10 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/fa494850a7a34b4ebdc6e55beb40f63f",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "FLUX",
+        "delist_time": "2026-02-10 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/fa494850a7a34b4ebdc6e55beb40f63f",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "GALA",
+        "delist_time": "2026-02-10 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/fa494850a7a34b4ebdc6e55beb40f63f",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "GPS",
+        "delist_time": "2026-02-10 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/fa494850a7a34b4ebdc6e55beb40f63f",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "GRT",
+        "delist_time": "2026-02-10 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/fa494850a7a34b4ebdc6e55beb40f63f",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "GUN",
+        "delist_time": "2026-02-10 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/fa494850a7a34b4ebdc6e55beb40f63f",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "ICP",
+        "delist_time": "2026-02-10 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/fa494850a7a34b4ebdc6e55beb40f63f",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "ICX",
+        "delist_time": "2026-02-10 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/fa494850a7a34b4ebdc6e55beb40f63f",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "KAITO",
+        "delist_time": "2026-02-10 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/fa494850a7a34b4ebdc6e55beb40f63f",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "KERNEL",
+        "delist_time": "2026-02-10 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/fa494850a7a34b4ebdc6e55beb40f63f",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "MANA",
+        "delist_time": "2026-02-10 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/fa494850a7a34b4ebdc6e55beb40f63f",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "NOM",
+        "delist_time": "2026-02-10 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/fa494850a7a34b4ebdc6e55beb40f63f",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "REQ",
+        "delist_time": "2026-02-10 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/fa494850a7a34b4ebdc6e55beb40f63f",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "XNO",
+        "delist_time": "2026-02-10 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/fa494850a7a34b4ebdc6e55beb40f63f",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "YGG",
+        "delist_time": "2026-02-10 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/fa494850a7a34b4ebdc6e55beb40f63f",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "ZRO",
+        "delist_time": "2026-02-10 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/fa494850a7a34b4ebdc6e55beb40f63f",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "AUDIO",
+        "delist_time": "2026-02-06 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/53d255cc249741b7965558493b46f5e6",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "BB",
+        "delist_time": "2026-02-06 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/53d255cc249741b7965558493b46f5e6",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "BERA",
+        "delist_time": "2026-02-06 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/53d255cc249741b7965558493b46f5e6",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "EIGEN",
+        "delist_time": "2026-02-06 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/53d255cc249741b7965558493b46f5e6",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "FIDA",
+        "delist_time": "2026-02-06 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/53d255cc249741b7965558493b46f5e6",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "HEI",
+        "delist_time": "2026-02-06 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/53d255cc249741b7965558493b46f5e6",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "IOTX",
+        "delist_time": "2026-02-06 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/53d255cc249741b7965558493b46f5e6",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "KERNEL",
+        "delist_time": "2026-02-06 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/53d255cc249741b7965558493b46f5e6",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "MANTA",
+        "delist_time": "2026-02-06 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/53d255cc249741b7965558493b46f5e6",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "MTL",
+        "delist_time": "2026-02-06 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/53d255cc249741b7965558493b46f5e6",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "NEAR",
+        "delist_time": "2026-02-06 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/53d255cc249741b7965558493b46f5e6",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "PEOPLE",
+        "delist_time": "2026-02-06 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/53d255cc249741b7965558493b46f5e6",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "RENDER",
+        "delist_time": "2026-02-06 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/53d255cc249741b7965558493b46f5e6",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "RONIN",
+        "delist_time": "2026-02-06 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/53d255cc249741b7965558493b46f5e6",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "SAPIEN",
+        "delist_time": "2026-02-06 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/53d255cc249741b7965558493b46f5e6",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "SCR",
+        "delist_time": "2026-02-06 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/53d255cc249741b7965558493b46f5e6",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "SUSHI",
+        "delist_time": "2026-02-06 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/53d255cc249741b7965558493b46f5e6",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "VANA",
+        "delist_time": "2026-02-06 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/53d255cc249741b7965558493b46f5e6",
+        "scraped_at": "2026-04-24 15:30:15"
+    },
+    {
+        "symbol": "KNC",
+        "delist_time": "2026-02-06 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/511c2fbe48a6429f91ad28d99cffc826",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "COTI",
+        "delist_time": "2026-02-06 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/511c2fbe48a6429f91ad28d99cffc826",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "BAT",
+        "delist_time": "2026-02-06 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/511c2fbe48a6429f91ad28d99cffc826",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "DUSK",
+        "delist_time": "2026-02-06 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/511c2fbe48a6429f91ad28d99cffc826",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "RLC",
+        "delist_time": "2026-02-06 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/511c2fbe48a6429f91ad28d99cffc826",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "GRT",
+        "delist_time": "2026-02-06 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/511c2fbe48a6429f91ad28d99cffc826",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "GLM",
+        "delist_time": "2026-02-06 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/511c2fbe48a6429f91ad28d99cffc826",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "KAVA",
+        "delist_time": "2026-02-06 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/511c2fbe48a6429f91ad28d99cffc826",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "JST",
+        "delist_time": "2026-02-06 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/511c2fbe48a6429f91ad28d99cffc826",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "CTK",
+        "delist_time": "2026-02-06 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/511c2fbe48a6429f91ad28d99cffc826",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "ARKM",
+        "delist_time": "2026-02-03 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/39afd25e6e09454bb29d06e972b7a033",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "ASTR",
+        "delist_time": "2026-02-03 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/39afd25e6e09454bb29d06e972b7a033",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "AWE",
+        "delist_time": "2026-02-03 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/39afd25e6e09454bb29d06e972b7a033",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "BANANA",
+        "delist_time": "2026-02-03 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/39afd25e6e09454bb29d06e972b7a033",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "DYDX",
+        "delist_time": "2026-02-03 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/39afd25e6e09454bb29d06e972b7a033",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "EUL",
+        "delist_time": "2026-02-03 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/39afd25e6e09454bb29d06e972b7a033",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "IMX",
+        "delist_time": "2026-02-03 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/39afd25e6e09454bb29d06e972b7a033",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "JTO",
+        "delist_time": "2026-02-03 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/39afd25e6e09454bb29d06e972b7a033",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "KSM",
+        "delist_time": "2026-02-03 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/39afd25e6e09454bb29d06e972b7a033",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "LINEA",
+        "delist_time": "2026-02-03 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/39afd25e6e09454bb29d06e972b7a033",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "LINK",
+        "delist_time": "2026-02-03 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/39afd25e6e09454bb29d06e972b7a033",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "NEAR",
+        "delist_time": "2026-02-03 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/39afd25e6e09454bb29d06e972b7a033",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "NFP",
+        "delist_time": "2026-02-03 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/39afd25e6e09454bb29d06e972b7a033",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "PIVX",
+        "delist_time": "2026-02-03 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/39afd25e6e09454bb29d06e972b7a033",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "PNUT",
+        "delist_time": "2026-02-03 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/39afd25e6e09454bb29d06e972b7a033",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "QTUM",
+        "delist_time": "2026-02-03 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/39afd25e6e09454bb29d06e972b7a033",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "SCRT",
+        "delist_time": "2026-02-03 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/39afd25e6e09454bb29d06e972b7a033",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "SNX",
+        "delist_time": "2026-02-03 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/39afd25e6e09454bb29d06e972b7a033",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "STG",
+        "delist_time": "2026-02-03 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/39afd25e6e09454bb29d06e972b7a033",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "SYS",
+        "delist_time": "2026-02-03 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/39afd25e6e09454bb29d06e972b7a033",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "UTK",
+        "delist_time": "2026-02-03 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/39afd25e6e09454bb29d06e972b7a033",
+        "scraped_at": "2026-04-24 15:30:26"
+    },
+    {
+        "symbol": "ACA",
+        "delist_time": "2026-02-13 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/87a9bdf137f348668a85575ee02b8a27",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "CHESS",
+        "delist_time": "2026-02-13 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/87a9bdf137f348668a85575ee02b8a27",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "DATA",
+        "delist_time": "2026-02-13 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/87a9bdf137f348668a85575ee02b8a27",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "DF",
+        "delist_time": "2026-02-13 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/87a9bdf137f348668a85575ee02b8a27",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "GHST",
+        "delist_time": "2026-02-13 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/87a9bdf137f348668a85575ee02b8a27",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "NKN",
+        "delist_time": "2026-02-13 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/87a9bdf137f348668a85575ee02b8a27",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "ARPA",
+        "delist_time": "2026-01-30 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/ed20e109dd4648b7a2f0c4a9ff725c4c",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "AXS",
+        "delist_time": "2026-01-30 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/ed20e109dd4648b7a2f0c4a9ff725c4c",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "BEL",
+        "delist_time": "2026-01-30 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/ed20e109dd4648b7a2f0c4a9ff725c4c",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "BERA",
+        "delist_time": "2026-01-30 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/ed20e109dd4648b7a2f0c4a9ff725c4c",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "ENSO",
+        "delist_time": "2026-01-30 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/ed20e109dd4648b7a2f0c4a9ff725c4c",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "FORTH",
+        "delist_time": "2026-01-30 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/ed20e109dd4648b7a2f0c4a9ff725c4c",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "HEMI",
+        "delist_time": "2026-01-30 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/ed20e109dd4648b7a2f0c4a9ff725c4c",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "ILV",
+        "delist_time": "2026-01-30 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/ed20e109dd4648b7a2f0c4a9ff725c4c",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "JOE",
+        "delist_time": "2026-01-30 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/ed20e109dd4648b7a2f0c4a9ff725c4c",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "MAV",
+        "delist_time": "2026-01-30 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/ed20e109dd4648b7a2f0c4a9ff725c4c",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "NEAR",
+        "delist_time": "2026-01-30 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/ed20e109dd4648b7a2f0c4a9ff725c4c",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "NTRN",
+        "delist_time": "2026-01-30 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/ed20e109dd4648b7a2f0c4a9ff725c4c",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "PHB",
+        "delist_time": "2026-01-30 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/ed20e109dd4648b7a2f0c4a9ff725c4c",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "PLUME",
+        "delist_time": "2026-01-30 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/ed20e109dd4648b7a2f0c4a9ff725c4c",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "RED",
+        "delist_time": "2026-01-30 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/ed20e109dd4648b7a2f0c4a9ff725c4c",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "SC",
+        "delist_time": "2026-01-30 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/ed20e109dd4648b7a2f0c4a9ff725c4c",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "SEI",
+        "delist_time": "2026-01-30 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/ed20e109dd4648b7a2f0c4a9ff725c4c",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "SKL",
+        "delist_time": "2026-01-30 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/ed20e109dd4648b7a2f0c4a9ff725c4c",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "SOMI",
+        "delist_time": "2026-01-30 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/ed20e109dd4648b7a2f0c4a9ff725c4c",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "WIZARD",
+        "delist_time": "2026-01-29 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/482d63d2b376420e808ddbe160c488bb",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "SHOGGOTH",
+        "delist_time": "2026-01-29 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/482d63d2b376420e808ddbe160c488bb",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "FWOG",
+        "delist_time": "2026-01-29 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/482d63d2b376420e808ddbe160c488bb",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "UFD",
+        "delist_time": "2026-01-29 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/482d63d2b376420e808ddbe160c488bb",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "BRIC",
+        "delist_time": "2026-01-29 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/482d63d2b376420e808ddbe160c488bb",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "UPTOP",
+        "delist_time": "2026-01-29 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/482d63d2b376420e808ddbe160c488bb",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "PORT3",
+        "delist_time": "2026-01-29 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/482d63d2b376420e808ddbe160c488bb",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "XNAP",
+        "delist_time": "2026-01-29 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/482d63d2b376420e808ddbe160c488bb",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "MORE",
+        "delist_time": "2026-01-29 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/482d63d2b376420e808ddbe160c488bb",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "BOMB",
+        "delist_time": "2026-01-29 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/482d63d2b376420e808ddbe160c488bb",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "BOOST",
+        "delist_time": "2026-01-29 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/482d63d2b376420e808ddbe160c488bb",
+        "scraped_at": "2026-04-24 15:30:35"
+    },
+    {
+        "symbol": "1INCH",
+        "delist_time": "2026-01-30 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/fb18d08c2d8b48cfb92aec286b100572",
+        "scraped_at": "2026-04-24 15:30:44"
+    },
+    {
+        "symbol": "AI",
+        "delist_time": "2026-01-23 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/1ced2fdbcfeb49c9a27c70015aab3aba",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "ALLO",
+        "delist_time": "2026-01-23 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/1ced2fdbcfeb49c9a27c70015aab3aba",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "APE",
+        "delist_time": "2026-01-23 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/1ced2fdbcfeb49c9a27c70015aab3aba",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "AUCTION",
+        "delist_time": "2026-01-23 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/1ced2fdbcfeb49c9a27c70015aab3aba",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "DYDX",
+        "delist_time": "2026-01-23 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/1ced2fdbcfeb49c9a27c70015aab3aba",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "ENA",
+        "delist_time": "2026-01-23 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/1ced2fdbcfeb49c9a27c70015aab3aba",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "FIL",
+        "delist_time": "2026-01-23 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/1ced2fdbcfeb49c9a27c70015aab3aba",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "ID",
+        "delist_time": "2026-01-23 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/1ced2fdbcfeb49c9a27c70015aab3aba",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "KITE",
+        "delist_time": "2026-01-23 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/1ced2fdbcfeb49c9a27c70015aab3aba",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "LDO",
+        "delist_time": "2026-01-23 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/1ced2fdbcfeb49c9a27c70015aab3aba",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "LRC",
+        "delist_time": "2026-01-23 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/1ced2fdbcfeb49c9a27c70015aab3aba",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "NMR",
+        "delist_time": "2026-01-23 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/1ced2fdbcfeb49c9a27c70015aab3aba",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "PNUT",
+        "delist_time": "2026-01-23 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/1ced2fdbcfeb49c9a27c70015aab3aba",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "PYR",
+        "delist_time": "2026-01-23 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/1ced2fdbcfeb49c9a27c70015aab3aba",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "STRK",
+        "delist_time": "2026-01-23 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/1ced2fdbcfeb49c9a27c70015aab3aba",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "XVG",
+        "delist_time": "2026-01-23 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/1ced2fdbcfeb49c9a27c70015aab3aba",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "YFI",
+        "delist_time": "2026-01-23 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/1ced2fdbcfeb49c9a27c70015aab3aba",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "ZIL",
+        "delist_time": "2026-01-23 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/1ced2fdbcfeb49c9a27c70015aab3aba",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "YGG",
+        "delist_time": "2026-01-23 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e02cbd00b40b4c4198ff14791777091b",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "ARPA",
+        "delist_time": "2026-01-23 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e02cbd00b40b4c4198ff14791777091b",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "OGN",
+        "delist_time": "2026-01-23 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e02cbd00b40b4c4198ff14791777091b",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "COMP",
+        "delist_time": "2026-01-23 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e02cbd00b40b4c4198ff14791777091b",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "SUPER",
+        "delist_time": "2026-01-23 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e02cbd00b40b4c4198ff14791777091b",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "JOE",
+        "delist_time": "2026-01-23 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e02cbd00b40b4c4198ff14791777091b",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "CELO",
+        "delist_time": "2026-01-23 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e02cbd00b40b4c4198ff14791777091b",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "VET",
+        "delist_time": "2026-01-23 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e02cbd00b40b4c4198ff14791777091b",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "GAS",
+        "delist_time": "2026-01-23 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e02cbd00b40b4c4198ff14791777091b",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "DIA",
+        "delist_time": "2026-01-23 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e02cbd00b40b4c4198ff14791777091b",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "0G",
+        "delist_time": "2026-01-20 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/811fb1daf8804536bcfa3a0bafcc6cec",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "1MBABYDOGE",
+        "delist_time": "2026-01-20 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/811fb1daf8804536bcfa3a0bafcc6cec",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "ADX",
+        "delist_time": "2026-01-20 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/811fb1daf8804536bcfa3a0bafcc6cec",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "AGLD",
+        "delist_time": "2026-01-20 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/811fb1daf8804536bcfa3a0bafcc6cec",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "ALT",
+        "delist_time": "2026-01-20 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/811fb1daf8804536bcfa3a0bafcc6cec",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "ARKM",
+        "delist_time": "2026-01-20 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/811fb1daf8804536bcfa3a0bafcc6cec",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "ATOM",
+        "delist_time": "2026-01-20 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/811fb1daf8804536bcfa3a0bafcc6cec",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "ENS",
+        "delist_time": "2026-01-20 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/811fb1daf8804536bcfa3a0bafcc6cec",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "HOLO",
+        "delist_time": "2026-01-20 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/811fb1daf8804536bcfa3a0bafcc6cec",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "MOVR",
+        "delist_time": "2026-01-20 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/811fb1daf8804536bcfa3a0bafcc6cec",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "NEWT",
+        "delist_time": "2026-01-20 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/811fb1daf8804536bcfa3a0bafcc6cec",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "OP",
+        "delist_time": "2026-01-20 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/811fb1daf8804536bcfa3a0bafcc6cec",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "ORDI",
+        "delist_time": "2026-01-20 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/811fb1daf8804536bcfa3a0bafcc6cec",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "OXT",
+        "delist_time": "2026-01-20 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/811fb1daf8804536bcfa3a0bafcc6cec",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "POLYX",
+        "delist_time": "2026-01-20 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/811fb1daf8804536bcfa3a0bafcc6cec",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "SLP",
+        "delist_time": "2026-01-20 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/811fb1daf8804536bcfa3a0bafcc6cec",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "SSV",
+        "delist_time": "2026-01-20 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/811fb1daf8804536bcfa3a0bafcc6cec",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "STORJ",
+        "delist_time": "2026-01-20 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/811fb1daf8804536bcfa3a0bafcc6cec",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "TRB",
+        "delist_time": "2026-01-20 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/811fb1daf8804536bcfa3a0bafcc6cec",
+        "scraped_at": "2026-04-24 15:30:56"
+    },
+    {
+        "symbol": "2Z",
+        "delist_time": "2026-01-16 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c1d4248f495a413685155eaf10f73381",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "AAVE",
+        "delist_time": "2026-01-16 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c1d4248f495a413685155eaf10f73381",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "APE",
+        "delist_time": "2026-01-16 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c1d4248f495a413685155eaf10f73381",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "API3",
+        "delist_time": "2026-01-16 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c1d4248f495a413685155eaf10f73381",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "ARB",
+        "delist_time": "2026-01-16 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c1d4248f495a413685155eaf10f73381",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "EUL",
+        "delist_time": "2026-01-16 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c1d4248f495a413685155eaf10f73381",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "FET",
+        "delist_time": "2026-01-16 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c1d4248f495a413685155eaf10f73381",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "HMSTR",
+        "delist_time": "2026-01-16 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c1d4248f495a413685155eaf10f73381",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "LAYER",
+        "delist_time": "2026-01-16 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c1d4248f495a413685155eaf10f73381",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "MIRA",
+        "delist_time": "2026-01-16 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c1d4248f495a413685155eaf10f73381",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "OP",
+        "delist_time": "2026-01-16 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c1d4248f495a413685155eaf10f73381",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "ORDI",
+        "delist_time": "2026-01-16 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c1d4248f495a413685155eaf10f73381",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "PYTH",
+        "delist_time": "2026-01-16 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c1d4248f495a413685155eaf10f73381",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "TRX",
+        "delist_time": "2026-01-16 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c1d4248f495a413685155eaf10f73381",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "WCT",
+        "delist_time": "2026-01-16 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c1d4248f495a413685155eaf10f73381",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "YB",
+        "delist_time": "2026-01-16 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c1d4248f495a413685155eaf10f73381",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "ZBT",
+        "delist_time": "2026-01-16 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c1d4248f495a413685155eaf10f73381",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "ZKC",
+        "delist_time": "2026-01-16 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c1d4248f495a413685155eaf10f73381",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "AUDIO",
+        "delist_time": "2026-01-15 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/9a5ed5122b2245b1896349d03cbd6732",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "SUSHI",
+        "delist_time": "2026-01-15 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/9a5ed5122b2245b1896349d03cbd6732",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "MTL",
+        "delist_time": "2026-01-15 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/9a5ed5122b2245b1896349d03cbd6732",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "IOTX",
+        "delist_time": "2026-01-15 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/9a5ed5122b2245b1896349d03cbd6732",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "SLP",
+        "delist_time": "2026-01-15 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/9a5ed5122b2245b1896349d03cbd6732",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "TRB",
+        "delist_time": "2026-01-15 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/9a5ed5122b2245b1896349d03cbd6732",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "PYR",
+        "delist_time": "2026-01-15 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/9a5ed5122b2245b1896349d03cbd6732",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "EGLD",
+        "delist_time": "2026-01-15 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/9a5ed5122b2245b1896349d03cbd6732",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "ENS",
+        "delist_time": "2026-01-15 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/9a5ed5122b2245b1896349d03cbd6732",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "APE",
+        "delist_time": "2026-01-15 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/9a5ed5122b2245b1896349d03cbd6732",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "NEO",
+        "delist_time": "2026-01-15 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/9a5ed5122b2245b1896349d03cbd6732",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "NMR",
+        "delist_time": "2026-01-15 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/9a5ed5122b2245b1896349d03cbd6732",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "SHIB",
+        "delist_time": "2026-01-15 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/9a5ed5122b2245b1896349d03cbd6732",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "MINA",
+        "delist_time": "2026-01-15 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/9a5ed5122b2245b1896349d03cbd6732",
+        "scraped_at": "2026-04-24 15:31:06"
+    },
+    {
+        "symbol": "ACT",
+        "delist_time": "2026-01-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/94f1030719d24fa7bfd3f88aa9d9f4bc",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "AEVO",
+        "delist_time": "2026-01-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/94f1030719d24fa7bfd3f88aa9d9f4bc",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "AR",
+        "delist_time": "2026-01-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/94f1030719d24fa7bfd3f88aa9d9f4bc",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "DOGS",
+        "delist_time": "2026-01-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/94f1030719d24fa7bfd3f88aa9d9f4bc",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "HEMI",
+        "delist_time": "2026-01-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/94f1030719d24fa7bfd3f88aa9d9f4bc",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "HFT",
+        "delist_time": "2026-01-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/94f1030719d24fa7bfd3f88aa9d9f4bc",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "IO",
+        "delist_time": "2026-01-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/94f1030719d24fa7bfd3f88aa9d9f4bc",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "MEME",
+        "delist_time": "2026-01-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/94f1030719d24fa7bfd3f88aa9d9f4bc",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "NFP",
+        "delist_time": "2026-01-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/94f1030719d24fa7bfd3f88aa9d9f4bc",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "PENDLE",
+        "delist_time": "2026-01-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/94f1030719d24fa7bfd3f88aa9d9f4bc",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "PHA",
+        "delist_time": "2026-01-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/94f1030719d24fa7bfd3f88aa9d9f4bc",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "RARE",
+        "delist_time": "2026-01-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/94f1030719d24fa7bfd3f88aa9d9f4bc",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "RAY",
+        "delist_time": "2026-01-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/94f1030719d24fa7bfd3f88aa9d9f4bc",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "RED",
+        "delist_time": "2026-01-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/94f1030719d24fa7bfd3f88aa9d9f4bc",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "SAND",
+        "delist_time": "2026-01-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/94f1030719d24fa7bfd3f88aa9d9f4bc",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "SHELL",
+        "delist_time": "2026-01-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/94f1030719d24fa7bfd3f88aa9d9f4bc",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "SXP",
+        "delist_time": "2026-01-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/94f1030719d24fa7bfd3f88aa9d9f4bc",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "TURTLE",
+        "delist_time": "2026-01-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/94f1030719d24fa7bfd3f88aa9d9f4bc",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "ZBT",
+        "delist_time": "2026-01-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/94f1030719d24fa7bfd3f88aa9d9f4bc",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "ZK",
+        "delist_time": "2026-01-13 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/94f1030719d24fa7bfd3f88aa9d9f4bc",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "1000SATS",
+        "delist_time": "2026-01-09 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/54bb43542d164f4ca6de56280cf20e92",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "2Z",
+        "delist_time": "2026-01-09 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/54bb43542d164f4ca6de56280cf20e92",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "AEVO",
+        "delist_time": "2026-01-09 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/54bb43542d164f4ca6de56280cf20e92",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "BARD",
+        "delist_time": "2026-01-09 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/54bb43542d164f4ca6de56280cf20e92",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "BIO",
+        "delist_time": "2026-01-09 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/54bb43542d164f4ca6de56280cf20e92",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "DOLO",
+        "delist_time": "2026-01-09 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/54bb43542d164f4ca6de56280cf20e92",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "EDEN",
+        "delist_time": "2026-01-09 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/54bb43542d164f4ca6de56280cf20e92",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "EGLD",
+        "delist_time": "2026-01-09 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/54bb43542d164f4ca6de56280cf20e92",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "ETHFI",
+        "delist_time": "2026-01-09 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/54bb43542d164f4ca6de56280cf20e92",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "GLMR",
+        "delist_time": "2026-01-09 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/54bb43542d164f4ca6de56280cf20e92",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "HOT",
+        "delist_time": "2026-01-09 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/54bb43542d164f4ca6de56280cf20e92",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "HUMA",
+        "delist_time": "2026-01-09 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/54bb43542d164f4ca6de56280cf20e92",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "IOTA",
+        "delist_time": "2026-01-09 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/54bb43542d164f4ca6de56280cf20e92",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "KAITO",
+        "delist_time": "2026-01-09 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/54bb43542d164f4ca6de56280cf20e92",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "MIRA",
+        "delist_time": "2026-01-09 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/54bb43542d164f4ca6de56280cf20e92",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "MORPHO",
+        "delist_time": "2026-01-09 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/54bb43542d164f4ca6de56280cf20e92",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "NEIRO",
+        "delist_time": "2026-01-09 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/54bb43542d164f4ca6de56280cf20e92",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "RONIN",
+        "delist_time": "2026-01-09 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/54bb43542d164f4ca6de56280cf20e92",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "SOMI",
+        "delist_time": "2026-01-09 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/54bb43542d164f4ca6de56280cf20e92",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "SSV",
+        "delist_time": "2026-01-09 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/54bb43542d164f4ca6de56280cf20e92",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "TURTLE",
+        "delist_time": "2026-01-09 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/54bb43542d164f4ca6de56280cf20e92",
+        "scraped_at": "2026-04-24 15:31:15"
+    },
+    {
+        "symbol": "AI",
+        "delist_time": "2026-01-03 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/a3cc1da2ec104a33a05bd9da6c3e3552",
+        "scraped_at": "2026-04-24 15:31:24"
+    },
+    {
+        "symbol": "ETC",
+        "delist_time": "2026-01-03 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/a3cc1da2ec104a33a05bd9da6c3e3552",
+        "scraped_at": "2026-04-24 15:31:24"
+    },
+    {
+        "symbol": "FLOW",
+        "delist_time": "2026-01-03 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/a3cc1da2ec104a33a05bd9da6c3e3552",
+        "scraped_at": "2026-04-24 15:31:24"
+    },
+    {
+        "symbol": "LPT",
+        "delist_time": "2026-01-03 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/a3cc1da2ec104a33a05bd9da6c3e3552",
+        "scraped_at": "2026-04-24 15:31:24"
+    },
+    {
+        "symbol": "SFP",
+        "delist_time": "2026-01-03 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/a3cc1da2ec104a33a05bd9da6c3e3552",
+        "scraped_at": "2026-04-24 15:31:24"
+    },
+    {
+        "symbol": "VET",
+        "delist_time": "2026-01-03 08:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/a3cc1da2ec104a33a05bd9da6c3e3552",
+        "scraped_at": "2026-04-24 15:31:24"
+    },
+    {
+        "symbol": "ARKM",
+        "delist_time": "2026-01-02 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/aa26b0b569d94830a070ba9d69b0f214",
+        "scraped_at": "2026-04-24 15:31:32"
+    },
+    {
+        "symbol": "BARD",
+        "delist_time": "2026-01-02 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/aa26b0b569d94830a070ba9d69b0f214",
+        "scraped_at": "2026-04-24 15:31:32"
+    },
+    {
+        "symbol": "EGLD",
+        "delist_time": "2026-01-02 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/aa26b0b569d94830a070ba9d69b0f214",
+        "scraped_at": "2026-04-24 15:31:32"
+    },
+    {
+        "symbol": "ZKC",
+        "delist_time": "2026-01-02 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/aa26b0b569d94830a070ba9d69b0f214",
+        "scraped_at": "2026-04-24 15:31:32"
+    },
+    {
+        "symbol": "BCH",
+        "delist_time": "2026-01-06 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/62aea45c9ea44de4bddf550c67f4c483",
+        "scraped_at": "2026-04-24 15:31:32"
+    },
+    {
+        "symbol": "TAO",
+        "delist_time": "2026-01-06 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/62aea45c9ea44de4bddf550c67f4c483",
+        "scraped_at": "2026-04-24 15:31:32"
+    },
+    {
+        "symbol": "AVAX",
+        "delist_time": "2026-01-06 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/62aea45c9ea44de4bddf550c67f4c483",
+        "scraped_at": "2026-04-24 15:31:32"
+    },
+    {
+        "symbol": "LTC",
+        "delist_time": "2026-01-06 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/62aea45c9ea44de4bddf550c67f4c483",
+        "scraped_at": "2026-04-24 15:31:32"
+    },
+    {
+        "symbol": "SUI",
+        "delist_time": "2026-01-06 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/62aea45c9ea44de4bddf550c67f4c483",
+        "scraped_at": "2026-04-24 15:31:32"
+    },
+    {
+        "symbol": "ADA",
+        "delist_time": "2026-01-06 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/62aea45c9ea44de4bddf550c67f4c483",
+        "scraped_at": "2026-04-24 15:31:32"
+    },
+    {
+        "symbol": "LINK",
+        "delist_time": "2026-01-06 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/62aea45c9ea44de4bddf550c67f4c483",
+        "scraped_at": "2026-04-24 15:31:32"
+    },
+    {
+        "symbol": "BIO",
+        "delist_time": "2025-12-26 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/1351888d07104a7b93b60afae7d503c9",
+        "scraped_at": "2026-04-24 15:31:32"
+    },
+    {
+        "symbol": "ENS",
+        "delist_time": "2025-12-26 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/1351888d07104a7b93b60afae7d503c9",
+        "scraped_at": "2026-04-24 15:31:32"
+    },
+    {
+        "symbol": "INJ",
+        "delist_time": "2025-12-26 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/1351888d07104a7b93b60afae7d503c9",
+        "scraped_at": "2026-04-24 15:31:32"
+    },
+    {
+        "symbol": "TREE",
+        "delist_time": "2025-12-26 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/1351888d07104a7b93b60afae7d503c9",
+        "scraped_at": "2026-04-24 15:31:32"
+    },
+    {
+        "symbol": "VTHO",
+        "delist_time": "2025-12-26 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/1351888d07104a7b93b60afae7d503c9",
+        "scraped_at": "2026-04-24 15:31:32"
+    },
+    {
+        "symbol": "BUZZ",
+        "delist_time": "2025-12-19 07:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/871615e225e0474f8151ea57460ef026",
+        "scraped_at": "2026-04-24 15:31:39"
+    },
+    {
+        "symbol": "DARK",
+        "delist_time": "2025-12-19 07:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/871615e225e0474f8151ea57460ef026",
+        "scraped_at": "2026-04-24 15:31:39"
+    },
+    {
+        "symbol": "FROG",
+        "delist_time": "2025-12-19 07:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/871615e225e0474f8151ea57460ef026",
+        "scraped_at": "2026-04-24 15:31:39"
+    },
+    {
+        "symbol": "GORK",
+        "delist_time": "2025-12-19 07:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/871615e225e0474f8151ea57460ef026",
+        "scraped_at": "2026-04-24 15:31:39"
+    },
+    {
+        "symbol": "MIRAI",
+        "delist_time": "2025-12-19 07:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/871615e225e0474f8151ea57460ef026",
+        "scraped_at": "2026-04-24 15:31:39"
+    },
+    {
+        "symbol": "PERRY",
+        "delist_time": "2025-12-19 07:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/871615e225e0474f8151ea57460ef026",
+        "scraped_at": "2026-04-24 15:31:39"
+    },
+    {
+        "symbol": "RFC",
+        "delist_time": "2025-12-19 07:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/871615e225e0474f8151ea57460ef026",
+        "scraped_at": "2026-04-24 15:31:39"
+    },
+    {
+        "symbol": "SNAI",
+        "delist_time": "2025-12-19 07:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/871615e225e0474f8151ea57460ef026",
+        "scraped_at": "2026-04-24 15:31:39"
+    },
+    {
+        "symbol": "TERMINUS",
+        "delist_time": "2025-12-19 07:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/871615e225e0474f8151ea57460ef026",
+        "scraped_at": "2026-04-24 15:31:39"
+    },
+    {
+        "symbol": "AI",
+        "delist_time": "2025-12-19 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/7a009775ccbb469da109f99a030feb66",
+        "scraped_at": "2026-04-24 15:31:39"
+    },
+    {
+        "symbol": "BICO",
+        "delist_time": "2025-12-19 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/7a009775ccbb469da109f99a030feb66",
+        "scraped_at": "2026-04-24 15:31:39"
+    },
+    {
+        "symbol": "DOLO",
+        "delist_time": "2025-12-19 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/7a009775ccbb469da109f99a030feb66",
+        "scraped_at": "2026-04-24 15:31:39"
+    },
+    {
+        "symbol": "MITO",
+        "delist_time": "2025-12-19 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/7a009775ccbb469da109f99a030feb66",
+        "scraped_at": "2026-04-24 15:31:39"
+    },
+    {
+        "symbol": "MOVE",
+        "delist_time": "2025-12-19 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/7a009775ccbb469da109f99a030feb66",
+        "scraped_at": "2026-04-24 15:31:39"
+    },
+    {
+        "symbol": "NEWT",
+        "delist_time": "2025-12-19 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/7a009775ccbb469da109f99a030feb66",
+        "scraped_at": "2026-04-24 15:31:39"
+    },
+    {
+        "symbol": "OM",
+        "delist_time": "2025-12-19 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/7a009775ccbb469da109f99a030feb66",
+        "scraped_at": "2026-04-24 15:31:39"
+    },
+    {
+        "symbol": "CHR",
+        "delist_time": "2025-12-12 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/4c79639f9d264dbfaa82f6b291d2e52a",
+        "scraped_at": "2026-04-24 15:31:47"
+    },
+    {
+        "symbol": "ENJ",
+        "delist_time": "2025-12-12 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/4c79639f9d264dbfaa82f6b291d2e52a",
+        "scraped_at": "2026-04-24 15:31:47"
+    },
+    {
+        "symbol": "HAEDAL",
+        "delist_time": "2025-12-12 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/4c79639f9d264dbfaa82f6b291d2e52a",
+        "scraped_at": "2026-04-24 15:31:47"
+    },
+    {
+        "symbol": "LISTA",
+        "delist_time": "2025-12-12 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/4c79639f9d264dbfaa82f6b291d2e52a",
+        "scraped_at": "2026-04-24 15:31:47"
+    },
+    {
+        "symbol": "POWR",
+        "delist_time": "2025-12-12 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/4c79639f9d264dbfaa82f6b291d2e52a",
+        "scraped_at": "2026-04-24 15:31:47"
+    },
+    {
+        "symbol": "PROVE",
+        "delist_time": "2025-12-12 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/4c79639f9d264dbfaa82f6b291d2e52a",
+        "scraped_at": "2026-04-24 15:31:47"
+    },
+    {
+        "symbol": "UMA",
+        "delist_time": "2025-12-12 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/4c79639f9d264dbfaa82f6b291d2e52a",
+        "scraped_at": "2026-04-24 15:31:47"
+    },
+    {
+        "symbol": "ZRX",
+        "delist_time": "2025-12-12 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/4c79639f9d264dbfaa82f6b291d2e52a",
+        "scraped_at": "2026-04-24 15:31:47"
+    },
+    {
+        "symbol": "FIS",
+        "delist_time": "2025-12-17 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/f958d031b39f46b1ab3947b1d53fa736",
+        "scraped_at": "2026-04-24 15:31:54"
+    },
+    {
+        "symbol": "REI",
+        "delist_time": "2025-12-17 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/f958d031b39f46b1ab3947b1d53fa736",
+        "scraped_at": "2026-04-24 15:31:54"
+    },
+    {
+        "symbol": "VOXEL",
+        "delist_time": "2025-12-17 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/f958d031b39f46b1ab3947b1d53fa736",
+        "scraped_at": "2026-04-24 15:31:54"
+    },
+    {
+        "symbol": "WAXP",
+        "delist_time": "2025-12-04 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/1836f3db22cd4bf696c0efef21f791d3",
+        "scraped_at": "2026-04-24 15:32:02"
+    },
+    {
+        "symbol": "VET",
+        "delist_time": "2025-12-04 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/1836f3db22cd4bf696c0efef21f791d3",
+        "scraped_at": "2026-04-24 15:32:02"
+    },
+    {
+        "symbol": "ACH",
+        "delist_time": "2025-12-05 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/062ade71d2054e979964269723936c6e",
+        "scraped_at": "2026-04-24 15:32:02"
+    },
+    {
+        "symbol": "DENT",
+        "delist_time": "2025-12-05 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/062ade71d2054e979964269723936c6e",
+        "scraped_at": "2026-04-24 15:32:02"
+    },
+    {
+        "symbol": "EGLD",
+        "delist_time": "2025-12-05 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/062ade71d2054e979964269723936c6e",
+        "scraped_at": "2026-04-24 15:32:02"
+    },
+    {
+        "symbol": "HAEDAL",
+        "delist_time": "2025-12-05 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/062ade71d2054e979964269723936c6e",
+        "scraped_at": "2026-04-24 15:32:02"
+    },
+    {
+        "symbol": "INIT",
+        "delist_time": "2025-12-05 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/062ade71d2054e979964269723936c6e",
+        "scraped_at": "2026-04-24 15:32:02"
+    },
+    {
+        "symbol": "PORTAL",
+        "delist_time": "2025-12-05 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/062ade71d2054e979964269723936c6e",
+        "scraped_at": "2026-04-24 15:32:02"
+    },
+    {
+        "symbol": "PROVE",
+        "delist_time": "2025-12-05 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/062ade71d2054e979964269723936c6e",
+        "scraped_at": "2026-04-24 15:32:02"
+    },
+    {
+        "symbol": "QTUM",
+        "delist_time": "2025-12-05 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/062ade71d2054e979964269723936c6e",
+        "scraped_at": "2026-04-24 15:32:02"
+    },
+    {
+        "symbol": "RIF",
+        "delist_time": "2025-12-05 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/062ade71d2054e979964269723936c6e",
+        "scraped_at": "2026-04-24 15:32:02"
+    },
+    {
+        "symbol": "SHELL",
+        "delist_time": "2025-12-05 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/062ade71d2054e979964269723936c6e",
+        "scraped_at": "2026-04-24 15:32:02"
+    },
+    {
+        "symbol": "STRAX",
+        "delist_time": "2025-12-05 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/062ade71d2054e979964269723936c6e",
+        "scraped_at": "2026-04-24 15:32:02"
+    },
+    {
+        "symbol": "TREE",
+        "delist_time": "2025-12-05 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/062ade71d2054e979964269723936c6e",
+        "scraped_at": "2026-04-24 15:32:02"
+    },
+    {
+        "symbol": "WAXP",
+        "delist_time": "2025-12-05 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/062ade71d2054e979964269723936c6e",
+        "scraped_at": "2026-04-24 15:32:02"
+    },
+    {
+        "symbol": "SXP",
+        "delist_time": "2025-12-04 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/cd7a4840c0e14877b07f890cdc06baf8",
+        "scraped_at": "2026-04-24 15:32:09"
+    },
+    {
+        "symbol": "ONT",
+        "delist_time": "2025-12-04 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/cd7a4840c0e14877b07f890cdc06baf8",
+        "scraped_at": "2026-04-24 15:32:09"
+    },
+    {
+        "symbol": "ID",
+        "delist_time": "2025-12-04 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/cd7a4840c0e14877b07f890cdc06baf8",
+        "scraped_at": "2026-04-24 15:32:09"
+    },
+    {
+        "symbol": "ZRX",
+        "delist_time": "2025-12-04 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/cd7a4840c0e14877b07f890cdc06baf8",
+        "scraped_at": "2026-04-24 15:32:09"
+    },
+    {
+        "symbol": "CHR",
+        "delist_time": "2025-12-04 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/cd7a4840c0e14877b07f890cdc06baf8",
+        "scraped_at": "2026-04-24 15:32:09"
+    },
+    {
+        "symbol": "ENJ",
+        "delist_time": "2025-12-04 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/cd7a4840c0e14877b07f890cdc06baf8",
+        "scraped_at": "2026-04-24 15:32:09"
+    },
+    {
+        "symbol": "ONG",
+        "delist_time": "2025-12-04 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/cd7a4840c0e14877b07f890cdc06baf8",
+        "scraped_at": "2026-04-24 15:32:09"
+    },
+    {
+        "symbol": "POWR",
+        "delist_time": "2025-12-04 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/cd7a4840c0e14877b07f890cdc06baf8",
+        "scraped_at": "2026-04-24 15:32:09"
+    },
+    {
+        "symbol": "AGLD",
+        "delist_time": "2025-12-04 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/cd7a4840c0e14877b07f890cdc06baf8",
+        "scraped_at": "2026-04-24 15:32:09"
+    },
+    {
+        "symbol": "UMA",
+        "delist_time": "2025-12-04 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/cd7a4840c0e14877b07f890cdc06baf8",
+        "scraped_at": "2026-04-24 15:32:09"
+    },
+    {
+        "symbol": "BMT",
+        "delist_time": "2025-11-28 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/3306bff6bb9e4dd4a49cdbc3ceb8f09a",
+        "scraped_at": "2026-04-24 15:32:09"
+    },
+    {
+        "symbol": "GMT",
+        "delist_time": "2025-11-28 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/3306bff6bb9e4dd4a49cdbc3ceb8f09a",
+        "scraped_at": "2026-04-24 15:32:09"
+    },
+    {
+        "symbol": "ME",
+        "delist_time": "2025-11-28 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/3306bff6bb9e4dd4a49cdbc3ceb8f09a",
+        "scraped_at": "2026-04-24 15:32:09"
+    },
+    {
+        "symbol": "TOWNS",
+        "delist_time": "2025-11-28 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/3306bff6bb9e4dd4a49cdbc3ceb8f09a",
+        "scraped_at": "2026-04-24 15:32:09"
+    },
+    {
+        "symbol": "LA",
+        "delist_time": "2025-11-21 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/4e544f84e3794ebc892bb4ada8f009b7",
+        "scraped_at": "2026-04-24 15:32:16"
+    },
+    {
+        "symbol": "SAHARA",
+        "delist_time": "2025-11-21 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/4e544f84e3794ebc892bb4ada8f009b7",
+        "scraped_at": "2026-04-24 15:32:16"
+    },
+    {
+        "symbol": "TOWNS",
+        "delist_time": "2025-11-21 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/4e544f84e3794ebc892bb4ada8f009b7",
+        "scraped_at": "2026-04-24 15:32:16"
+    },
+    {
+        "symbol": "XCN",
+        "delist_time": "2025-11-21 09:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/6392491d998b4cbaa6d4beee0fd898c6",
+        "scraped_at": "2026-04-24 15:32:16"
+    },
+    {
+        "symbol": "FLM",
+        "delist_time": "2025-11-21 09:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/6392491d998b4cbaa6d4beee0fd898c6",
+        "scraped_at": "2026-04-24 15:32:16"
+    },
+    {
+        "symbol": "PERP",
+        "delist_time": "2025-11-21 09:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/6392491d998b4cbaa6d4beee0fd898c6",
+        "scraped_at": "2026-04-24 15:32:16"
+    },
+    {
+        "symbol": "INIT",
+        "delist_time": "2025-11-07 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/a414fd64592c42d28c881b49ae5b5aca",
+        "scraped_at": "2026-04-24 15:32:31"
+    },
+    {
+        "symbol": "IOTX",
+        "delist_time": "2025-11-07 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/a414fd64592c42d28c881b49ae5b5aca",
+        "scraped_at": "2026-04-24 15:32:31"
+    },
+    {
+        "symbol": "PEOPLE",
+        "delist_time": "2025-11-07 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/a414fd64592c42d28c881b49ae5b5aca",
+        "scraped_at": "2026-04-24 15:32:31"
+    },
+    {
+        "symbol": "RUNE",
+        "delist_time": "2025-11-07 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/a414fd64592c42d28c881b49ae5b5aca",
+        "scraped_at": "2026-04-24 15:32:31"
+    },
+    {
+        "symbol": "USUAL",
+        "delist_time": "2025-11-07 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/a414fd64592c42d28c881b49ae5b5aca",
+        "scraped_at": "2026-04-24 15:32:31"
+    },
+    {
+        "symbol": "PEOPLE",
+        "delist_time": "2025-11-06 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/f5698969fc264525a3957baa820b7217",
+        "scraped_at": "2026-04-24 15:32:31"
+    },
+    {
+        "symbol": "SCR",
+        "delist_time": "2025-11-06 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/f5698969fc264525a3957baa820b7217",
+        "scraped_at": "2026-04-24 15:32:31"
+    },
+    {
+        "symbol": "IOTX",
+        "delist_time": "2025-11-06 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/f5698969fc264525a3957baa820b7217",
+        "scraped_at": "2026-04-24 15:32:31"
+    },
+    {
+        "symbol": "RARE",
+        "delist_time": "2025-11-06 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/f5698969fc264525a3957baa820b7217",
+        "scraped_at": "2026-04-24 15:32:31"
+    },
+    {
+        "symbol": "OM",
+        "delist_time": "2025-11-06 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/f5698969fc264525a3957baa820b7217",
+        "scraped_at": "2026-04-24 15:32:31"
+    },
+    {
+        "symbol": "ATA",
+        "delist_time": "2025-10-31 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/de87685396b44694bf6fedddc6d97cef",
+        "scraped_at": "2026-04-24 15:32:41"
+    },
+    {
+        "symbol": "LAYER",
+        "delist_time": "2025-10-31 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/de87685396b44694bf6fedddc6d97cef",
+        "scraped_at": "2026-04-24 15:32:41"
+    },
+    {
+        "symbol": "POWR",
+        "delist_time": "2025-10-31 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/de87685396b44694bf6fedddc6d97cef",
+        "scraped_at": "2026-04-24 15:32:41"
+    },
+    {
+        "symbol": "FLM",
+        "delist_time": "2025-11-12 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/a6c810fc36424548917e146dbe21469a",
+        "scraped_at": "2026-04-24 15:32:41"
+    },
+    {
+        "symbol": "KDA",
+        "delist_time": "2025-11-12 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/a6c810fc36424548917e146dbe21469a",
+        "scraped_at": "2026-04-24 15:32:41"
+    },
+    {
+        "symbol": "PERP",
+        "delist_time": "2025-11-12 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/a6c810fc36424548917e146dbe21469a",
+        "scraped_at": "2026-04-24 15:32:41"
+    },
+    {
+        "symbol": "AXS",
+        "delist_time": "2025-10-24 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c06f4048fd4c42f2a608ffb120ae3945",
+        "scraped_at": "2026-04-24 15:32:49"
+    },
+    {
+        "symbol": "GALA",
+        "delist_time": "2025-10-24 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c06f4048fd4c42f2a608ffb120ae3945",
+        "scraped_at": "2026-04-24 15:32:49"
+    },
+    {
+        "symbol": "PNUT",
+        "delist_time": "2025-10-24 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c06f4048fd4c42f2a608ffb120ae3945",
+        "scraped_at": "2026-04-24 15:32:49"
+    },
+    {
+        "symbol": "GALA",
+        "delist_time": "2025-10-23 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/df1dc9b0e8cc4e0ab56cf318c56bc290",
+        "scraped_at": "2026-04-24 15:32:49"
+    },
+    {
+        "symbol": "ANKR",
+        "delist_time": "2025-10-17 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/6a6879302b1a4ef89961cc3838df8b60",
+        "scraped_at": "2026-04-24 15:32:56"
+    },
+    {
+        "symbol": "BOME",
+        "delist_time": "2025-10-17 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/6a6879302b1a4ef89961cc3838df8b60",
+        "scraped_at": "2026-04-24 15:32:56"
+    },
+    {
+        "symbol": "DATA",
+        "delist_time": "2025-10-17 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/6a6879302b1a4ef89961cc3838df8b60",
+        "scraped_at": "2026-04-24 15:32:56"
+    },
+    {
+        "symbol": "HOME",
+        "delist_time": "2025-10-17 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/6a6879302b1a4ef89961cc3838df8b60",
+        "scraped_at": "2026-04-24 15:32:56"
+    },
+    {
+        "symbol": "SHELL",
+        "delist_time": "2025-10-17 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/6a6879302b1a4ef89961cc3838df8b60",
+        "scraped_at": "2026-04-24 15:32:56"
+    },
+    {
+        "symbol": "SPK",
+        "delist_time": "2025-10-17 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/6a6879302b1a4ef89961cc3838df8b60",
+        "scraped_at": "2026-04-24 15:32:56"
+    },
+    {
+        "symbol": "ANKR",
+        "delist_time": "2025-10-16 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/f3032795aacb4c6094193eb2c75bc21a",
+        "scraped_at": "2026-04-24 15:32:56"
+    },
+    {
+        "symbol": "DATA",
+        "delist_time": "2025-10-16 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/f3032795aacb4c6094193eb2c75bc21a",
+        "scraped_at": "2026-04-24 15:32:56"
+    },
+    {
+        "symbol": "HOME",
+        "delist_time": "2025-10-10 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/591c38a42688433e93afd32122f22585",
+        "scraped_at": "2026-04-24 15:33:04"
+    },
+    {
+        "symbol": "SPK",
+        "delist_time": "2025-10-10 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/591c38a42688433e93afd32122f22585",
+        "scraped_at": "2026-04-24 15:33:04"
+    },
+    {
+        "symbol": "USUAL",
+        "delist_time": "2025-10-10 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/591c38a42688433e93afd32122f22585",
+        "scraped_at": "2026-04-24 15:33:04"
+    },
+    {
+        "symbol": "1000CAT",
+        "delist_time": "2025-10-03 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/93fe07787c4446199852bebdb3219a74",
+        "scraped_at": "2026-04-24 15:33:04"
+    },
+    {
+        "symbol": "HYPER",
+        "delist_time": "2025-10-03 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/93fe07787c4446199852bebdb3219a74",
+        "scraped_at": "2026-04-24 15:33:04"
+    },
+    {
+        "symbol": "RVN",
+        "delist_time": "2025-10-03 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/93fe07787c4446199852bebdb3219a74",
+        "scraped_at": "2026-04-24 15:33:04"
+    },
+    {
+        "symbol": "NXPC",
+        "delist_time": "2025-09-19 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/fb348cd146834cc8ab3ccc8ecbc3bdf4",
+        "scraped_at": "2026-04-24 15:33:18"
+    },
+    {
+        "symbol": "HUMA",
+        "delist_time": "2025-09-19 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/fb348cd146834cc8ab3ccc8ecbc3bdf4",
+        "scraped_at": "2026-04-24 15:33:18"
+    },
+    {
+        "symbol": "SOPH",
+        "delist_time": "2025-09-12 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/38fa944df3884e169d0f9592884381b9",
+        "scraped_at": "2026-04-24 15:33:27"
+    },
+    {
+        "symbol": "1000CAT",
+        "delist_time": "2025-09-12 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/38fa944df3884e169d0f9592884381b9",
+        "scraped_at": "2026-04-24 15:33:27"
+    },
+    {
+        "symbol": "BABY",
+        "delist_time": "2025-09-05 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/1df082fb97244a31ba3f0b913969095f",
+        "scraped_at": "2026-04-24 15:33:27"
+    },
+    {
+        "symbol": "BMT",
+        "delist_time": "2025-09-05 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/1df082fb97244a31ba3f0b913969095f",
+        "scraped_at": "2026-04-24 15:33:27"
+    },
+    {
+        "symbol": "THE",
+        "delist_time": "2025-09-05 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/1df082fb97244a31ba3f0b913969095f",
+        "scraped_at": "2026-04-24 15:33:27"
+    },
+    {
+        "symbol": "BAKE",
+        "delist_time": "2025-09-17 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/b601f1d986ad403b8c667dd0ca17e2e7",
+        "scraped_at": "2026-04-24 15:33:35"
+    },
+    {
+        "symbol": "HIFI",
+        "delist_time": "2025-09-17 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/b601f1d986ad403b8c667dd0ca17e2e7",
+        "scraped_at": "2026-04-24 15:33:35"
+    },
+    {
+        "symbol": "SLF",
+        "delist_time": "2025-09-17 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/b601f1d986ad403b8c667dd0ca17e2e7",
+        "scraped_at": "2026-04-24 15:33:35"
+    },
+    {
+        "symbol": "BABY",
+        "delist_time": "2025-08-29 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/caf7122e023f42f7b2074eebbc82f243",
+        "scraped_at": "2026-04-24 15:33:35"
+    },
+    {
+        "symbol": "NXPC",
+        "delist_time": "2025-08-29 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/caf7122e023f42f7b2074eebbc82f243",
+        "scraped_at": "2026-04-24 15:33:35"
+    },
+    {
+        "symbol": "SXT",
+        "delist_time": "2025-08-29 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/caf7122e023f42f7b2074eebbc82f243",
+        "scraped_at": "2026-04-24 15:33:35"
+    },
+    {
+        "symbol": "MOVE",
+        "delist_time": "2025-08-22 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c62d1ed9054b4a70b2ecbe0af01e50bb",
+        "scraped_at": "2026-04-24 15:33:44"
+    },
+    {
+        "symbol": "NIL",
+        "delist_time": "2025-08-22 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c62d1ed9054b4a70b2ecbe0af01e50bb",
+        "scraped_at": "2026-04-24 15:33:44"
+    },
+    {
+        "symbol": "SXT",
+        "delist_time": "2025-08-22 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/c62d1ed9054b4a70b2ecbe0af01e50bb",
+        "scraped_at": "2026-04-24 15:33:44"
+    },
+    {
+        "symbol": "ANIME",
+        "delist_time": "2025-08-15 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/b021b76f70af4465a0b5add81d751de7",
+        "scraped_at": "2026-04-24 15:33:44"
+    },
+    {
+        "symbol": "HYPER",
+        "delist_time": "2025-08-15 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/b021b76f70af4465a0b5add81d751de7",
+        "scraped_at": "2026-04-24 15:33:44"
+    },
+    {
+        "symbol": "STO",
+        "delist_time": "2025-08-15 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/b021b76f70af4465a0b5add81d751de7",
+        "scraped_at": "2026-04-24 15:33:44"
+    },
+    {
+        "symbol": "NKN",
+        "delist_time": "2025-08-08 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/95ea413c2c1c41498664b0bad613fcd9",
+        "scraped_at": "2026-04-24 15:33:53"
+    },
+    {
+        "symbol": "STX",
+        "delist_time": "2025-08-08 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/95ea413c2c1c41498664b0bad613fcd9",
+        "scraped_at": "2026-04-24 15:33:53"
+    },
+    {
+        "symbol": "DOGS",
+        "delist_time": "2025-08-08 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/3270cb16cd344fecb9646758131189dc",
+        "scraped_at": "2026-04-24 15:33:53"
+    },
+    {
+        "symbol": "MOVE",
+        "delist_time": "2025-08-08 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/3270cb16cd344fecb9646758131189dc",
+        "scraped_at": "2026-04-24 15:33:53"
+    },
+    {
+        "symbol": "MANTA",
+        "delist_time": "2025-08-08 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/3270cb16cd344fecb9646758131189dc",
+        "scraped_at": "2026-04-24 15:33:53"
+    },
+    {
+        "symbol": "PEOPLE",
+        "delist_time": "2025-08-08 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/3270cb16cd344fecb9646758131189dc",
+        "scraped_at": "2026-04-24 15:33:53"
+    },
+    {
+        "symbol": "XVS",
+        "delist_time": "2025-08-01 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/4da1c4e783e24cfd93f24d73e484654e",
+        "scraped_at": "2026-04-24 15:33:53"
+    },
+    {
+        "symbol": "YGG",
+        "delist_time": "2025-08-01 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/4da1c4e783e24cfd93f24d73e484654e",
+        "scraped_at": "2026-04-24 15:33:53"
+    },
+    {
+        "symbol": "ALPHA",
+        "delist_time": "2025-07-04 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/173b2a63c03141009029407ecfebd14a",
+        "scraped_at": "2026-04-24 15:34:01"
+    },
+    {
+        "symbol": "BSW",
+        "delist_time": "2025-07-04 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/173b2a63c03141009029407ecfebd14a",
+        "scraped_at": "2026-04-24 15:34:01"
+    },
+    {
+        "symbol": "KMD",
+        "delist_time": "2025-07-04 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/173b2a63c03141009029407ecfebd14a",
+        "scraped_at": "2026-04-24 15:34:01"
+    },
+    {
+        "symbol": "LEVER",
+        "delist_time": "2025-07-04 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/173b2a63c03141009029407ecfebd14a",
+        "scraped_at": "2026-04-24 15:34:01"
+    },
+    {
+        "symbol": "LTO",
+        "delist_time": "2025-07-04 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/173b2a63c03141009029407ecfebd14a",
+        "scraped_at": "2026-04-24 15:34:01"
+    },
+    {
+        "symbol": "KAITO",
+        "delist_time": "2025-06-27 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/a37e284394114daf8e0045360dd129eb",
+        "scraped_at": "2026-04-24 15:34:10"
+    },
+    {
+        "symbol": "ZIL",
+        "delist_time": "2025-06-27 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/a37e284394114daf8e0045360dd129eb",
+        "scraped_at": "2026-04-24 15:34:10"
+    },
+    {
+        "symbol": "UTK",
+        "delist_time": "2025-06-25 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/ca8dff7e7c98469c92de91ef618fdd29",
+        "scraped_at": "2026-04-24 15:34:10"
+    },
+    {
+        "symbol": "ZIL",
+        "delist_time": "2025-06-25 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/ca8dff7e7c98469c92de91ef618fdd29",
+        "scraped_at": "2026-04-24 15:34:10"
+    },
+    {
+        "symbol": "CATI",
+        "delist_time": "2025-06-20 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/73093927c8b547a1ac974d43e3cd70c6",
+        "scraped_at": "2026-04-24 15:34:10"
+    },
+    {
+        "symbol": "ONE",
+        "delist_time": "2025-06-20 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/73093927c8b547a1ac974d43e3cd70c6",
+        "scraped_at": "2026-04-24 15:34:10"
+    },
+    {
+        "symbol": "TLM",
+        "delist_time": "2025-06-20 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/73093927c8b547a1ac974d43e3cd70c6",
+        "scraped_at": "2026-04-24 15:34:10"
+    },
+    {
+        "symbol": "MOVE",
+        "delist_time": "2025-06-18 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/021c6be6c155475c99b724c214560c63",
+        "scraped_at": "2026-04-24 15:34:18"
+    },
+    {
+        "symbol": "ONE",
+        "delist_time": "2025-06-18 06:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/021c6be6c155475c99b724c214560c63",
+        "scraped_at": "2026-04-24 15:34:18"
+    },
+    {
+        "symbol": "ACX",
+        "delist_time": "2025-06-06 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e6a6214f24d14215bb0741c8779f0ae7",
+        "scraped_at": "2026-04-24 15:34:18"
+    },
+    {
+        "symbol": "IDEX",
+        "delist_time": "2025-06-06 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e6a6214f24d14215bb0741c8779f0ae7",
+        "scraped_at": "2026-04-24 15:34:18"
+    },
+    {
+        "symbol": "ORCA",
+        "delist_time": "2025-06-06 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e6a6214f24d14215bb0741c8779f0ae7",
+        "scraped_at": "2026-04-24 15:34:18"
+    },
+    {
+        "symbol": "THETA",
+        "delist_time": "2025-06-06 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e6a6214f24d14215bb0741c8779f0ae7",
+        "scraped_at": "2026-04-24 15:34:18"
+    },
+    {
+        "symbol": "XAI",
+        "delist_time": "2025-06-06 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/e6a6214f24d14215bb0741c8779f0ae7",
+        "scraped_at": "2026-04-24 15:34:18"
+    },
+    {
+        "symbol": "ACA",
+        "delist_time": "2025-05-23 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/714283bd536e405ba8afd855fa9ac0ec",
+        "scraped_at": "2026-04-24 15:34:18"
+    },
+    {
+        "symbol": "MASK",
+        "delist_time": "2025-05-23 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/714283bd536e405ba8afd855fa9ac0ec",
+        "scraped_at": "2026-04-24 15:34:18"
+    },
+    {
+        "symbol": "TRU",
+        "delist_time": "2025-05-23 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/714283bd536e405ba8afd855fa9ac0ec",
+        "scraped_at": "2026-04-24 15:34:18"
+    },
+    {
+        "symbol": "ANIME",
+        "delist_time": "2025-05-09 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/867a8e3ef6ae4012b5262991541a7754",
+        "scraped_at": "2026-04-24 15:34:22"
+    },
+    {
+        "symbol": "STRK",
+        "delist_time": "2025-05-09 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/867a8e3ef6ae4012b5262991541a7754",
+        "scraped_at": "2026-04-24 15:34:22"
+    },
+    {
+        "symbol": "THE",
+        "delist_time": "2025-05-09 03:00:00",
+        "url": "https://www.binance.com/en/support/announcement/detail/867a8e3ef6ae4012b5262991541a7754",
+        "scraped_at": "2026-04-24 15:34:22"
+    }
+]

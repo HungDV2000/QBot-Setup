@@ -98,7 +98,7 @@ _DEBUG_COL_NAMES = [
     "RSI 14 (4h)",                     # AH
     "Vol 1h (hiện tại)",               # AI
     "Vol 1h MA20",                     # AJ
-    "Cảnh báo delist sắp tới",         # AK — từ thông báo Binance (Support)
+    "Cảnh báo delist sắp tới",         # AK — delists.json (mốc tương lai) + thông báo Support (CMS)
 ]
 
 
@@ -408,6 +408,72 @@ def _delist_warn_lookup(dmap, pair):
         if str(k).upper() == pu:
             return v
     return ""
+
+
+# Danh sách delist crawl (cùng thư mục qbot_setup/delists/) — mốc thời gian cụ thể
+_DELISTS_JSON_PATH = Path(__file__).resolve().parent / "delists" / "delists.json"
+
+
+def _load_future_delist_by_pair_from_json() -> dict:
+    """
+    Đọc delists.json: mỗi phần tử { symbol, delist_time, url?, scraped_at? }.
+    Chỉ giữ mốc delist_time > thời điểm chạy (dự kiến trong tương lai).
+    Trả về map 'BASE/USDT' -> chuỗi cảnh báo (ghi rõ thời gian delist).
+    Trùng symbol: lấy mốc sớm nhất (gần nhất tới hiện tại trong các mốc tương lai = min delist_time).
+    """
+    path = _DELISTS_JSON_PATH
+    if not path.is_file():
+        logger.warning(f"delists.json không tồn tại: {path}")
+        return {}
+    try:
+        with open(path, encoding="utf-8") as f:
+            items = json.load(f)
+    except Exception as e:
+        logger.warning(f"Không đọc được delists.json: {e}")
+        return {}
+    if not isinstance(items, list):
+        return {}
+    now = datetime.now()
+    # pair -> (datetime delist, label)
+    best: dict = {}
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        base = str(it.get("symbol") or "").strip().upper()
+        ts_raw = str(it.get("delist_time") or "").strip()
+        if not base or not ts_raw:
+            continue
+        try:
+            dt_delist = datetime.strptime(ts_raw, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            logger.debug(f"delists.json: bỏ qua delist_time không parse được: {ts_raw!r}")
+            continue
+        if dt_delist <= now:
+            continue
+        pair_key = f"{base}/USDT"
+        label = f"⚠️ DELIST dự kiến: {ts_raw}"
+        prev = best.get(pair_key)
+        if prev is None or dt_delist < prev[0]:
+            best[pair_key] = (dt_delist, label)
+    out = {k: v[1] for k, v in best.items()}
+    logger.info(f"delists.json: {len(out)} cặp có mốc delist trong tương lai")
+    return out
+
+
+def _merge_delist_warn_json_and_cms(json_map: dict, cms_map: dict) -> dict:
+    """Gộp cảnh báo từ file JSON (ưu tiên hiển thị trước) và catalog Support (FUT/SPOT/MG + ngày)."""
+    keys = set(json_map or {}) | set(cms_map or {})
+    merged: dict = {}
+    for k in keys:
+        parts = []
+        if json_map and k in json_map and json_map[k]:
+            parts.append(json_map[k])
+        if cms_map and k in cms_map and cms_map[k]:
+            parts.append(f"Support: {cms_map[k]}")
+        if parts:
+            s = " | ".join(parts)
+            merged[k] = s[: 400] if len(s) > 400 else s
+    return merged
 
 
 def _bb_upper_lower_from_closes(closing_prices, multiplier=2.0):
@@ -1062,29 +1128,18 @@ def do_it():
     except Exception as e:
         logger.warning(f"load_markets futures: {e}")
 
-    
-
-
-
-    
-    
-    
-    
-    
-    
-    
-    
-
-
-    
-
-    
-    
-
-    print("📣 Đang tải cảnh báo delist sắp tới (Binance Support, catalog 161)...", flush=True)
-    delist_warn_by_pair = _build_upcoming_delist_by_pair()
-    print(f"   └─ {len(delist_warn_by_pair)} cặp có cảnh báo từ tiêu đề thông báo", flush=True)
-    logger.info(f"Delist cảnh báo (map): {len(delist_warn_by_pair)} cặp")
+    print("📣 Đang tải cảnh báo delist (delists.json + Binance Support catalog 161)...", flush=True)
+    delist_from_json = _load_future_delist_by_pair_from_json()
+    delist_from_cms = _build_upcoming_delist_by_pair()
+    delist_warn_by_pair = _merge_delist_warn_json_and_cms(delist_from_json, delist_from_cms)
+    print(
+        f"   └─ JSON (tương lai): {len(delist_from_json)} cặp | "
+        f"CMS: {len(delist_from_cms)} cặp | gộp AK: {len(delist_warn_by_pair)} cặp",
+        flush=True,
+    )
+    logger.info(
+        f"Delist AK: json_future={len(delist_from_json)} cms={len(delist_from_cms)} merged={len(delist_warn_by_pair)}"
+    )
 
     def get_row_result(symbol):
         """
@@ -1101,6 +1156,7 @@ def do_it():
             empty = [""] * len(_DEBUG_COL_NAMES)
             empty[0] = pair
             empty[1] = pct
+            empty[-1] = _delist_warn_lookup(delist_warn_by_pair, pair)
             return empty
 
         print(f"🔄 {symbol} - %24h: {pct:.2f}%, giá: {price}", flush=True)
@@ -1150,6 +1206,7 @@ def do_it():
             empty = [""] * len(_DEBUG_COL_NAMES)
             empty[0] = pair
             empty[1] = pct
+            empty[-1] = _delist_warn_lookup(delist_warn_by_pair, pair)
             return empty
 
         # Một lần 4h (20 nến): tái dùng cho Vol Y / RSI AF
@@ -1275,7 +1332,7 @@ def do_it():
         else:
             row.extend(["", ""])
 
-        # AK: sắp delist / delist gần đây theo thông báo (tiêu đề)
+        # AK: delists.json (mốc tương lai, có ⚠️) + catalog Support (FUT/SPOT/MG + ngày)
         row.append(_delist_warn_lookup(delist_warn_by_pair, pair))
 
         logger.info(f"get_row_result xong: {symbol}")
@@ -1471,7 +1528,7 @@ def do_it():
         "RSI 14 (4h)",                  # AH
         "Vol 1h (hiện tại)",            # AI
         "Vol 1h MA20",                  # AJ
-        "Cảnh báo delist sắp tới",      # AK thông báo Support (FUT/SPOT/MG + ngày)
+        "Cảnh báo delist sắp tới",      # AK: delists.json + Support (CMS)
     ]
     
     # Thêm header vào đầu array
