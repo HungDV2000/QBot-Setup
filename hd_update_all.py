@@ -397,19 +397,19 @@ def _build_upcoming_delist_by_pair() -> dict:
 
 def _delist_warn_lookup(dmap, pair):
     """
-    Khớp cặp BASE/USDT với map (không phân biệt hoa thường).
-    Cột AK chỉ hiển thị mã chuẩn Binance dạng BASE/USDT (ví dụ DAM/USDT).
+    Khớp cặp mã với map (không phân biệt hoa thường).
+    Cột AK chỉ trả về mã cặp đúng như key trong dữ liệu delist (DB/API).
     """
     if not dmap or not pair:
         return ""
-    pu = pair.upper()
     if pair in dmap:
-        return pu
+        return pair
+    pu = pair.upper()
     if pu in dmap:
         return pu
     for k in dmap.keys():
         if str(k).upper() == pu:
-            return pu
+            return str(k)
     return ""
 
 
@@ -450,23 +450,6 @@ def _dedupe_symbols_by_normalized_pair(symbols, tickers):
 _DELIST_API_URL = "https://n8n.deepview.win/webhook/delist-current-month"
 
 
-def _normalize_delist_base_symbol(raw_symbol: str) -> str:
-    """
-    Chuẩn hoá symbol từ API về BASE:
-    - BOBUSDT -> BOB
-    - WLDUSD -> WLD
-    - DEGEN -> DEGEN
-    """
-    s = str(raw_symbol or "").strip().upper()
-    if not s:
-        return ""
-    if s.endswith("USDT") and len(s) > 4:
-        return s[:-4]
-    if s.endswith("USD") and len(s) > 3:
-        return s[:-3]
-    return s
-
-
 def _parse_delist_datetime_utc(raw: str):
     """
     Parse định dạng từ API: 'YYYY-MM-DD HH:MM UTC'
@@ -487,7 +470,8 @@ def _load_future_delist_by_pair_from_api() -> dict:
     """
     Đọc API delist-current-month của n8n.
     Chỉ giữ mốc delist_datetime trong tương lai.
-    Trả về map: 'BASE/USDT' -> cảnh báo có thời gian delist rõ ràng.
+    Trả về map: '<PAIR_FROM_DB>' -> '<PAIR_FROM_DB>' cho các mốc tương lai.
+    Ví dụ key/value: 'DAM/USDT'.
     """
     try:
         r = requests.get(_DELIST_API_URL, timeout=30)
@@ -510,22 +494,15 @@ def _load_future_delist_by_pair_from_api() -> dict:
         return {}
 
     now_utc = datetime.utcnow()
-    event_type_label = {
-        "futures": "FUT",
-        "spot": "SPOT",
-        "spot_pair_removal": "SPOT",
-        "margin": "MG",
-        "loan": "LOAN",
-    }
-    # pair -> (dt, message)
+    # pair -> (dt, pair_label)
     best: dict = {}
 
     for it in items:
         if not isinstance(it, dict):
             continue
-        base = _normalize_delist_base_symbol(it.get("symbol"))
+        pair_key = str(it.get("symbol") or "").strip().upper()
         dt_txt = str(it.get("delist_datetime") or "").strip()
-        if not base or not dt_txt:
+        if not pair_key or not dt_txt:
             continue
 
         dt_utc = _parse_delist_datetime_utc(dt_txt)
@@ -535,13 +512,9 @@ def _load_future_delist_by_pair_from_api() -> dict:
         if dt_utc <= now_utc:
             continue
 
-        pair_key = f"{base}/USDT"
-        et = str(it.get("event_type") or "").strip().lower()
-        et_lbl = event_type_label.get(et, et.upper() if et else "DELIST")
-        label = f"⚠️ {et_lbl} DELIST: {dt_txt}"
         prev = best.get(pair_key)
         if prev is None or dt_utc < prev[0]:
-            best[pair_key] = (dt_utc, label)
+            best[pair_key] = (dt_utc, pair_key)
 
     out = {k: v[1] for k, v in best.items()}
     logger.info(f"Delist API: {len(out)} cặp có mốc delist trong tương lai")
