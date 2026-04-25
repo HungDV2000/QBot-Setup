@@ -396,17 +396,20 @@ def _build_upcoming_delist_by_pair() -> dict:
 
 
 def _delist_warn_lookup(dmap, pair):
-    """Khớp cặp BASE/USDT với map (không phân biệt hoa thường)."""
+    """
+    Khớp cặp BASE/USDT với map (không phân biệt hoa thường).
+    Cột AK chỉ hiển thị mã chuẩn Binance dạng BASE/USDT (ví dụ DAM/USDT).
+    """
     if not dmap or not pair:
         return ""
-    if pair in dmap:
-        return dmap[pair]
     pu = pair.upper()
+    if pair in dmap:
+        return pu
     if pu in dmap:
-        return dmap[pu]
-    for k, v in dmap.items():
+        return pu
+    for k in dmap.keys():
         if str(k).upper() == pu:
-            return v
+            return pu
     return ""
 
 
