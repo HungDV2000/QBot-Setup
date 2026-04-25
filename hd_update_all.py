@@ -413,6 +413,40 @@ def _delist_warn_lookup(dmap, pair):
     return ""
 
 
+def _normalize_pair_for_sheet(symbol: str) -> str:
+    """Chuẩn hoá symbol về dạng BASE/USDT để tránh trùng DAM/USDT và DAM/USDT:USDT."""
+    return str(symbol or "").replace(":USDT", "").upper()
+
+
+def _dedupe_symbols_by_normalized_pair(symbols, tickers):
+    """
+    Khử trùng symbol theo mã chuẩn BASE/USDT.
+    Ưu tiên giữ symbol có hậu tố ':USDT' (futures chuẩn) nếu có.
+    """
+    chosen: dict = {}
+    for s in symbols:
+        key = _normalize_pair_for_sheet(s)
+        if not key:
+            continue
+        prev = chosen.get(key)
+        if prev is None:
+            chosen[key] = s
+            continue
+        # Ưu tiên futures contract dạng BTC/USDT:USDT
+        if (":USDT" in s) and (":USDT" not in prev):
+            chosen[key] = s
+            continue
+        # Nếu cùng loại, giữ mã có volume cao hơn
+        try:
+            prev_vol = float(tickers.get(prev, {}).get("quoteVolume") or 0)
+            cur_vol = float(tickers.get(s, {}).get("quoteVolume") or 0)
+            if cur_vol > prev_vol:
+                chosen[key] = s
+        except Exception:
+            pass
+    return list(chosen.values())
+
+
 _DELIST_API_URL = "https://n8n.deepview.win/webhook/delist-current-month"
 
 
@@ -1147,13 +1181,21 @@ def do_it():
         if (tickers[s].get("quoteVolume") or 0) >= 100_000
         and (tickers[s].get("last") or 0) > 0
     ]
-    removed = before - len(futures_symbols)
+    removed_by_filter = before - len(futures_symbols)
+    # Khử trùng theo mã chuẩn BASE/USDT để tránh hiện 2 dòng cùng một mã (vd DAM/USDT)
+    before_dedupe = len(futures_symbols)
+    futures_symbols = _dedupe_symbols_by_normalized_pair(futures_symbols, tickers)
+    deduped = before_dedupe - len(futures_symbols)
     print(
         f"✅ Số mã hợp lệ sau lọc: {len(futures_symbols)}"
-        f" (loại {removed} mã không có giá / thanh khoản thấp)",
+        f" (loại {removed_by_filter} mã không có giá / thanh khoản thấp"
+        f"{f', khử trùng {deduped} mã' if deduped > 0 else ''})",
         flush=True,
     )
-    logger.info(f"Tiếp tục xử lý với {len(futures_symbols)} mã (đã loại {removed} mã)")
+    logger.info(
+        f"Tiếp tục xử lý với {len(futures_symbols)} mã "
+        f"(đã loại {removed_by_filter} mã, khử trùng {deduped} mã theo BASE/USDT)"
+    )
 
     # Bước 4b: load markets một lần — AB (Futures) / AC (Spot) từ exchangeInfo qua CCXT
     spot_markets_by_pair = {}
