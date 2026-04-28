@@ -454,7 +454,8 @@ def do_it():
             
             logger.info(f"{symbol_formatted}: {vi_the_short_long}, Entry={gia_vao}, Lev={don_bay}, Orders={order_count}, SL={lenh_ls}, TP={lenh_tp}")
             
-            # ✅ Tạo row với 15 cột (A-P) để có thể giữ lại cột J, K, L, O, P
+            # ✅ Tạo row với 16 cột (A-P)
+            # M: Tick xóa lệnh 1 (entry), N: Tick xóa cặp 2-3 (SL+TP), O: Tick xóa lệnh đơn 2-3 sót lại
             row = (
                 symbol_formatted,      # A: Symbol
                 vi_the_short_long,     # B: LONG/SHORT
@@ -465,13 +466,13 @@ def do_it():
                 lenh_ls,               # G: Lệnh Stop Limit (Y/N)
                 lenh_tp,               # H: Lệnh Trailing Stop (Y/N)
                 lenh_nguoc,            # I: Số lượng orders
-                "",                    # J: Giá kích hoạt SL - Để trống, user điền tay (sẽ merge từ dữ liệu cũ)
-                "",                    # K: Giá kích hoạt TP - Để trống, user điền tay (sẽ merge từ dữ liệu cũ)
-                "",                    # L: Trạng thái cho phép đặt lệnh (Y/N) - Sẽ merge từ dữ liệu cũ
-                "",                    # M: (trống)
-                "",                    # N: (trống)
-                "",                    # O: (trống - sẽ merge từ dữ liệu cũ nếu có)
-                ""                     # P: (trống - sẽ merge từ dữ liệu cũ nếu có)
+                "",                    # J: Giá kích hoạt SL - Để trống, user điền tay
+                "",                    # K: Giá kích hoạt TP - Để trống, user điền tay
+                "",                    # L: Trạng thái cho phép đặt lệnh (Y/N)
+                "",                    # M: Tick xóa lệnh 1 (entry order)
+                "",                    # N: Tick xóa cặp 2-3 (SL+TP)
+                "",                    # O: Tick xóa lệnh đơn 2-3 sót lại
+                ""                     # P: (trống)
             )
             tab_100_ma_2d_arr.append(row)
             
@@ -527,7 +528,8 @@ def do_it():
             
             logger.info(f"{symbol_formatted}: {vi_the_short_long}, Price={gia_vao}, Status=Chờ khớp")
             
-            # ✅ Tạo row với 15 cột (A-P) để có thể giữ lại cột J, K, L, O, P
+            # ✅ Tạo row với 16 cột (A-P)
+            # M: Tick xóa lệnh 1 (entry), N: Tick xóa cặp 2-3 (SL+TP), O: Tick xóa lệnh đơn 2-3 sót lại
             row = (
                 symbol_formatted,      # A: Symbol
                 vi_the_short_long,     # B: LONG/SHORT
@@ -538,13 +540,13 @@ def do_it():
                 lenh_ls,               # G: Lệnh SL (N)
                 lenh_tp,               # H: Lệnh TP (N)
                 lenh_nguoc,            # I: Số lượng orders (0)
-                "",                    # J: Giá kích hoạt SL - Để trống (sẽ merge từ dữ liệu cũ)
-                "",                    # K: Giá kích hoạt TP - Để trống (sẽ merge từ dữ liệu cũ)
-                "",                    # L: Trạng thái cho phép đặt lệnh (Y/N) - Sẽ merge từ dữ liệu cũ
-                "",                    # M: (trống)
-                "",                    # N: (trống)
-                "",                    # O: (trống - sẽ merge từ dữ liệu cũ nếu có)
-                ""                     # P: (trống - sẽ merge từ dữ liệu cũ nếu có)
+                "",                    # J: Giá kích hoạt SL - Để trống
+                "",                    # K: Giá kích hoạt TP - Để trống
+                "",                    # L: Trạng thái cho phép đặt lệnh (Y/N)
+                "",                    # M: Tick xóa lệnh 1 (entry order)
+                "",                    # N: Tick xóa cặp 2-3 (SL+TP)
+                "",                    # O: Tick xóa lệnh đơn 2-3 sót lại
+                ""                     # P: (trống)
             )
             tab_100_ma_2d_arr.append(row)
             
@@ -569,27 +571,25 @@ def do_it():
             
             if old_data:
                 for row in old_data:
-                    # Kiểm tra row có đủ dữ liệu không (ít nhất 12 cột để có L)
-                    if len(row) >= 12:
+                    # Kiểm tra row có đủ dữ liệu không (ít nhất 15 cột để có M, N, O, P)
+                    if len(row) >= 15:
                         symbol = str(row[0]).strip() if len(row) > 0 and row[0] else ""
                         price_sl = str(row[9]).strip() if len(row) > 9 and row[9] else ""  # Cột J (index 9): Giá kích hoạt SL
                         price_tp = str(row[10]).strip() if len(row) > 10 and row[10] else ""  # Cột K (index 10): Giá kích hoạt TP
                         status = str(row[11]).strip().upper() if len(row) > 11 and row[11] else ""  # Cột L (index 11): Trạng thái Y/N
-                        col_o = str(row[14]).strip() if len(row) > 14 and row[14] else ""  # Cột O (index 14)
-                        col_p = str(row[15]).strip() if len(row) > 15 and row[15] else ""  # Cột P (index 15)
+                        col_m = str(row[12]).strip() if len(row) > 12 and row[12] else ""  # Cột M (index 12): Tick xóa lệnh 1
+                        col_n = str(row[13]).strip() if len(row) > 13 and row[13] else ""  # Cột N (index 13): Tick xóa cặp 2-3
+                        col_o = str(row[14]).strip() if len(row) > 14 and row[14] else ""  # Cột O (index 14): Tick xóa lệnh đơn
                         
                         # Chỉ lưu nếu có symbol
                         if symbol:
                             # Chuẩn hóa symbol format: HOME/USDT hoặc HOME/USDT:USDT → HOME/USDT
                             symbol_normalized = symbol.replace(":USDT", "").strip()
-                            data_map[symbol_normalized] = (price_sl, price_tp, status, col_o, col_p)
-                            if price_sl or price_tp or status:
-                                logger.debug(f"Lưu dữ liệu cho {symbol_normalized}: SL={price_sl}, TP={price_tp}, Status={status}, O={col_o}, P={col_p}")
-                            else:
-                                logger.debug(f"Lưu dữ liệu cho {symbol_normalized}: O={col_o}, P={col_p}")
+                            data_map[symbol_normalized] = (price_sl, price_tp, status, col_m, col_n, col_o)
+                            logger.debug(f"Lưu dữ liệu cho {symbol_normalized}: SL={price_sl}, TP={price_tp}, Status={status}, M={col_m}, N={col_n}, O={col_o}")
                 
                 print(f"    ✅ Đã đọc {len(data_map)} symbols từ dữ liệu cũ", flush=True)
-                logger.info(f"Đã đọc {len(data_map)} symbols từ dữ liệu cũ (bao gồm giá kích hoạt J/K, trạng thái L và cột O/P)")
+                logger.info(f"Đã đọc {len(data_map)} symbols từ dữ liệu cũ (bao gồm M, N, O)")
             else:
                 print("    ℹ️  Không có dữ liệu cũ", flush=True)
                 
@@ -597,25 +597,25 @@ def do_it():
             print(f"    ⚠️  Lỗi khi đọc dữ liệu cũ: {e} (tiếp tục không merge)", flush=True)
             logger.warning(f"Lỗi đọc dữ liệu cũ để merge: {e}", exc_info=True)
         
-        # ✅ BƯỚC 5.2: MERGE GIÁ KÍCH HOẠT SL/TP (J, K), TRẠNG THÁI (L) và cột O, P vào dữ liệu mới
+        # ✅ BƯỚC 5.2: MERGE GIÁ KÍCH HOẠT SL/TP (J, K), TRẠNG THÁI (L) và cột M, N, O vào dữ liệu mới
         if data_map:
-            print("  🔄 Merge giá kích hoạt SL/TP (J, K), trạng thái (L) và cột O, P vào dữ liệu mới...", flush=True)
+            print("  🔄 Merge giá kích hoạt SL/TP (J, K), trạng thái (L) và cột M, N, O vào dữ liệu mới...", flush=True)
             merged_count = 0
             
             for i, row in enumerate(tab_100_ma_2d_arr):
-                if len(row) >= 11:  # Đảm bảo row có đủ 11 cột
+                if len(row) >= 12:  # Đảm bảo row có đủ 12 cột
                     symbol = str(row[0]).strip() if row[0] else ""
                     # Chuẩn hóa symbol để so sánh
                     symbol_normalized = symbol.replace(":USDT", "").strip()
                     
                     # Check xem symbol có trong data_map không
                     if symbol_normalized in data_map:
-                        price_sl, price_tp, status, col_o, col_p = data_map[symbol_normalized]
-                        # Update row: giữ nguyên các cột A-I, update J, K, L và thêm O, P
+                        price_sl, price_tp, status, col_m, col_n, col_o = data_map[symbol_normalized]
+                        # Update row: giữ nguyên các cột A-L, update M, N, O
                         row_list = list(row)
                         
-                        # Đảm bảo row_list có đủ 15 cột (A-P)
-                        while len(row_list) < 15:
+                        # Đảm bảo row_list có đủ 16 cột (A-P)
+                        while len(row_list) < 16:
                             row_list.append("")  # Thêm cột rỗng nếu thiếu
                         
                         # ✅ Update cột J, K (giá kích hoạt SL/TP) - CHỈ merge nếu có giá trị (không rỗng)
@@ -626,23 +626,25 @@ def do_it():
                         if status:  # Chỉ merge nếu status không rỗng
                             row_list[11] = status  # Cột L: Trạng thái Y/N
                         
-                        # Giữ lại cột O, P nếu có
+                        # Giữ lại cột M, N, O (tick xóa lệnh)
+                        if col_m:
+                            row_list[12] = col_m  # Cột M: Tick xóa lệnh 1
+                        if col_n:
+                            row_list[13] = col_n  # Cột N: Tick xóa cặp 2-3
                         if col_o:
-                            row_list[14] = col_o  # Cột O
-                        if col_p:
-                            row_list[15] = col_p  # Cột P
+                            row_list[14] = col_o  # Cột O: Tick xóa lệnh đơn
                         
                         tab_100_ma_2d_arr[i] = tuple(row_list)
                         merged_count += 1
-                        logger.debug(f"Merged cho {symbol_normalized}: SL={price_sl}, TP={price_tp}, Status={status}, O={col_o}, P={col_p}")
+                        logger.debug(f"Merged cho {symbol_normalized}: SL={price_sl}, TP={price_tp}, Status={status}, M={col_m}, N={col_n}, O={col_o}")
             
-            print(f"    ✅ Đã merge giá kích hoạt (J/K), trạng thái (L) và cột O, P cho {merged_count} symbols", flush=True)
-            logger.info(f"Đã merge giá kích hoạt (J/K), trạng thái (L) và cột O/P cho {merged_count} symbols từ dữ liệu cũ")
+            print(f"    ✅ Đã merge giá kích hoạt (J/K), trạng thái (L) và cột M, N, O cho {merged_count} symbols", flush=True)
+            logger.info(f"Đã merge giá kích hoạt (J/K), trạng thái (L) và cột M, N, O cho {merged_count} symbols từ dữ liệu cũ")
         
-        # ✅ Clear dữ liệu cũ CHỈ từ cột A-I (KHÔNG xóa cột J, K, L, O, P)
-        print("  🗑️  Xóa dữ liệu cũ (chỉ cột A-I, giữ nguyên J-K-L và O-P)...", flush=True)
-        # Clear từ cột A đến I (end_column="I" thay vì "K") - Giữ nguyên J, K, L, O, P
-        gg_sheet_factory.clear_multi(gg_sheet_factory.tab_cho_va_khop, 2, "a", end_row=1000, end_column="I")
+        # ✅ Clear dữ liệu cũ CHỈ từ cột A-L (KHÔNG xóa cột M, N, O - giữ lại tick xóa lệnh)
+        print("  🗑️  Xóa dữ liệu cũ (chỉ cột A-L, giữ nguyên M, N, O)...", flush=True)
+        # Clear từ cột A đến L (end_column="L") - Giữ nguyên M, N, O
+        gg_sheet_factory.clear_multi(gg_sheet_factory.tab_cho_va_khop, 2, "a", end_row=1000, end_column="L")
         
         # Ghi timestamp vào A2
         timestamp_str = current_time.strftime("%Y-%m-%d %H:%M:%S")
