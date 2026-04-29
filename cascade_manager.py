@@ -308,7 +308,9 @@ class CascadeManager:
             result['tp_order'] = tp_order
             logger.info(f"✅ Đã tạo TP lớp {layer_num}: Order ID {tp_order.get('id')}")
         except Exception as e:
+            import traceback as tb
             logger.error(f"❌ Lỗi tạo TP lớp {layer_num}: {e}")
+            logger.error(f"❌ Traceback TP lớp {layer_num}:\n{tb.format_exc()}")
         
         # 3. Tạo Entry lớp tiếp theo (nếu chưa đạt max_layers)
         next_layer_num = layer_num + 1

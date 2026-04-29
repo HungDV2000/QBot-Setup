@@ -109,6 +109,17 @@ def call_binance_api_direct(method, endpoint, params=None):
             
         response.raise_for_status()
         return response.json()
+    except requests.exceptions.HTTPError as e:
+        # Chỉ log 400 cho delivery futures ở debug level, không phải ERROR
+        if e.response.status_code == 400:
+            # Kiểm tra xem có phải delivery futures không
+            if '-26' in params.get('symbol', ''):  # Delivery futures có date code
+                logger.debug(f"Bỏ qua delivery futures: {params.get('symbol')}")
+            else:
+                logger.warning(f"Lỗi 400 cho symbol {params.get('symbol')}: {e}")
+        else:
+            logger.error(f"Lỗi HTTP khi gọi Binance API ({method} {endpoint}): {e}")
+        return None
     except Exception as e:
         logger.error(f"Lỗi khi gọi Binance API trực tiếp ({method} {endpoint}): {e}")
         return None
@@ -236,6 +247,8 @@ def get_all_entry_algo_orders():
     """
     Lấy TẤT CẢ entry algo orders (NEW) trực tiếp từ Binance
     Dùng endpoint: /fapi/v1/allAlgoOrders cho từng symbol phổ biến
+    
+    ⚠️ LỌC BỎ delivery perpetual futures (symbols có '-')
     """
     all_entry_algo = []
 
@@ -244,12 +257,21 @@ def get_all_entry_algo_orders():
         symbols = list(exchange.markets.keys())
         print(f"🔍 Kiểm tra algo orders cho {len(symbols)} symbols...", flush=True)
 
+        delivery_count = 0
+        checked_count = 0
+        
         for sym in symbols:
             try:
                 # Chỉ kiểm tra USDT symbols
                 if ':USDT' not in sym:
                     continue
-
+                
+                # ⚠️ BỎ QUA delivery perpetual futures (symbols có '-', ví dụ: BTCUSDT-260626)
+                if '-' in sym:
+                    delivery_count += 1
+                    continue
+                
+                checked_count += 1
                 algo_orders = get_algo_orders_for_symbol(sym)
 
                 # Lọc NEW orders
@@ -266,7 +288,9 @@ def get_all_entry_algo_orders():
                 logger.warning(f"Lỗi khi lấy algo orders cho {sym}: {e}")
                 continue
 
+        print(f"✅ Đã kiểm tra {checked_count} symbols (bỏ qua {delivery_count} delivery futures)", flush=True)
         print(f"✅ Tổng entry algo orders: {len(all_entry_algo)}", flush=True)
+        logger.info(f"Đã kiểm tra {checked_count} symbols (bỏ qua {delivery_count} delivery futures)")
         logger.info(f"Tổng entry algo orders: {len(all_entry_algo)}")
 
     except Exception as e:

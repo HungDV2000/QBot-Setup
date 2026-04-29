@@ -219,6 +219,13 @@ def get_algo_orders_for_symbol(symbol):
         # HOME/USDT:USDT -> HOMEUSDT
         # HOMEUSDT:USDT -> HOMEUSDT
         symbol_clean = symbol.replace('/', '').replace(':USDT', '').upper()
+        
+        # ⚠️ BỎ QUA delivery perpetual futures (symbols có '-', ví dụ: BTCUSDT-260626)
+        # Endpoint /fapi/v1/ chỉ hoạt động với USDT-M perpetual futures
+        if '-' in symbol_clean:
+            logger.debug(f"Bỏ qua delivery futures symbol: {symbol_clean}")
+            return []
+        
         params = {'symbol': symbol_clean}
         logger.debug(f"Lấy algo orders cho {symbol} (cleaned: {symbol_clean})")
         response = call_binance_api_direct('GET', '/fapi/v1/allAlgoOrders', params)
@@ -230,7 +237,11 @@ def get_algo_orders_for_symbol(symbol):
             else: return []
         else: return []
     except Exception as e:
-        logger.error(f"Lỗi khi lấy algo orders: {e}", exc_info=True)
+        # Chỉ log lỗi HTTP 400 (delivery futures) ở debug level
+        if '400' in str(e):
+            logger.debug(f"Lỗi 400 cho {symbol} - có thể là delivery futures, bỏ qua")
+        else:
+            logger.error(f"Lỗi khi lấy algo orders: {e}", exc_info=True)
         return []
 
 def cancel_all_algo_orders_direct(symbol):
@@ -587,6 +598,15 @@ def do_it():
                     logger.debug(f"{symbol}: SL order ID: {sl_order.get('id', 'N/A')}")
                 if tp_order:
                     logger.debug(f"{symbol}: TP order ID: {tp_order.get('id', 'N/A')}")
+                else:
+                    # ✅ Debug: Log lỗi chi tiết từ cascade_manager logs
+                    logger.error(f"{symbol}: TP order = None - Xem cascade_manager logs để biết lý do")
+                    logger.error(f"{symbol}: Các nguyên nhân có thể:")
+                    logger.error(f"   1. Validation lỗi: TP LONG phải có activation_price > current_price")
+                    logger.error(f"   2. Validation lỗi: TP SHORT phải có activation_price < current_price")
+                    logger.error(f"   3. Lỗi API khi tạo trailing stop order")
+                    logger.error(f"   4. entry_price hoặc tp_rate không hợp lệ")
+                    logger.error(f"{symbol}: Debug - entry_price={entry_price}, tp_rate={tp_rate}, side={side}")
                 
                 # Log kết quả
                 orders_created = []
