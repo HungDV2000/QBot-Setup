@@ -110,6 +110,13 @@ def call_binance_api_direct(method, endpoint, params=None):
 
         response.raise_for_status()
         return response.json()
+    except requests.exceptions.HTTPError as e:
+        # Chỉ log 400 ở debug level (delivery futures hoặc symbol không hợp lệ)
+        if e.response.status_code == 400:
+            logger.debug(f"Lỗi 400 cho symbol {params.get('symbol')}: {e}")
+        else:
+            logger.error(f"Lỗi HTTP khi gọi Binance API ({method} {endpoint}): {e}")
+        return None
     except Exception as e:
         logger.error(f"Lỗi khi gọi Binance API trực tiếp ({method} {endpoint}): {e}")
         return None
@@ -121,6 +128,12 @@ def get_all_algo_orders_for_symbol(symbol):
     """
     try:
         symbol_clean = symbol.replace('/', '').replace(':USDT', '')
+        
+        # ⚠️ BỎ QUA delivery perpetual futures (symbols có '-', ví dụ: BTCUSDT-260626)
+        if '-' in symbol_clean:
+            logger.debug(f"Bỏ qua delivery futures: {symbol_clean}")
+            return []
+        
         params = {'symbol': symbol_clean}
 
         response = call_binance_api_direct('GET', '/fapi/v1/allAlgoOrders', params)
@@ -137,7 +150,11 @@ def get_all_algo_orders_for_symbol(symbol):
         return []
 
     except Exception as e:
-        logger.error(f"Lỗi khi lấy algo orders cho {symbol}: {e}", exc_info=True)
+        # Chỉ log lỗi HTTP 400 ở debug level
+        if '400' in str(e):
+            logger.debug(f"Lỗi 400 cho {symbol} - có thể delivery futures, bỏ qua")
+        else:
+            logger.error(f"Lỗi khi lấy algo orders cho {symbol}: {e}", exc_info=True)
         return []
 
 
@@ -209,7 +226,14 @@ def get_active_algo_orders(symbol):
     Lấy algo orders đang active (NEW) cho một symbol
     """
     all_orders = get_all_algo_orders_for_symbol(symbol)
-    return [o for o in all_orders if o.get('algoStatus', '').upper() == 'NEW']
+    active_orders = [o for o in all_orders if o.get('algoStatus', '').upper() == 'NEW']
+    
+    # Debug: log chi tiết
+    logger.debug(f"[get_active_algo_orders] {symbol}: Tổng {len(all_orders)} orders, {len(active_orders)} active (NEW)")
+    for o in all_orders[:5]:  # Log tối đa 5 orders đầu
+        logger.debug(f"  → algoId={o.get('algoId')}, algoType={o.get('algoType')}, status={o.get('algoStatus')}, reduceOnly={o.get('reduceOnly')}, callbackRate={o.get('callbackRate')}")
+    
+    return active_orders
 
 
 def get_removable_algo_orders(symbol):
@@ -367,10 +391,11 @@ def process_cancellation():
                     print(f"   🗑️  [M] Xóa lệnh 1 (entry order)...", flush=True)
                     logger.info(f"[{symbol_raw}] Bắt đầu xóa lệnh 1 (entry order)")
 
-                    # Entry order = open orders thông thường (không phải algo orders)
+                    deleted_count = 0
+                    
+                    # 1️⃣ XÓA OPEN ORDERS THÔNG THƯỜNG (LIMIT, MARKET, etc.)
                     open_orders = get_open_orders(symbol_ccxt)
-
-                    # Phân loại orders
+                    
                     entry_orders = []
                     other_orders = []
                     for order in open_orders:
@@ -380,18 +405,9 @@ def process_cancellation():
                             entry_orders.append(order)
                         else:
                             other_orders.append(order)
-
-                    # Log chi tiết trước khi xóa
+                    
                     logger.info(f"[{symbol_raw}] Tìm thấy {len(open_orders)} open orders: {len(entry_orders)} ENTRY, {len(other_orders)} OTHER")
-                    if entry_orders:
-                        for o in entry_orders:
-                            logger.info(f"  → ENTRY: id={o.get('id')}, type={o.get('type')}, side={o.get('side')}")
-                    if other_orders:
-                        for o in other_orders:
-                            logger.info(f"  → OTHER: id={o.get('id')}, type={o.get('type')}, reduceOnly={o.get('reduceOnly')}")
-
-                    deleted_count = 0
-                    # Chỉ xóa ENTRY orders (reduceOnly=false)
+                    
                     for order in entry_orders:
                         order_id = order.get('id')
                         if order_id:
@@ -399,9 +415,26 @@ def process_cancellation():
                                 deleted_count += 1
                                 total_delete_1 += 1
                                 has_any_deletion = True
+                    
+                    # 2️⃣ XÓA ENTRY ALGO ORDERS (TRAILING_STOP với reduceOnly=False)
+                    # Entry orders trên Binance có thể là algo orders, không chỉ open orders
+                    active_algo = get_active_algo_orders(symbol_ccxt)
+                    classified = classify_algo_orders(active_algo)
+                    entry_algo_orders = classified.get('ENTRY', [])
+                    
+                    logger.info(f"[{symbol_raw}] Tìm thấy {len(entry_algo_orders)} ENTRY algo orders")
+                    
+                    for algo in entry_algo_orders:
+                        algo_id = algo.get('algoId')
+                        if algo_id:
+                            if cancel_algo_order(symbol_ccxt, algo_id, "ENTRY"):
+                                deleted_count += 1
+                                total_delete_1 += 1
+                                has_any_deletion = True
+                                logger.info(f"[{symbol_raw}] Đã xóa ENTRY algo: algoId={algo_id}")
 
                     print(f"   ✅ Đã xóa {deleted_count} lệnh entry cho {symbol_raw}", flush=True)
-                    logger.info(f"[{symbol_raw}] Đã xóa {deleted_count} lệnh entry")
+                    logger.info(f"[{symbol_raw}] Đã xóa {deleted_count} lệnh entry (open: {len(entry_orders)}, algo: {len(entry_algo_orders)})")
 
                 # === XÓA CẶP LỆNH 2-3 (SL + TP - Algo Orders) ===
                 if delete_cap_23:
