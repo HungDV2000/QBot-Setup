@@ -63,6 +63,13 @@ exchange.setSandboxMode(False)
 
 logger.info("✅ Khởi tạo Binance exchange thành công")
 
+# Load markets để exchange biết các symbols
+try:
+    exchange.load_markets(True)  # Force reload
+    logger.info("✅ Đã load markets thành công")
+except Exception as e:
+    logger.warning(f"⚠️ Lỗi load markets: {e}")
+
 
 def call_binance_api_direct(method, endpoint, params=None):
     """
@@ -225,44 +232,122 @@ def check_sl_tp_orders(symbol, orders):
     return has_sl, has_tp, order_count
 
 
+def get_all_entry_algo_orders():
+    """
+    Lấy TẤT CẢ entry algo orders (NEW) trực tiếp từ Binance
+    Dùng endpoint: /fapi/v1/allAlgoOrders cho từng symbol phổ biến
+    """
+    all_entry_algo = []
+
+    try:
+        # Lấy danh sách symbols từ exchange markets
+        symbols = list(exchange.markets.keys())
+        print(f"🔍 Kiểm tra algo orders cho {len(symbols)} symbols...", flush=True)
+
+        for sym in symbols:
+            try:
+                # Chỉ kiểm tra USDT symbols
+                if ':USDT' not in sym:
+                    continue
+
+                algo_orders = get_algo_orders_for_symbol(sym)
+
+                # Lọc NEW orders
+                new_orders = [o for o in algo_orders if o.get('algoStatus', '').upper() == 'NEW']
+
+                for algo in new_orders:
+                    algo['symbol_ccxt'] = sym
+                    algo['symbol_clean'] = sym.replace('/', '').replace(':USDT', '')
+                    all_entry_algo.append(algo)
+
+                    print(f"  📌 Entry algo: {algo['symbol_clean']}, Type={algo.get('algoType')}, AlgoId={algo.get('algoId')}", flush=True)
+
+            except Exception as e:
+                logger.warning(f"Lỗi khi lấy algo orders cho {sym}: {e}")
+                continue
+
+        print(f"✅ Tổng entry algo orders: {len(all_entry_algo)}", flush=True)
+        logger.info(f"Tổng entry algo orders: {len(all_entry_algo)}")
+
+    except Exception as e:
+        print(f"❌ Lỗi khi lấy entry algo orders: {e}", flush=True)
+        logger.error(f"Lỗi get_all_entry_algo_orders: {e}", exc_info=True)
+
+    return all_entry_algo
+
+
 def get_all_open_orders_with_single_order():
     """
     Lấy tất cả orders có đúng 1 order pending cho mỗi symbol
     (Sử dụng để track lệnh entry đang chờ khớp)
+
+    ✅ CẬP NHẬT: Lấy CẢ open orders thường VÀ algo orders (entry orders)
     """
     res = []
-    
+
     try:
-        # Lấy TẤT CẢ open orders từ Binance (không cần biết symbols trước)
-        print("🔍 Đang lấy tất cả open orders từ Binance...", flush=True)
-        all_orders = exchange.fetch_open_orders()
-        
-        print(f"✅ Tổng số orders: {len(all_orders)}", flush=True)
-        logger.info(f"Tổng số open orders: {len(all_orders)}")
-        
-        # Nhóm orders theo symbol
+        # ✅ BƯỚC 1: Lấy open orders thông thường (LIMIT, MARKET, etc.)
+        print("🔍 Đang lấy open orders từ Binance...", flush=True)
+        try:
+            all_open_orders = exchange.fetch_open_orders()
+            print(f"✅ Tổng open orders: {len(all_open_orders)}", flush=True)
+            logger.info(f"Tổng open orders: {len(all_open_orders)}")
+        except Exception as e:
+            print(f"⚠️ Lỗi khi lấy open orders: {e}", flush=True)
+            logger.warning(f"Lỗi fetch_open_orders: {e}")
+            all_open_orders = []
+
+        # ✅ BƯỚC 2: Lấy TẤT CẢ algo orders từ Binance API trực tiếp
+        print("🔍 Đang lấy algo orders từ Binance API...", flush=True)
+        all_algo_orders = get_all_entry_algo_orders()
+        print(f"✅ Tổng algo orders (NEW): {len(all_algo_orders)}", flush=True)
+
+        # ✅ BƯỚC 3: Nhóm orders theo symbol và lọc symbols có đúng 1 order
         orders_by_symbol = {}
-        for order in all_orders:
-            symbol = order['symbol']
-            if symbol not in orders_by_symbol:
-                orders_by_symbol[symbol] = []
-            orders_by_symbol[symbol].append(order)
-        
-        # Chỉ lấy symbols có đúng 1 order (lệnh entry chờ khớp)
-        for symbol, orders in orders_by_symbol.items():
-            if len(orders) == 1:
-                res.append(orders[0])
-                print(f"  📌 {symbol}: 1 order (chờ khớp)", flush=True)
-                order = orders[0]
-                print(f"     ID: {order['id']}, Type: {order.get('type', 'N/A')}, Amount: {order['amount']}, Price: {order.get('price', 'N/A')}", flush=True)
-        
+
+        # Thêm open orders vào dict
+        for order in all_open_orders:
+            # Convert HOME/USDT:USDT → HOMEUSDT
+            sym = order['symbol'].replace('/', '').replace(':USDT', '')
+            if sym not in orders_by_symbol:
+                orders_by_symbol[sym] = {'open': [], 'algo': []}
+            orders_by_symbol[sym]['open'].append(order)
+
+        # Thêm algo orders vào dict
+        for algo in all_algo_orders:
+            sym = algo.get('symbol_clean', algo.get('symbol', '')).replace('/', '').replace(':USDT', '')
+            if sym not in orders_by_symbol:
+                orders_by_symbol[sym] = {'open': [], 'algo': []}
+            orders_by_symbol[sym]['algo'].append(algo)
+
+        # ✅ BƯỚC 4: Lọc symbols có đúng 1 order (entry orders)
+        for sym, orders_data in orders_by_symbol.items():
+            open_count = len(orders_data['open'])
+            algo_count = len(orders_data['algo'])
+            total_count = open_count + algo_count
+
+            if total_count == 1:
+                # Lấy order duy nhất
+                if orders_data['open']:
+                    res.append(orders_data['open'][0])
+                    print(f"  📌 {sym}: 1 open order (chờ khớp)", flush=True)
+                    order = orders_data['open'][0]
+                    print(f"     ID: {order['id']}, Type: {order.get('type', 'N/A')}, Amount: {order['amount']}, Price: {order.get('price', 'N/A')}", flush=True)
+                elif orders_data['algo']:
+                    res.append(orders_data['algo'][0])
+                    print(f"  📌 {sym}: 1 algo order (chờ khớp)", flush=True)
+                    algo = orders_data['algo'][0]
+                    print(f"     AlgoId: {algo.get('algoId', 'N/A')}, Type: {algo.get('algoType', 'N/A')}, Status: {algo.get('algoStatus', 'N/A')}", flush=True)
+            elif total_count > 1:
+                print(f"  ⏭️  {sym}: {total_count} orders ({open_count} open + {algo_count} algo) - bỏ qua (nhiều hơn 1)", flush=True)
+
         print(f"✅ Tìm thấy {len(res)} symbols có đúng 1 order (lệnh entry)", flush=True)
         logger.info(f"Symbols có đúng 1 order: {len(res)}")
-        
+
     except Exception as e:
         print(f"❌ Lỗi khi lấy orders từ Binance: {e}", flush=True)
         logger.error(f"Lỗi get_all_open_orders_with_single_order: {e}", exc_info=True)
-    
+
     return res
 
 def get_opened_possition():
@@ -491,42 +576,83 @@ def do_it():
     print("🔧 BƯỚC 4: Xử lý orders chờ khớp...", flush=True)
     for idx, order in enumerate(res1, 1):
         try:
-            print(f"\n  [{idx}/{len(res1)}] Xử lý order {order.get('id', 'N/A')}...", flush=True)
-            
-            order_symbol = order['info']['symbol']
-            
-            # Skip nếu symbol đã có position (tránh trùng lặp)
-            if next((position for position in res if order_symbol == position['symbol']), None):
-                print(f"    ⏭️  Bỏ qua (đã có position)", flush=True)
-                continue
+            print(f"\n  [{idx}/{len(res1)}] Xử lý order...", flush=True)
 
-            print(f"    ✓ Symbol: {order['symbol']}, Type: {order.get('type', 'N/A')}", flush=True)
-            
-            # Format symbol
-            cac_ma = order_symbol
-            symbol_formatted = cac_ma.replace("USDT", "/USDT")
-            
-            # Xác định side từ order
-            side = order['info']['side']
-            vi_the_short_long = 'LONG' if side == "BUY" else 'SHORT'
-            
-            # Đang chờ khớp (chưa có position)
-            cho_khop = "Y"  # Đang chờ
-            da_khop_mo_vi_the = "N"  # Chưa mở vị thế
-            
-            # Price và leverage
-            gia_vao = order['info'].get('price', 0)
-            don_bay = "N"  # Chưa có leverage (chưa có position)
-            
-            # Chưa có SL/TP (chưa vào lệnh)
-            lenh_ls = "N"
-            lenh_tp = "N"
-            lenh_nguoc = 0  # Không có orders khác
-            
-            print(f"    ✓ Side: {vi_the_short_long}, Price: {gia_vao}", flush=True)
-            print(f"    ✓ Trạng thái: Chờ khớp", flush=True)
-            
-            logger.info(f"{symbol_formatted}: {vi_the_short_long}, Price={gia_vao}, Status=Chờ khớp")
+            # ✅ Check xem là algo order hay open order
+            is_algo_order = 'algoId' in order or 'algoType' in order
+
+            if is_algo_order:
+                # === XỬ LÝ ALGO ORDER ===
+                algo_id = order.get('algoId', 'N/A')
+                algo_type = order.get('algoType', 'N/A')
+                algo_status = order.get('algoStatus', 'N/A')
+
+                print(f"    📌 Algo Order: AlgoId={algo_id}, Type={algo_type}, Status={algo_status}", flush=True)
+                logger.info(f"Xử lý algo order: AlgoId={algo_id}, Type={algo_type}, Status={algo_status}")
+
+                # Symbol từ order
+                order_symbol = order.get('symbol', order.get('symbol_ccxt', ''))
+                # Convert HOMEUSDT → HOME/USDT
+                symbol_formatted = order_symbol.replace("USDT", "/USDT") if order_symbol else ""
+
+                # Side từ algo order (side trong info)
+                algo_info = order.get('info', {})
+                side = algo_info.get('side', algo_info.get('side', 'UNKNOWN'))
+                vi_the_short_long = 'LONG' if side == "BUY" else 'SHORT'
+
+                # Giá kích hoạt
+                gia_vao = order.get('activatePrice', algo_info.get('activatePrice', 0))
+
+                # Đang chờ khớp
+                cho_khop = "Y"
+                da_khop_mo_vi_the = "N"
+                don_bay = "N"
+                lenh_ls = "N"
+                lenh_tp = "N"
+                lenh_nguoc = 0
+
+                print(f"    ✓ Symbol: {symbol_formatted}", flush=True)
+                print(f"    ✓ Side: {vi_the_short_long}, Activation: {gia_vao}", flush=True)
+                print(f"    ✓ Trạng thái: Chờ khớp (algo)", flush=True)
+
+            else:
+                # === XỬ LÝ OPEN ORDER THÔNG THƯỜNG ===
+                print(f"  [{idx}/{len(res1)}] Xử lý order {order.get('id', 'N/A')}...", flush=True)
+
+                order_symbol = order['info']['symbol']
+
+                # Skip nếu symbol đã có position (tránh trùng lặp)
+                if next((position for position in res if order_symbol == position['symbol']), None):
+                    print(f"    ⏭️  Bỏ qua (đã có position)", flush=True)
+                    continue
+
+                print(f"    ✓ Symbol: {order['symbol']}, Type: {order.get('type', 'N/A')}", flush=True)
+
+                # Format symbol
+                cac_ma = order_symbol
+                symbol_formatted = cac_ma.replace("USDT", "/USDT")
+
+                # Xác định side từ order
+                side = order['info']['side']
+                vi_the_short_long = 'LONG' if side == "BUY" else 'SHORT'
+
+                # Đang chờ khớp (chưa có position)
+                cho_khop = "Y"
+                da_khop_mo_vi_the = "N"
+
+                # Price và leverage
+                gia_vao = order['info'].get('price', 0)
+                don_bay = "N"
+
+                # Chưa có SL/TP (chưa vào lệnh)
+                lenh_ls = "N"
+                lenh_tp = "N"
+                lenh_nguoc = 0
+
+                print(f"    ✓ Side: {vi_the_short_long}, Price: {gia_vao}", flush=True)
+                print(f"    ✓ Trạng thái: Chờ khớp", flush=True)
+
+            logger.info(f"{symbol_formatted}: {vi_the_short_long}, Activation={gia_vao}, Status=Chờ khớp")
             
             # ✅ Tạo row với 16 cột (A-P)
             # M: Tick xóa lệnh 1 (entry), N: Tick xóa cặp 2-3 (SL+TP), O: Tick xóa lệnh đơn 2-3 sót lại
