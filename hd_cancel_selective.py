@@ -60,6 +60,13 @@ exchange = exchange_class({
 })
 exchange.setSandboxMode(False)
 
+# Load markets để exchange biết các symbols
+try:
+    exchange.load_markets(True)  # Force reload
+    logger.info("✅ Đã load markets thành công")
+except Exception as e:
+    logger.warning(f"⚠️ Lỗi load markets: {e}")
+
 logger.info("✅ Khởi tạo Binance exchange thành công")
 
 
