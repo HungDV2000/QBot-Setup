@@ -772,13 +772,13 @@ def do_it():
   else:
     
     if state_value == STATE_LONG:
-      start_row = 55
-      end_row = 104
+      start_row = 57
+      end_row = 107
       type = "BUY"
 
     elif state_value == STATE_SHORT:
-      start_row = 4
-      end_row = 53
+      start_row = 6
+      end_row = 55
       type = "SHORT"
 
     don_bay = gg_sheet_factory.get_dat_lenh(f"A{start_row}:H{end_row}")  # Chỉ cần đọc A-H
