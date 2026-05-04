@@ -613,6 +613,180 @@ class CascadeManager:
         
         return order
     
+    # ──────────────────────────────────────────────────────────────────────
+    # [TASK 1] Multi-layer SL/TP (3 lớp với tỉ lệ 40/40/20 chia từ sheet)
+    # ──────────────────────────────────────────────────────────────────────
+
+    def on_entry_filled_multi_layer(
+        self,
+        symbol: str,
+        entry_price: float,
+        leverage: int,
+        position_amt: float,
+        side: str,
+        sl_prices: list,    # [sl1, sl2, sl3] - giá kích hoạt, có thể None nếu user để trống
+        tp_prices: list,    # [tp1, tp2, tp3]
+        ratios: list,       # [0.4, 0.4, 0.2] hoặc [40, 40, 20] (sẽ normalize)
+        callback_rate: float = 1.0,
+        skip_sl: bool = False,  # True nếu đã có SL, bỏ qua
+        skip_tp: bool = False,  # True nếu đã có TP, bỏ qua
+    ) -> Dict:
+        """
+        [TASK 1] Tạo 3 cặp lệnh SL/TP theo tỉ lệ qty (40/40/20).
+
+        Logic:
+          - position_amt tổng được chia thành 3 phần theo ratios
+          - SL tạo STOP_LIMIT reduceOnly với số lượng = qty * ratio
+          - TP tạo TRAILING_STOP reduceOnly với activation_price = tp_prices[i]
+          - Nếu giá SL/TP nào rỗng (None) → bỏ qua lớp đó
+
+        Returns:
+          dict {
+            'sl_orders': [order1, order2, order3] (None nếu skip hoặc lỗi),
+            'tp_orders': [order1, order2, order3] (None nếu skip hoặc lỗi),
+            'errors': [ ...chi tiết lỗi... ]
+          }
+        """
+        result = {'sl_orders': [None, None, None], 'tp_orders': [None, None, None], 'errors': []}
+
+        # Normalize ratios: cho phép [40, 40, 20] hoặc [0.4, 0.4, 0.2]
+        rs = [float(r) if r is not None else 0.0 for r in ratios]
+        tot = sum(rs)
+        if tot <= 0:
+            result['errors'].append(f"Tổng tỉ lệ = 0, không thể chia qty")
+            return result
+        # Nếu tổng > 1.5 → cho là phần trăm (%), convert sang decimal
+        if tot > 1.5:
+            rs = [r / 100.0 for r in rs]
+            tot = sum(rs)
+        # Renormalize để đảm bảo tổng = 1.0 (chính xác khi user nhập lẻ)
+        if abs(tot - 1.0) > 0.01:
+            logger.warning(f"{symbol}: Tổng ratios = {tot:.3f} ≠ 1.0, renormalize")
+            rs = [r / tot for r in rs]
+
+        abs_total_qty = abs(float(position_amt))
+
+        # Tính qty từng lớp + đảm bảo tổng không vượt qty tổng (rounding)
+        qty_per_layer = []
+        running_qty = 0.0
+        for i, r in enumerate(rs):
+            if i < len(rs) - 1:
+                q_raw = abs_total_qty * r
+                try:
+                    q_round = float(self.exchange.amount_to_precision(symbol, q_raw))
+                except Exception:
+                    q_round = q_raw
+                qty_per_layer.append(q_round)
+                running_qty += q_round
+            else:
+                # Lớp cuối: lấy phần còn lại để không bị lệch (tổng = total)
+                last_q = abs_total_qty - running_qty
+                try:
+                    last_q = float(self.exchange.amount_to_precision(symbol, last_q))
+                except Exception:
+                    pass
+                qty_per_layer.append(max(0.0, last_q))
+
+        logger.info(f"🎯 [MULTI-LAYER] {symbol} ({side}) qty={abs_total_qty} chia 3 lớp: {qty_per_layer} (ratios={rs})")
+
+        # ── SL: 3 lớp STOP_LIMIT ───────────────────────────────────────
+        if not skip_sl:
+            for i in range(3):
+                raw_price = sl_prices[i] if i < len(sl_prices) else None
+                qty_i = qty_per_layer[i] if i < len(qty_per_layer) else 0
+                if raw_price is None or qty_i <= 0:
+                    logger.info(f"   SL lớp {i+1}: bỏ qua (price={raw_price}, qty={qty_i})")
+                    continue
+                try:
+                    stop_price = self.smart_round_price(
+                        price=float(raw_price),
+                        symbol=symbol,
+                        is_sl=True,
+                        is_long=(side == 'LONG'),
+                    )
+                    if stop_price <= 0:
+                        raise ValueError(f"stop_price={stop_price} ≤ 0")
+                    order_side = 'sell' if side == 'LONG' else 'buy'
+
+                    # Validate so với giá hiện tại (bỏ qua nếu không fetch được)
+                    try:
+                        cur = self.exchange.fetch_ticker(symbol).get('last')
+                        if cur:
+                            if side == 'LONG' and stop_price >= cur:
+                                logger.warning(f"   ⚠️ SL{i+1} LONG: {stop_price} >= current {cur} → trigger ngay")
+                            elif side == 'SHORT' and stop_price <= cur:
+                                logger.warning(f"   ⚠️ SL{i+1} SHORT: {stop_price} <= current {cur} → trigger ngay")
+                    except Exception:
+                        pass
+
+                    logger.info(f"   📤 SL{i+1}: STOP_LIMIT {order_side} @ {stop_price}, qty={qty_i}")
+                    order = self.order_helper.create_stop_limit_order(
+                        symbol=symbol,
+                        side=order_side,
+                        amount=qty_i,
+                        stop_price=stop_price,
+                        limit_price=stop_price,
+                        reduce_only=True,
+                    )
+                    result['sl_orders'][i] = order
+                    logger.info(f"   ✅ SL{i+1} order ID: {order.get('id')}")
+                except Exception as e:
+                    err = f"SL{i+1} lỗi: {e}"
+                    logger.error(f"   ❌ {err}", exc_info=True)
+                    result['errors'].append(err)
+
+        # ── TP: 3 lớp TRAILING_STOP ───────────────────────────────────
+        if not skip_tp:
+            for i in range(3):
+                raw_price = tp_prices[i] if i < len(tp_prices) else None
+                qty_i = qty_per_layer[i] if i < len(qty_per_layer) else 0
+                if raw_price is None or qty_i <= 0:
+                    logger.info(f"   TP lớp {i+1}: bỏ qua (price={raw_price}, qty={qty_i})")
+                    continue
+                try:
+                    activation_price = self.smart_round_price(
+                        price=float(raw_price),
+                        symbol=symbol,
+                        is_sl=False,
+                        is_long=(side == 'LONG'),
+                    )
+                    if activation_price <= 0:
+                        raise ValueError(f"activation_price={activation_price} ≤ 0")
+                    order_side = 'sell' if side == 'LONG' else 'buy'
+
+                    # Validate so với giá hiện tại
+                    try:
+                        cur = self.exchange.fetch_ticker(symbol).get('last')
+                        if cur:
+                            if side == 'LONG' and activation_price <= cur:
+                                logger.warning(f"   ⚠️ TP{i+1} LONG: {activation_price} <= current {cur} → trigger ngay")
+                            elif side == 'SHORT' and activation_price >= cur:
+                                logger.warning(f"   ⚠️ TP{i+1} SHORT: {activation_price} >= current {cur} → trigger ngay")
+                    except Exception:
+                        pass
+
+                    logger.info(f"   📤 TP{i+1}: TRAILING_STOP {order_side} @ {activation_price}, qty={qty_i}, callback={callback_rate}%")
+                    order = self.order_helper.create_trailing_stop_order(
+                        symbol=symbol,
+                        side=order_side,
+                        amount=qty_i,
+                        activation_price=activation_price,
+                        callback_rate=callback_rate,
+                        reduce_only=True,
+                    )
+                    result['tp_orders'][i] = order
+                    logger.info(f"   ✅ TP{i+1} order ID: {order.get('id')}")
+                except Exception as e:
+                    err = f"TP{i+1} lỗi: {e}"
+                    logger.error(f"   ❌ {err}", exc_info=True)
+                    result['errors'].append(err)
+
+        sl_ok = sum(1 for o in result['sl_orders'] if o is not None)
+        tp_ok = sum(1 for o in result['tp_orders'] if o is not None)
+        logger.info(f"[MULTI-LAYER DONE] {symbol}: SL={sl_ok}/3, TP={tp_ok}/3, errors={len(result['errors'])}")
+        return result
+
+
     def on_tp_filled(self, symbol: str, layer_num: int) -> List[str]:
         """
         Xử lý khi Take Profit khớp

@@ -346,6 +346,176 @@ def get_all_entry_algo_orders():
     return all_entry_algo
 
 
+def get_all_reduce_only_orders_by_symbol():
+    """
+    [TASK 2] Lấy tất cả reduce_only orders (SL/TP) đang active theo symbol.
+    Dùng để phát hiện "vị thế đã đóng" — symbol còn SL/TP treo nhưng không có position.
+
+    Returns: dict {symbol_clean: {'open': [...], 'algo': [...], 'has_sl': bool, 'has_tp': bool, 'count': int, 'side': 'LONG'/'SHORT'/None}}
+    """
+    result = {}
+
+    # 1) Open orders có reduceOnly=True
+    try:
+        all_open_orders = exchange.fetch_open_orders()
+    except Exception as e:
+        logger.warning(f"Lỗi fetch_open_orders trong reduce_only scan: {e}")
+        all_open_orders = []
+
+    for order in all_open_orders:
+        info = order.get('info', {}) or {}
+        reduce_only = order.get('reduceOnly', False) or info.get('reduceOnly', False)
+        if not reduce_only:
+            continue
+        sym_clean = order.get('symbol', '').replace('/', '').replace(':USDT', '')
+        if not sym_clean:
+            continue
+        if sym_clean not in result:
+            result[sym_clean] = {'open': [], 'algo': [], 'has_sl': False, 'has_tp': False, 'count': 0, 'side': None}
+        result[sym_clean]['open'].append(order)
+        # Đoán loại + side ngược (nếu SL SELL reduceOnly → position là LONG)
+        otype = str(order.get('type', '')).upper()
+        if otype in ['STOP', 'STOP_LIMIT', 'STOP_MARKET']:
+            result[sym_clean]['has_sl'] = True
+        if 'TRAILING' in otype or 'TAKE_PROFIT' in otype:
+            result[sym_clean]['has_tp'] = True
+        if result[sym_clean]['side'] is None:
+            s = str(order.get('side', info.get('side', ''))).upper()
+            if s == 'SELL':
+                result[sym_clean]['side'] = 'LONG'
+            elif s == 'BUY':
+                result[sym_clean]['side'] = 'SHORT'
+
+    # 2) Algo orders reduceOnly + NEW/TRIGGERED
+    algo_orders = get_all_open_algo_orders_batch() or []
+    for algo in algo_orders:
+        info = algo.get('info', {}) or {}
+        reduce_only = algo.get('reduceOnly', info.get('reduceOnly', False))
+        if not reduce_only:
+            continue
+        status = str(algo.get('algoStatus', '')).upper()
+        if status not in ('NEW', 'TRIGGERED'):
+            continue
+        sym_clean = algo.get('symbol_clean', algo.get('symbol', '')).replace('/', '').replace(':USDT', '')
+        if not sym_clean:
+            continue
+        if sym_clean not in result:
+            result[sym_clean] = {'open': [], 'algo': [], 'has_sl': False, 'has_tp': False, 'count': 0, 'side': None}
+        result[sym_clean]['algo'].append(algo)
+        atype = str(algo.get('algoType', '')).upper()
+        try:
+            cb = float(algo.get('callbackRate', info.get('callbackRate', 0)) or 0)
+        except (ValueError, TypeError):
+            cb = 0.0
+        if atype in ['CONDITIONAL', 'VP', 'TRAILING_STOP_MARKET'] and cb > 0:
+            result[sym_clean]['has_tp'] = True
+        elif atype in ['STOP', 'STOP_MARKET', 'STOP_LOSS', 'STOP_LOSS_MARKET', 'STOP_LIMIT']:
+            result[sym_clean]['has_sl'] = True
+        elif atype == 'CONDITIONAL' and cb == 0:
+            result[sym_clean]['has_sl'] = True
+        if result[sym_clean]['side'] is None:
+            s = str(algo.get('side', info.get('side', ''))).upper()
+            if s == 'SELL':
+                result[sym_clean]['side'] = 'LONG'
+            elif s == 'BUY':
+                result[sym_clean]['side'] = 'SHORT'
+
+    # Đếm tổng count
+    for sym, data in result.items():
+        data['count'] = len(data['open']) + len(data['algo'])
+
+    return result
+
+
+def detect_closed_positions_with_residual_orders(opened_positions_symbols):
+    """
+    [TASK 2] Phát hiện các vị thế đã ĐÓNG nhưng còn lệnh reduce_only treo.
+
+    Args:
+        opened_positions_symbols: set của symbol_clean (HOMEUSDT) đang có position mở
+
+    Returns: list of dict {symbol, side, has_sl, has_tp, order_count}
+    """
+    try:
+        all_reduce_only = get_all_reduce_only_orders_by_symbol()
+    except Exception as e:
+        logger.error(f"Lỗi khi lấy reduce_only orders: {e}", exc_info=True)
+        return []
+
+    closed_list = []
+    for sym_clean, data in all_reduce_only.items():
+        if sym_clean in opened_positions_symbols:
+            continue  # Còn position → không phải "đóng"
+        # Đây là trường hợp còn SL/TP treo nhưng position = 0 → ĐÓNG
+        closed_list.append({
+            'symbol': sym_clean,
+            'side': data.get('side') or '',
+            'has_sl': data['has_sl'],
+            'has_tp': data['has_tp'],
+            'order_count': data['count'],
+        })
+        logger.info(f"[CLOSED] {sym_clean}: còn {data['count']} reduce_only orders (SL={data['has_sl']}, TP={data['has_tp']}) → Trạng thái ĐÓNG")
+
+    if closed_list:
+        print(f"🔴 Phát hiện {len(closed_list)} vị thế đã ĐÓNG nhưng còn lệnh treo: {[c['symbol'] for c in closed_list]}", flush=True)
+    else:
+        print(f"✅ Không có vị thế ĐÓNG còn lệnh treo", flush=True)
+
+    return closed_list
+
+
+def build_cho_va_khop_row(
+    symbol_formatted, side, status_d, entry_price, leverage, has_sl, has_tp, order_count
+):
+    """
+    [TASK 1+2] Dựng row 23 cột cho sheet "Chờ và khớp" (A-W).
+
+    Layout:
+      A=Symbol, B=Side, C=Chờ khớp (Y/N), D=Trạng thái (Y/N/ĐÓNG),
+      E=Giá vào, F=Đòn bẩy, G=Có SL (Y/N), H=Có TP (Y/N), I=Số orders,
+      J=% lớp 1, K=% lớp 2, L=% lớp 3  ← user nhập (default 40/40/20),
+      M=SL1, N=SL2, O=SL3, P=TP1, Q=TP2, R=TP3  ← user nhập giá,
+      S=Cho phép đặt (Y/N), T/U/V=Tick xóa 1/2-3/sót, W=Tick xóa ngược (ĐÓNG).
+
+    Các cột user-input (J-S) và tick (T-W) để trống, sẽ merge từ dữ liệu cũ.
+    """
+    lenh_ls = "Y" if has_sl else "N"
+    lenh_tp = "Y" if has_tp else "N"
+    # status_d: "Y" (đã khớp), "N" (chờ khớp), "ĐÓNG" (còn lệnh ngược)
+    if status_d == "Y":
+        cho_khop = "N"
+    elif status_d == "N":
+        cho_khop = "Y"
+    else:  # ĐÓNG
+        cho_khop = "N"
+
+    return (
+        symbol_formatted,        # A: Symbol
+        side,                    # B: LONG/SHORT
+        cho_khop,                # C: Chờ khớp (auto)
+        status_d,                # D: Trạng thái (Y/N/ĐÓNG) — auto
+        entry_price,             # E: Giá vào (auto)
+        leverage,                # F: Đòn bẩy (auto)
+        lenh_ls,                 # G: Có SL (auto)
+        lenh_tp,                 # H: Có TP (auto)
+        order_count,             # I: Số orders (auto)
+        "",                      # J: % lớp 1 (user, default 40)
+        "",                      # K: % lớp 2 (user, default 40)
+        "",                      # L: % lớp 3 (user, default 20)
+        "",                      # M: Giá SL1 (user)
+        "",                      # N: Giá SL2 (user)
+        "",                      # O: Giá SL3 (user)
+        "",                      # P: Giá TP1 (user)
+        "",                      # Q: Giá TP2 (user)
+        "",                      # R: Giá TP3 (user)
+        "",                      # S: Cho phép đặt (user - Y/N)
+        "",                      # T: Tick xóa entry
+        "",                      # U: Tick xóa cặp SL+TP
+        "",                      # V: Tick xóa lệnh sót
+        "",                      # W: Tick xóa lệnh ngược (ĐÓNG)
+    )
+
+
 def get_all_open_orders_with_single_order():
     """
     Lấy tất cả orders có đúng 1 order pending cho mỗi symbol
@@ -609,25 +779,16 @@ def do_it():
             
             logger.info(f"{symbol_formatted}: {vi_the_short_long}, Entry={gia_vao}, Lev={don_bay}, Orders={order_count}, SL={lenh_ls}, TP={lenh_tp}")
             
-            # ✅ Tạo row với 16 cột (A-P)
-            # M: Tick xóa lệnh 1 (entry), N: Tick xóa cặp 2-3 (SL+TP), O: Tick xóa lệnh đơn 2-3 sót lại
-            row = (
-                symbol_formatted,      # A: Symbol
-                vi_the_short_long,     # B: LONG/SHORT
-                cho_khop,              # C: Chờ khớp (N)
-                da_khop_mo_vi_the,     # D: Đã khớp (Y)
-                gia_vao,               # E: Giá vào
-                don_bay,               # F: Đòn bẩy
-                lenh_ls,               # G: Lệnh Stop Limit (Y/N)
-                lenh_tp,               # H: Lệnh Trailing Stop (Y/N)
-                lenh_nguoc,            # I: Số lượng orders
-                "",                    # J: Giá kích hoạt SL - Để trống, user điền tay
-                "",                    # K: Giá kích hoạt TP - Để trống, user điền tay
-                "",                    # L: Trạng thái cho phép đặt lệnh (Y/N)
-                "",                    # M: Tick xóa lệnh 1 (entry order)
-                "",                    # N: Tick xóa cặp 2-3 (SL+TP)
-                "",                    # O: Tick xóa lệnh đơn 2-3 sót lại
-                ""                     # P: (trống)
+            # [TASK 1+2] Tạo row 23 cột (A-W) với trạng thái D="Y" (đã khớp, position mở)
+            row = build_cho_va_khop_row(
+                symbol_formatted=symbol_formatted,
+                side=vi_the_short_long,
+                status_d="Y",  # Position đang mở
+                entry_price=gia_vao,
+                leverage=don_bay,
+                has_sl=has_sl,
+                has_tp=has_tp,
+                order_count=order_count,
             )
             tab_100_ma_2d_arr.append(row)
             
@@ -732,25 +893,16 @@ def do_it():
 
             logger.info(f"{symbol_formatted}: {vi_the_short_long}, Activation={gia_vao}, Status=Chờ khớp")
             
-            # ✅ Tạo row với 16 cột (A-P)
-            # M: Tick xóa lệnh 1 (entry), N: Tick xóa cặp 2-3 (SL+TP), O: Tick xóa lệnh đơn 2-3 sót lại
-            row = (
-                symbol_formatted,      # A: Symbol
-                vi_the_short_long,     # B: LONG/SHORT
-                cho_khop,              # C: Chờ khớp (Y)
-                da_khop_mo_vi_the,     # D: Đã khớp (N)
-                gia_vao,               # E: Giá vào (activation price)
-                don_bay,               # F: Đòn bẩy (N - chưa có)
-                lenh_ls,               # G: Lệnh SL (N)
-                lenh_tp,               # H: Lệnh TP (N)
-                lenh_nguoc,            # I: Số lượng orders (0)
-                "",                    # J: Giá kích hoạt SL - Để trống
-                "",                    # K: Giá kích hoạt TP - Để trống
-                "",                    # L: Trạng thái cho phép đặt lệnh (Y/N)
-                "",                    # M: Tick xóa lệnh 1 (entry order)
-                "",                    # N: Tick xóa cặp 2-3 (SL+TP)
-                "",                    # O: Tick xóa lệnh đơn 2-3 sót lại
-                ""                     # P: (trống)
+            # [TASK 1+2] Tạo row 23 cột (A-W) với trạng thái D="N" (chờ khớp)
+            row = build_cho_va_khop_row(
+                symbol_formatted=symbol_formatted,
+                side=vi_the_short_long,
+                status_d="N",  # Chưa khớp
+                entry_price=gia_vao,
+                leverage=don_bay,
+                has_sl=False,
+                has_tp=False,
+                order_count=lenh_nguoc,
             )
             tab_100_ma_2d_arr.append(row)
             
@@ -759,39 +911,77 @@ def do_it():
             logger.error(f"Lỗi xử lý order {order.get('id', 'N/A')}: {e}", exc_info=True)
             continue
 
+    # [TASK 2] BƯỚC 4.5: Phát hiện vị thế ĐÓNG còn lệnh ngược treo
+    print(f"\n🔴 BƯỚC 4.5: Phát hiện vị thế ĐÓNG còn lệnh treo...", flush=True)
+    opened_symbols_set = set(p.get('symbol', '') for p in res)
+    closed_list = detect_closed_positions_with_residual_orders(opened_symbols_set)
+
+    for closed in closed_list:
+        try:
+            sym_clean = closed['symbol']
+            symbol_formatted = sym_clean.replace("USDT", "/USDT") if sym_clean.endswith("USDT") else sym_clean
+            side_str = closed.get('side') or ""
+            # Row ĐÓNG: entry=0 vì position đã đóng (user sẽ dùng W để xoá lệnh ngược)
+            row = build_cho_va_khop_row(
+                symbol_formatted=symbol_formatted,
+                side=side_str,
+                status_d="ĐÓNG",
+                entry_price=0,
+                leverage="N",
+                has_sl=closed['has_sl'],
+                has_tp=closed['has_tp'],
+                order_count=closed['order_count'],
+            )
+            tab_100_ma_2d_arr.append(row)
+            print(f"  📎 Thêm ĐÓNG: {symbol_formatted} (side={side_str}, orders={closed['order_count']})", flush=True)
+        except Exception as e:
+            logger.error(f"Lỗi tạo row ĐÓNG cho {closed.get('symbol')}: {e}", exc_info=True)
+
     # BƯỚC 5: Cập nhật lên Google Sheet
     print(f"\n📤 BƯỚC 5: Cập nhật lên Google Sheet...", flush=True)
-    print(f"  Tổng dòng dữ liệu: {len(tab_100_ma_2d_arr)}", flush=True)
-    logger.info(f"Tổng dòng dữ liệu: {len(tab_100_ma_2d_arr)}")
+    print(f"  Tổng dòng dữ liệu: {len(tab_100_ma_2d_arr)} (bao gồm {len(closed_list)} dòng ĐÓNG)", flush=True)
+    logger.info(f"Tổng dòng dữ liệu: {len(tab_100_ma_2d_arr)} (ĐÓNG: {len(closed_list)})")
     
     try:
-        # ✅ BƯỚC 5.1: ĐỌC DỮ LIỆU CŨ (trước khi clear) để giữ lại giá kích hoạt SL/TP (cột J, K), trạng thái (L) và cột O, P
-        print("  📖 Đọc dữ liệu cũ để giữ lại giá kích hoạt SL/TP (J, K), trạng thái (L) và cột O, P...", flush=True)
-        data_map = {}  # Dict: {symbol: (price_sl, price_tp, status, col_o, col_p)}
+        # [TASK 1+2] BƯỚC 5.1: ĐỌC DỮ LIỆU CŨ (A-W) để giữ lại user input
+        # User nhập: cột J-L (% lớp 1/2/3), M-R (giá SL/TP), S (allow), T-W (tick)
+        print("  📖 Đọc dữ liệu cũ (A-W) để giữ user input (J-L %, M-R giá, S allow, T-W tick)...", flush=True)
+        # data_map: {symbol: (p_l1, p_l2, p_l3, sl1, sl2, sl3, tp1, tp2, tp3, allow, tick_t, tick_u, tick_v, tick_w)}
+        data_map = {}
         
         try:
-            # ✅ Đọc dữ liệu cũ từ hàng 2, cột A-P (15 cột để có cả O, P)
-            old_data = gg_sheet_factory.get_cho_va_khop("A2:P1000")
+            # Đọc A2:W1000 (23 cột)
+            old_data = gg_sheet_factory.get_cho_va_khop("A2:W1000")
             
             if old_data:
                 for row in old_data:
-                    # [Bug D FIX] Bỏ điều kiện len(row) >= 15, lấy từng field an toàn
                     symbol = str(row[0]).strip() if len(row) > 0 and row[0] else ""
                     if not symbol:
                         continue
-                    price_sl = str(row[9]).strip()  if len(row) > 9  and row[9]  else ""  # Cột J
-                    price_tp = str(row[10]).strip() if len(row) > 10 and row[10] else ""  # Cột K
-                    status   = str(row[11]).strip().upper() if len(row) > 11 and row[11] else ""  # Cột L
-                    col_m    = str(row[12]).strip() if len(row) > 12 and row[12] else ""  # Cột M
-                    col_n    = str(row[13]).strip() if len(row) > 13 and row[13] else ""  # Cột N
-                    col_o    = str(row[14]).strip() if len(row) > 14 and row[14] else ""  # Cột O
-                    # Chuẩn hóa symbol format: HOME/USDT hoặc HOME/USDT:USDT → HOME/USDT
+                    # Giữ tất cả user-input cols (J-W, index 9-22, tổng 14 cột)
+                    def _g(i):
+                        return str(row[i]).strip() if len(row) > i and row[i] else ""
+                    user_values = (
+                        _g(9),   # J: % lớp 1
+                        _g(10),  # K: % lớp 2
+                        _g(11),  # L: % lớp 3
+                        _g(12),  # M: Giá SL1
+                        _g(13),  # N: Giá SL2
+                        _g(14),  # O: Giá SL3
+                        _g(15),  # P: Giá TP1
+                        _g(16),  # Q: Giá TP2
+                        _g(17),  # R: Giá TP3
+                        _g(18),  # S: Cho phép đặt
+                        _g(19),  # T: Tick xóa entry
+                        _g(20),  # U: Tick xóa cặp SL+TP
+                        _g(21),  # V: Tick xóa sót
+                        _g(22),  # W: Tick xóa lệnh ngược (ĐÓNG)
+                    )
                     symbol_normalized = symbol.replace(":USDT", "").strip()
-                    data_map[symbol_normalized] = (price_sl, price_tp, status, col_m, col_n, col_o)
-                    logger.debug(f"Lưu dữ liệu cho {symbol_normalized}: SL={price_sl}, TP={price_tp}, Status={status}, M={col_m}, N={col_n}, O={col_o}")
+                    data_map[symbol_normalized] = user_values
                 
                 print(f"    ✅ Đã đọc {len(data_map)} symbols từ dữ liệu cũ", flush=True)
-                logger.info(f"Đã đọc {len(data_map)} symbols từ dữ liệu cũ (bao gồm M, N, O)")
+                logger.info(f"Đã đọc {len(data_map)} symbols từ dữ liệu cũ (A-W)")
             else:
                 print("    ℹ️  Không có dữ liệu cũ", flush=True)
                 
@@ -799,62 +989,43 @@ def do_it():
             print(f"    ⚠️  Lỗi khi đọc dữ liệu cũ: {e} (tiếp tục không merge)", flush=True)
             logger.warning(f"Lỗi đọc dữ liệu cũ để merge: {e}", exc_info=True)
         
-        # ✅ BƯỚC 5.2: MERGE GIÁ KÍCH HOẠT SL/TP (J, K), TRẠNG THÁI (L) và cột M, N, O vào dữ liệu mới
+        # [TASK 1+2] BƯỚC 5.2: MERGE USER INPUT (J-W) vào dữ liệu mới
         if data_map:
-            print("  🔄 Merge giá kích hoạt SL/TP (J, K), trạng thái (L) và cột M, N, O vào dữ liệu mới...", flush=True)
+            print("  🔄 Merge user input (J-L % lớp, M-R giá SL/TP, S allow, T-W tick) vào dữ liệu mới...", flush=True)
             merged_count = 0
             
             for i, row in enumerate(tab_100_ma_2d_arr):
-                if len(row) >= 12:  # Đảm bảo row có đủ 12 cột
-                    symbol = str(row[0]).strip() if row[0] else ""
-                    # Chuẩn hóa symbol để so sánh
-                    symbol_normalized = symbol.replace(":USDT", "").strip()
-                    
-                    # Check xem symbol có trong data_map không
-                    if symbol_normalized in data_map:
-                        price_sl, price_tp, status, col_m, col_n, col_o = data_map[symbol_normalized]
-                        # Update row: giữ nguyên các cột A-L, update M, N, O
-                        row_list = list(row)
-                        
-                        # Đảm bảo row_list có đủ 16 cột (A-P)
-                        while len(row_list) < 16:
-                            row_list.append("")  # Thêm cột rỗng nếu thiếu
-                        
-                        # ✅ Update cột J, K (giá kích hoạt SL/TP) - CHỈ merge nếu có giá trị (không rỗng)
-                        if price_sl:  # Chỉ merge nếu price_sl không rỗng
-                            row_list[9] = price_sl   # Cột J: Giá kích hoạt SL
-                        if price_tp:  # Chỉ merge nếu price_tp không rỗng
-                            row_list[10] = price_tp  # Cột K: Giá kích hoạt TP
-                        if status:  # Chỉ merge nếu status không rỗng
-                            row_list[11] = status  # Cột L: Trạng thái Y/N
-                        
-                        # Giữ lại cột M, N, O (tick xóa lệnh)
-                        if col_m:
-                            row_list[12] = col_m  # Cột M: Tick xóa lệnh 1
-                        if col_n:
-                            row_list[13] = col_n  # Cột N: Tick xóa cặp 2-3
-                        if col_o:
-                            row_list[14] = col_o  # Cột O: Tick xóa lệnh đơn
-                        
-                        tab_100_ma_2d_arr[i] = tuple(row_list)
-                        merged_count += 1
-                        logger.debug(f"Merged cho {symbol_normalized}: SL={price_sl}, TP={price_tp}, Status={status}, M={col_m}, N={col_n}, O={col_o}")
+                symbol = str(row[0]).strip() if row[0] else ""
+                symbol_normalized = symbol.replace(":USDT", "").strip()
+                
+                if symbol_normalized in data_map:
+                    user_values = data_map[symbol_normalized]
+                    row_list = list(row)
+                    # Bảo đảm đủ 23 cột
+                    while len(row_list) < 23:
+                        row_list.append("")
+                    # Merge từng field nếu user có nhập (không rỗng)
+                    # user_values mapping to row indices 9..22
+                    for off, val in enumerate(user_values):
+                        idx = 9 + off  # cột J..W
+                        if val:
+                            row_list[idx] = val
+                    tab_100_ma_2d_arr[i] = tuple(row_list)
+                    merged_count += 1
             
-            print(f"    ✅ Đã merge giá kích hoạt (J/K), trạng thái (L) và cột M, N, O cho {merged_count} symbols", flush=True)
-            logger.info(f"Đã merge giá kích hoạt (J/K), trạng thái (L) và cột M, N, O cho {merged_count} symbols từ dữ liệu cũ")
+            print(f"    ✅ Đã merge user input cho {merged_count} symbols", flush=True)
+            logger.info(f"Merged user-input (J-W) cho {merged_count} symbols")
         
-        # ✅ Clear dữ liệu cũ CHỈ từ cột A-L (KHÔNG xóa cột M, N, O - giữ lại tick xóa lệnh)
-        print("  🗑️  Xóa dữ liệu cũ (chỉ cột A-L, giữ nguyên M, N, O)...", flush=True)
-        # Clear từ cột A đến L (end_column="L") - Giữ nguyên M, N, O
-        gg_sheet_factory.clear_multi(gg_sheet_factory.tab_cho_va_khop, 2, "a", end_row=1000, end_column="L")
+        # [TASK 1+2] Clear chỉ cột A-I (auto-populated), giữ J-W (user input + tick)
+        print("  🗑️  Xóa dữ liệu cũ (chỉ cột A-I auto, giữ J-W user input)...", flush=True)
+        gg_sheet_factory.clear_multi(gg_sheet_factory.tab_cho_va_khop, 2, "a", end_row=1000, end_column="I")
         
-        # Ghi timestamp vào A2
         timestamp_str = current_time.strftime("%Y-%m-%d %H:%M:%S")
         print(f"  📅 Cập nhật timestamp vào A2: {timestamp_str}", flush=True)
         gg_sheet_factory.update_single_value(gg_sheet_factory.tab_cho_va_khop, "A2", timestamp_str)
         
-        # Update dữ liệu mới (bắt đầu từ hàng 2, đã có rate merged)
-        print("  ✍️  Ghi dữ liệu mới (đã merge rate)...", flush=True)
+        # Ghi dữ liệu mới 23 cột (update_multi sẽ dùng range A..ZZ)
+        print("  ✍️  Ghi dữ liệu mới 23 cột (A-W, đã merge user input)...", flush=True)
         gg_sheet_factory.update_multi(gg_sheet_factory.tab_cho_va_khop, 2, tab_100_ma_2d_arr, "a")
         
         print(f"✅ Hoàn thành! Đã cập nhật {len(tab_100_ma_2d_arr)} dòng vào sheet (đã giữ lại rate)", flush=True)

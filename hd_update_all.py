@@ -99,6 +99,23 @@ _DEBUG_COL_NAMES = [
     "Vol 1h (hiện tại)",               # AI
     "Vol 1h MA20",                     # AJ
     "Cảnh báo delist sắp tới",         # AK — API delist-current-month + thông báo Support (CMS)
+    # ── TASK 4: Chỉ báo kỹ thuật bổ sung (AL → BA) ───────────────────────────
+    "MA7 (1h)",                        # AL
+    "MA25 (1h)",                       # AM
+    "MA99 (1h)",                       # AN
+    "MACD (1h)",                       # AO
+    "MACD Signal (1h)",                # AP
+    "MACD Hist (1h)",                  # AQ
+    "Stoch RSI %K (1h)",               # AR
+    "Stoch RSI %D (1h)",               # AS
+    "Open Interest (USDT)",            # AT
+    "OI Δ 24h (%)",                    # AU
+    "L/S Ratio (account)",             # AV
+    "L/S Ratio (top traders)",         # AW
+    "Vol 1h / MA20 (ratio)",           # AX — volume breakout detector
+    "Score LONG/SHORT (-10..+10)",     # AY
+    "Gợi ý",                           # AZ — "LONG mạnh" / "LONG nhẹ" / "Trung tính" / "SHORT nhẹ" / "SHORT mạnh"
+    "Lý do score",                     # BA — chi tiết thành phần
 ]
 
 
@@ -583,6 +600,294 @@ def _rsi_wilder_from_closes(closes, period=14):
         return 100.0
     rs = avg_gain / avg_loss
     return float(100 - (100 / (1 + rs)))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TASK 4: Chỉ báo kỹ thuật bổ sung (MA, MACD, Stoch RSI, OI, LSR, Score)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _ema_series(values, period):
+    """EMA list cùng độ dài values. Dùng SMA làm seed giá trị thứ period-1."""
+    if not values or len(values) < period:
+        return []
+    arr = [float(x) for x in values]
+    k = 2.0 / (period + 1)
+    ema = [None] * len(arr)
+    seed = sum(arr[:period]) / period
+    ema[period - 1] = seed
+    for i in range(period, len(arr)):
+        ema[i] = arr[i] * k + ema[i - 1] * (1 - k)
+    return ema
+
+
+def _sma_last(values, period):
+    """SMA của period cuối (giá trị đơn)."""
+    if not values or len(values) < period:
+        return None
+    return float(np.mean(values[-period:]))
+
+
+def _compute_macd(closes, fast=12, slow=26, signal=9):
+    """MACD theo chuẩn TA: MACD = EMA12 - EMA26, Signal = EMA9 của MACD, Hist = MACD - Signal.
+    Returns: (macd, signal, histogram) tại nến cuối — None nếu không đủ nến.
+    """
+    if not closes or len(closes) < slow + signal:
+        return None, None, None
+    ema_fast = _ema_series(closes, fast)
+    ema_slow = _ema_series(closes, slow)
+    macd_line = []
+    for i in range(len(closes)):
+        if ema_fast[i] is None or ema_slow[i] is None:
+            macd_line.append(None)
+        else:
+            macd_line.append(ema_fast[i] - ema_slow[i])
+    # Lấy phần có giá trị để tính EMA9
+    valid = [x for x in macd_line if x is not None]
+    if len(valid) < signal:
+        return None, None, None
+    signal_vals = _ema_series(valid, signal)
+    macd_now = valid[-1]
+    signal_now = signal_vals[-1]
+    if signal_now is None:
+        return macd_now, None, None
+    return macd_now, signal_now, macd_now - signal_now
+
+
+def _compute_stoch_rsi(closes, rsi_period=14, stoch_period=14, k_smooth=3, d_smooth=3):
+    """Stoch RSI: Stoch của chuỗi RSI(14). Trả về (%K, %D) thang 0-100.
+    Yêu cầu >= rsi_period + stoch_period + k_smooth nến.
+    """
+    min_len = rsi_period + stoch_period + k_smooth + d_smooth
+    if not closes or len(closes) < min_len:
+        return None, None
+
+    # Tính chuỗi RSI cho TỪNG NẾN (Wilder) — O(n)
+    changes = [closes[i] - closes[i - 1] for i in range(1, len(closes))]
+    gains = [max(0.0, c) for c in changes]
+    losses = [max(0.0, -c) for c in changes]
+    rsi_series = [None] * len(closes)
+    if len(gains) < rsi_period:
+        return None, None
+    avg_g = sum(gains[:rsi_period]) / rsi_period
+    avg_l = sum(losses[:rsi_period]) / rsi_period
+    # RSI đầu tiên tại index rsi_period
+    for i in range(rsi_period, len(gains) + 1):
+        if i > rsi_period:
+            avg_g = (avg_g * (rsi_period - 1) + gains[i - 1]) / rsi_period
+            avg_l = (avg_l * (rsi_period - 1) + losses[i - 1]) / rsi_period
+        if avg_l == 0:
+            rsi = 100.0
+        else:
+            rs = avg_g / avg_l
+            rsi = 100 - (100 / (1 + rs))
+        rsi_series[i] = rsi
+
+    rsi_clean = [x for x in rsi_series if x is not None]
+    if len(rsi_clean) < stoch_period + k_smooth + d_smooth - 2:
+        return None, None
+
+    # Stoch RSI raw: (RSI - minRSI) / (maxRSI - minRSI)
+    raw_k = []
+    for i in range(len(rsi_clean)):
+        if i < stoch_period - 1:
+            raw_k.append(None)
+            continue
+        window = rsi_clean[i - stoch_period + 1:i + 1]
+        w_min, w_max = min(window), max(window)
+        if w_max - w_min == 0:
+            raw_k.append(0.0)
+        else:
+            raw_k.append((rsi_clean[i] - w_min) / (w_max - w_min) * 100)
+
+    k_valid = [x for x in raw_k if x is not None]
+    if len(k_valid) < k_smooth + d_smooth:
+        return None, None
+
+    # %K smoothed (SMA k_smooth)
+    k_smoothed = []
+    for i in range(len(k_valid)):
+        if i < k_smooth - 1:
+            k_smoothed.append(None)
+        else:
+            k_smoothed.append(float(np.mean(k_valid[i - k_smooth + 1:i + 1])))
+
+    k_clean = [x for x in k_smoothed if x is not None]
+    if len(k_clean) < d_smooth:
+        return None, None
+    # %D = SMA d_smooth của %K
+    d_now = float(np.mean(k_clean[-d_smooth:]))
+    k_now = k_clean[-1]
+    return k_now, d_now
+
+
+def _binance_fapi_get(endpoint, params=None, timeout=10):
+    """Gọi Binance Futures public endpoint (không cần signature)."""
+    try:
+        r = requests.get(f"https://fapi.binance.com{endpoint}", params=params or {}, timeout=timeout)
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        logger.debug(f"[fapi] {endpoint} params={params} lỗi: {e}")
+        return None
+
+
+def _fetch_open_interest_now(symbol_clean):
+    """GET /fapi/v1/openInterest — OI tức thời (đơn vị: contract)."""
+    data = _binance_fapi_get("/fapi/v1/openInterest", {"symbol": symbol_clean})
+    if not data:
+        return None
+    try:
+        return float(data.get("openInterest", 0))
+    except (ValueError, TypeError):
+        return None
+
+
+def _fetch_oi_hist_delta_pct(symbol_clean, period="1h", points=25):
+    """GET /futures/data/openInterestHist — lấy chuỗi OI theo chu kỳ.
+    Trả về (oi_now_usdt, delta_pct_24h). Nếu points=25 với period=1h → 24h history.
+    """
+    data = _binance_fapi_get(
+        "/futures/data/openInterestHist",
+        {"symbol": symbol_clean, "period": period, "limit": points},
+    )
+    if not data or len(data) < 2:
+        return None, None
+    try:
+        oi_now = float(data[-1].get("sumOpenInterestValue", 0))  # USDT value
+        oi_24h_ago = float(data[0].get("sumOpenInterestValue", 0))
+        if oi_24h_ago <= 0:
+            return oi_now, None
+        delta = (oi_now - oi_24h_ago) / oi_24h_ago * 100
+        return oi_now, delta
+    except (ValueError, TypeError, KeyError):
+        return None, None
+
+
+def _fetch_long_short_ratio(symbol_clean, ratio_type="account", period="1h"):
+    """Binance L/S Ratio.
+    ratio_type: 'account' = globalLongShortAccountRatio (mọi account)
+                'position' = topLongShortPositionRatio (top traders theo vị thế)
+    Returns: float (long/short) hoặc None.
+    """
+    if ratio_type == "account":
+        endpoint = "/futures/data/globalLongShortAccountRatio"
+    elif ratio_type == "position":
+        endpoint = "/futures/data/topLongShortPositionRatio"
+    else:
+        return None
+    data = _binance_fapi_get(endpoint, {"symbol": symbol_clean, "period": period, "limit": 1})
+    if not data or len(data) == 0:
+        return None
+    try:
+        return float(data[0].get("longShortRatio", 0))
+    except (ValueError, TypeError):
+        return None
+
+
+def _compute_long_short_score(
+    price, ma7, ma25, ma99, macd_val, macd_signal, macd_hist, stoch_k, stoch_d,
+    lsr_account, lsr_position, oi_delta_pct
+):
+    """Tổng hợp điểm -10 → +10.
+    +10 = rất LONG, -10 = rất SHORT, 0 = trung tính.
+    Các điểm thành phần được cân đối để tổng ≤ 10.
+    """
+    score = 0.0
+    reasons = []
+
+    # MA trend (±3 điểm): MA7 > MA25 > MA99 = +3, ngược lại = -3
+    try:
+        if ma7 is not None and ma25 is not None and ma99 is not None:
+            if ma7 > ma25 > ma99:
+                score += 3
+                reasons.append("MA7>25>99(+3)")
+            elif ma7 < ma25 < ma99:
+                score -= 3
+                reasons.append("MA7<25<99(-3)")
+            elif ma7 > ma25:
+                score += 1.5
+                reasons.append("MA7>25(+1.5)")
+            elif ma7 < ma25:
+                score -= 1.5
+                reasons.append("MA7<25(-1.5)")
+    except Exception:
+        pass
+
+    # Price vs MA25 (±1): giá nằm trên MA25 = xu hướng ngắn hạn lên
+    try:
+        if price and ma25:
+            if price > ma25:
+                score += 1
+                reasons.append("P>MA25(+1)")
+            elif price < ma25:
+                score -= 1
+                reasons.append("P<MA25(-1)")
+    except Exception:
+        pass
+
+    # MACD histogram (±2): histogram > 0 và MACD > Signal = lên
+    try:
+        if macd_val is not None and macd_signal is not None:
+            if macd_val > macd_signal and (macd_hist or 0) > 0:
+                score += 2
+                reasons.append("MACD>Sig(+2)")
+            elif macd_val < macd_signal and (macd_hist or 0) < 0:
+                score -= 2
+                reasons.append("MACD<Sig(-2)")
+    except Exception:
+        pass
+
+    # Stoch RSI (±1.5): <20 oversold = cơ hội LONG, >80 overbought = cơ hội SHORT
+    try:
+        if stoch_k is not None:
+            if stoch_k < 20 and (stoch_d is None or stoch_k > stoch_d):
+                score += 1.5
+                reasons.append(f"StochRSI<20 cross↑(+1.5)")
+            elif stoch_k > 80 and (stoch_d is None or stoch_k < stoch_d):
+                score -= 1.5
+                reasons.append(f"StochRSI>80 cross↓(-1.5)")
+    except Exception:
+        pass
+
+    # L/S account (contrarian ±1): tỷ lệ quá cao = retail đang FOMO, dễ bị quét
+    try:
+        if lsr_account is not None:
+            if lsr_account > 3.0:
+                score -= 1
+                reasons.append(f"LSR_acc={lsr_account:.2f}(retail FOMO,-1)")
+            elif lsr_account < 0.5:
+                score += 1
+                reasons.append(f"LSR_acc={lsr_account:.2f}(retail panic,+1)")
+    except Exception:
+        pass
+
+    # L/S top traders (follow ±1.5): top traders có thông tin tốt hơn
+    try:
+        if lsr_position is not None:
+            if lsr_position > 2.0:
+                score += 1.5
+                reasons.append(f"LSR_pos={lsr_position:.2f}(top LONG,+1.5)")
+            elif lsr_position < 0.7:
+                score -= 1.5
+                reasons.append(f"LSR_pos={lsr_position:.2f}(top SHORT,-1.5)")
+    except Exception:
+        pass
+
+    # OI delta (±1): OI tăng xác nhận trend; giảm = trend yếu
+    try:
+        if oi_delta_pct is not None and price and ma25:
+            if oi_delta_pct > 5 and price > ma25:
+                score += 1
+                reasons.append(f"OIΔ+{oi_delta_pct:.1f}% LONG(+1)")
+            elif oi_delta_pct > 5 and price < ma25:
+                score -= 1
+                reasons.append(f"OIΔ+{oi_delta_pct:.1f}% SHORT(-1)")
+    except Exception:
+        pass
+
+    # Kẹp trong [-10, +10]
+    score = max(-10.0, min(10.0, score))
+    return round(score, 1), " | ".join(reasons) if reasons else ""
 
 
 def _max_daily_volatility_from_ohlcv(ohlcv):
@@ -1225,7 +1530,8 @@ def do_it():
             empty = [""] * len(_DEBUG_COL_NAMES)
             empty[0] = pair
             empty[1] = pct
-            empty[-1] = _delist_warn_lookup(delist_warn_by_pair, pair)
+            # Cột AK = "Cảnh báo delist sắp tới" (index 36)
+            empty[_DEBUG_COL_NAMES.index("Cảnh báo delist sắp tới")] = _delist_warn_lookup(delist_warn_by_pair, pair)
             return empty
 
         print(f"🔄 {symbol} - %24h: {pct:.2f}%, giá: {price}", flush=True)
@@ -1245,15 +1551,17 @@ def do_it():
         closes_1d_closed = closes_1d[:-1] if len(closes_1d) > 20 else closes_1d
         bb1d_u, bb1d_l = _bb_upper_lower_from_closes(closes_1d_closed) if len(closes_1d_closed) >= 20 else (float("nan"), float("nan"))
 
-        # --- 2) Một lần 1h (20 nến): BB1h + Vol X + AG/AH ---
+        # --- 2) Một lần 1h (150 nến): BB1h + Vol X + AG/AH + MA/MACD/StochRSI ---
+        # Tăng limit 20 → 150 để đủ warmup cho MA99 + MACD(26,9) + Stoch RSI(14,14,3,3)
         ohlcv_1h = []
         try:
-            ohlcv_1h = exchange.fetch_ohlcv(pair, "1h", limit=20)
+            ohlcv_1h = exchange.fetch_ohlcv(pair, "1h", limit=150)
         except Exception as e:
             logger.warning(f"[{pair}] fetch_ohlcv 1h: {e}")
 
         closes_1h = [x[4] for x in ohlcv_1h] if ohlcv_1h else []
-        bb1h_u, bb1h_l = _bb_upper_lower_from_closes(closes_1h) if len(closes_1h) >= 20 else (float("nan"), float("nan"))
+        # BB1h chỉ dùng 20 nến gần nhất (giữ nguyên logic cũ)
+        bb1h_u, bb1h_l = _bb_upper_lower_from_closes(closes_1h[-20:]) if len(closes_1h) >= 20 else (float("nan"), float("nan"))
         result_bb_array = [bb1h_u, bb1h_l]  # dùng cho % đến BB1h (cột V/W)
 
         # Cập nhật giá tươi từ nến 1h gần nhất (nến đang hình thành = live price)
@@ -1275,7 +1583,7 @@ def do_it():
             empty = [""] * len(_DEBUG_COL_NAMES)
             empty[0] = pair
             empty[1] = pct
-            empty[-1] = _delist_warn_lookup(delist_warn_by_pair, pair)
+            empty[_DEBUG_COL_NAMES.index("Cảnh báo delist sắp tới")] = _delist_warn_lookup(delist_warn_by_pair, pair)
             return empty
 
         # Một lần 4h (20 nến): tái dùng cho Vol Y / RSI AF
@@ -1395,14 +1703,80 @@ def do_it():
 
         if ohlcv_1h and len(ohlcv_1h) >= 20:
             # Vol 1h tính bằng USDT: base_vol × close_price của từng nến
-            vols_usdt = [float(x[5]) * float(x[4]) for x in ohlcv_1h]
-            row.append(round(vols_usdt[-1], 2))           # AI: Vol 1h hiện tại (USDT)
-            row.append(round(float(np.mean(vols_usdt)), 2))  # AJ: Vol 1h MA20 (USDT)
+            # Chỉ lấy 20 nến gần nhất để MA20 giữ nguyên logic cũ
+            vols_usdt_last20 = [float(x[5]) * float(x[4]) for x in ohlcv_1h[-20:]]
+            row.append(round(vols_usdt_last20[-1], 2))           # AI: Vol 1h hiện tại (USDT)
+            vol_1h_ma20 = float(np.mean(vols_usdt_last20))
+            row.append(round(vol_1h_ma20, 2))                    # AJ: Vol 1h MA20 (USDT)
         else:
+            vol_1h_ma20 = None
             row.extend(["", ""])
 
         # AK: API delist-current-month (mốc tương lai, có ⚠️) + catalog Support (FUT/SPOT/MG + ngày)
         row.append(_delist_warn_lookup(delist_warn_by_pair, pair))
+
+        # ── TASK 4: CHỈ BÁO KỸ THUẬT BỔ SUNG (AL → BA) ────────────────────────
+        # AL-AN: MA 7/25/99 từ closes_1h
+        ma7 = _sma_last(closes_1h, 7) if len(closes_1h) >= 7 else None
+        ma25 = _sma_last(closes_1h, 25) if len(closes_1h) >= 25 else None
+        ma99 = _sma_last(closes_1h, 99) if len(closes_1h) >= 99 else None
+        row.append(round(ma7, 8) if ma7 is not None else "")
+        row.append(round(ma25, 8) if ma25 is not None else "")
+        row.append(round(ma99, 8) if ma99 is not None else "")
+
+        # AO-AQ: MACD
+        macd_val, macd_sig, macd_hist = _compute_macd(closes_1h)
+        row.append(round(macd_val, 8) if macd_val is not None else "")
+        row.append(round(macd_sig, 8) if macd_sig is not None else "")
+        row.append(round(macd_hist, 8) if macd_hist is not None else "")
+
+        # AR-AS: Stoch RSI %K %D
+        stoch_k, stoch_d = _compute_stoch_rsi(closes_1h)
+        row.append(round(stoch_k, 2) if stoch_k is not None else "")
+        row.append(round(stoch_d, 2) if stoch_d is not None else "")
+
+        # AT-AU: Open Interest hiện tại (USDT) + Δ% 24h
+        symbol_clean = pair.replace("/", "")  # BTC/USDT → BTCUSDT
+        oi_now_usdt, oi_delta = _fetch_oi_hist_delta_pct(symbol_clean, period="1h", points=25)
+        row.append(round(oi_now_usdt, 2) if oi_now_usdt is not None else "")
+        row.append(round(oi_delta, 2) if oi_delta is not None else "")
+
+        # AV-AW: L/S ratio (account / top-trader-position)
+        lsr_acc = _fetch_long_short_ratio(symbol_clean, "account", "1h")
+        lsr_pos = _fetch_long_short_ratio(symbol_clean, "position", "1h")
+        row.append(round(lsr_acc, 3) if lsr_acc is not None else "")
+        row.append(round(lsr_pos, 3) if lsr_pos is not None else "")
+
+        # AX: tỷ lệ Vol 1h hiện tại / MA20 (>2 = đột biến)
+        if vol_1h_ma20 and vol_1h_ma20 > 0 and ohlcv_1h:
+            vol_now = float(ohlcv_1h[-1][5]) * float(ohlcv_1h[-1][4])
+            vol_ratio = vol_now / vol_1h_ma20
+            row.append(round(vol_ratio, 2))
+        else:
+            row.append("")
+
+        # AY-BA: Score + Gợi ý + Lý do
+        score, reasons = _compute_long_short_score(
+            price=price, ma7=ma7, ma25=ma25, ma99=ma99,
+            macd_val=macd_val, macd_signal=macd_sig, macd_hist=macd_hist,
+            stoch_k=stoch_k, stoch_d=stoch_d,
+            lsr_account=lsr_acc, lsr_position=lsr_pos,
+            oi_delta_pct=oi_delta,
+        )
+        row.append(score)
+        # Gợi ý theo thang score
+        if score >= 5:
+            suggest = "LONG mạnh"
+        elif score >= 2:
+            suggest = "LONG nhẹ"
+        elif score <= -5:
+            suggest = "SHORT mạnh"
+        elif score <= -2:
+            suggest = "SHORT nhẹ"
+        else:
+            suggest = "Trung tính"
+        row.append(suggest)
+        row.append(reasons)
 
         logger.info(f"get_row_result xong: {symbol}")
         if ENABLE_DEBUG_DATA:
@@ -1598,6 +1972,23 @@ def do_it():
         "Vol 1h (hiện tại)",            # AI
         "Vol 1h MA20",                  # AJ
         "Cảnh báo delist sắp tới",      # AK: delist API + Support (CMS)
+        # ── TASK 4: Chỉ báo kỹ thuật bổ sung (AL → BA) ───────────────────
+        "MA7 (1h)",                     # AL
+        "MA25 (1h)",                    # AM
+        "MA99 (1h)",                    # AN
+        "MACD (1h)",                    # AO
+        "MACD Signal (1h)",             # AP
+        "MACD Hist (1h)",               # AQ
+        "Stoch RSI %K (1h)",            # AR
+        "Stoch RSI %D (1h)",            # AS
+        "Open Interest (USDT)",         # AT
+        "OI Δ 24h (%)",                 # AU
+        "L/S Ratio (account)",          # AV
+        "L/S Ratio (top traders)",      # AW
+        "Vol 1h / MA20",                # AX — >2 = đột biến volume
+        "Score LONG/SHORT",             # AY — -10..+10
+        "Gợi ý",                        # AZ — LONG mạnh/LONG nhẹ/Trung tính/SHORT nhẹ/SHORT mạnh
+        "Lý do score",                  # BA — các thành phần cấu thành điểm
     ]
     
     # Thêm header vào đầu array

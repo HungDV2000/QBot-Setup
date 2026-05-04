@@ -598,8 +598,8 @@ def update_multi(tab_name, array_index, array_2d, from_column_alphabet_name):
   else:
       index = 2 + array_index
   
-  # Fix: Mở rộng range đến cột AZ để đủ chứa tất cả data (A..AH = 34 cột, AZ = 52)
-  RANGE_NAME = f"'{tab_name}'!{from_column_alphabet_name}{index}:AZ1000"
+  # Fix: Mở rộng range đến cột ZZ để đủ chứa data mở rộng (100 mã tab có 53 cột A→BA)
+  RANGE_NAME = f"'{tab_name}'!{from_column_alphabet_name}{index}:ZZ1000"
   
   
   print("----------------------------")

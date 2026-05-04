@@ -72,19 +72,107 @@ def is_same_pair(sym1, sym2):
        return True
     return False
 
+def parse_multi_layer_sl_tp_from_sheet(symbol, side, row_data, entry_price):
+    """
+    [TASK 1] Đọc 3 lớp SL/TP + tỉ lệ từ sheet "Chờ và khớp" (layout 23 cột A-W).
+
+    Layout dùng:
+      J (idx 9)  = % lớp 1  (default 40)
+      K (idx 10) = % lớp 2  (default 40)
+      L (idx 11) = % lớp 3  (default 20)
+      M (idx 12) = Giá SL1
+      N (idx 13) = Giá SL2
+      O (idx 14) = Giá SL3
+      P (idx 15) = Giá TP1
+      Q (idx 16) = Giá TP2
+      R (idx 17) = Giá TP3
+
+    Args:
+        symbol, side: để log
+        row_data: list dữ liệu từ sheet
+        entry_price: để validate hợp lệ giá
+
+    Returns:
+        dict {
+            'sl_prices': [sl1, sl2, sl3] (None nếu user không nhập hoặc không hợp lệ),
+            'tp_prices': [tp1, tp2, tp3] (tương tự),
+            'ratios':    [r1, r2, r3]   (% lớp, mặc định 40/40/20),
+            'has_sl': True nếu có ít nhất 1 SL price hợp lệ,
+            'has_tp': tương tự,
+        }
+    """
+    DEFAULT_RATIOS = [40.0, 40.0, 20.0]
+
+    def _parse_float(idx, label):
+        if len(row_data) <= idx or not row_data[idx]:
+            return None
+        raw = str(row_data[idx]).strip().replace(",", ".")
+        if not raw or raw in ("0", "0.0"):
+            return None
+        try:
+            v = float(raw)
+            return v if v > 0 else None
+        except (ValueError, TypeError):
+            logger.debug(f"{symbol}: Cột {label} không phải số: '{raw}'")
+            return None
+
+    # --- Tỉ lệ J/K/L ---
+    r1 = _parse_float(9, "J (% lớp 1)") or DEFAULT_RATIOS[0]
+    r2 = _parse_float(10, "K (% lớp 2)") or DEFAULT_RATIOS[1]
+    r3 = _parse_float(11, "L (% lớp 3)")
+    if r3 is None:
+        # Tự tính nếu rỗng: = 100 - r1 - r2 (cap >= 0)
+        r3 = max(0.0, 100.0 - r1 - r2)
+    ratios = [r1, r2, r3]
+
+    # --- Giá SL1/2/3 ---
+    sl_prices = [_parse_float(12, "M (SL1)"), _parse_float(13, "N (SL2)"), _parse_float(14, "O (SL3)")]
+    # --- Giá TP1/2/3 ---
+    tp_prices = [_parse_float(15, "P (TP1)"), _parse_float(16, "Q (TP2)"), _parse_float(17, "R (TP3)")]
+
+    # Validate từng SL theo side (SL LONG < entry, SL SHORT > entry)
+    is_long = (side == STATE_LONG)
+    for i, v in enumerate(sl_prices):
+        if v is None:
+            continue
+        if is_long and v >= entry_price:
+            logger.warning(f"{symbol}: SL{i+1}={v} >= entry={entry_price} cho LONG — bỏ qua")
+            sl_prices[i] = None
+        elif (not is_long) and v <= entry_price:
+            logger.warning(f"{symbol}: SL{i+1}={v} <= entry={entry_price} cho SHORT — bỏ qua")
+            sl_prices[i] = None
+
+    # Validate từng TP theo side (TP LONG > entry, TP SHORT < entry)
+    for i, v in enumerate(tp_prices):
+        if v is None:
+            continue
+        if is_long and v <= entry_price:
+            logger.warning(f"{symbol}: TP{i+1}={v} <= entry={entry_price} cho LONG — bỏ qua")
+            tp_prices[i] = None
+        elif (not is_long) and v >= entry_price:
+            logger.warning(f"{symbol}: TP{i+1}={v} >= entry={entry_price} cho SHORT — bỏ qua")
+            tp_prices[i] = None
+
+    has_sl = any(p is not None for p in sl_prices)
+    has_tp = any(p is not None for p in tp_prices)
+
+    logger.info(
+        f"{symbol} ({side}) Entry={entry_price} | "
+        f"SL={sl_prices} TP={tp_prices} | Ratios={ratios} | has_sl={has_sl} has_tp={has_tp}"
+    )
+    return {
+        'sl_prices': sl_prices,
+        'tp_prices': tp_prices,
+        'ratios': ratios,
+        'has_sl': has_sl,
+        'has_tp': has_tp,
+    }
+
+
 def get_sl_tp_activation_price_from_cho_va_khop(symbol, side, row_data, entry_price):
     """
-    Lấy giá kích hoạt SL/TP từ sheet "Chờ và khớp" (cột J, K)
-    Tính rate từ giá kích hoạt và entry price
-    
-    Args:
-        symbol: Symbol hiện tại
-        side: "LONG" hoặc "SHORT"
-        row_data: Dữ liệu dòng từ sheet (list)
-        entry_price: Giá vào lệnh (để tính rate từ giá kích hoạt)
-    
-    Returns:
-        (sl_rate, tp_rate, source_info, sl_activation_price, tp_activation_price)
+    [DEPRECATED — giữ lại cho tham chiếu] Lấy 1 giá SL/TP từ sheet cũ (J, K).
+    Code mới dùng parse_multi_layer_sl_tp_from_sheet().
     """
     # Config mặc định (fallback)
     if side == STATE_LONG:
@@ -424,10 +512,10 @@ cascade_mgr = get_cascade_manager(exchange, order_helper)
 def do_it():
     logger.info(f"{datetime.now()}. Scan Lệnh 123 - Đọc từ Sheet 'Chờ và khớp' -------------------------")
     
-    # [LOGIC MỚI] Đọc sheet "Chờ và khớp" thay vì quét Binance trực tiếp
+    # [TASK 1] Đọc sheet "Chờ và khớp" với layout mới 23 cột (A-W)
     try:
-        sheet_data = gg_sheet_factory.get_cho_va_khop("A4:L1000")  # Đọc từ hàng 4 đến 1000, cột A-L (thêm cột L: trạng thái)
-        logger.info(f"✅ Đã đọc {len(sheet_data)} dòng từ sheet 'Chờ và khớp'")
+        sheet_data = gg_sheet_factory.get_cho_va_khop("A4:W1000")
+        logger.info(f"✅ Đã đọc {len(sheet_data)} dòng từ sheet 'Chờ và khớp' (23 cột A-W)")
     except Exception as e:
         logger.error(f"❌ Lỗi khi đọc sheet 'Chờ và khớp': {e}")
         return
@@ -470,13 +558,13 @@ def do_it():
                 logger.warning(f"{symbol}: Side không hợp lệ: {side}")
                 continue
             
-            # Cột C: Chờ khớp (Y/N) - không dùng nhưng vẫn parse để log
+            # Cột C: Chờ khớp (Y/N)
             cho_khop = str(row[2]).strip().upper() if len(row) > 2 else "N"
             
-            # Cột D: Đã khớp/Mở vị thế (Y/N) - ĐIỀU KIỆN QUAN TRỌNG
+            # Cột D: Trạng thái (Y/N/ĐÓNG) - chỉ xử lý "Y" (position đang mở)
             da_khop = str(row[3]).strip().upper() if len(row) > 3 else "N"
             
-            # [ĐIỀU KIỆN 1] Chỉ xử lý lệnh ĐÃ KHỚP (đã vào lệnh)
+            # [ĐIỀU KIỆN 1] Chỉ xử lý "Y" (position đang mở). Bỏ qua "N" (chờ) và "ĐÓNG"
             if da_khop != "Y":
                 continue
             
@@ -533,213 +621,129 @@ def do_it():
                 logger.debug(f"{symbol}: Đã có đủ SL và TP trên Binance, bỏ qua")
                 continue
             
-            # ✅ [ĐIỀU KIỆN 3] KIỂM TRA TRẠNG THÁI CHO PHÉP ĐẶT LỆNH (Cột L)
-            # Cột L (index 11) - Trạng thái cho phép đặt lệnh (Y/N)
-            # ✅ CHỈ đặt lệnh nếu cột L = "Y", nếu rỗng hoặc khác "Y" thì KHÔNG đặt
-            allow_order = False  # ✅ Mặc định KHÔNG cho phép (chỉ cho phép khi L = "Y")
+            # ✅ [ĐIỀU KIỆN 3] KIỂM TRA TRẠNG THÁI CHO PHÉP ĐẶT LỆNH (Cột S - index 18)
+            # [TASK 1] Cột L cũ (allow) đã chuyển sang cột S trong layout 23 cột
+            allow_order = False
             try:
-                if len(row) > 11 and row[11]:
-                    status_str = str(row[11]).strip().upper()
+                if len(row) > 18 and row[18]:
+                    status_str = str(row[18]).strip().upper()
                     allow_order = (status_str == "Y")
                     if allow_order:
-                        logger.info(f"{symbol}: Trạng thái cột L = '{status_str}' → Cho phép đặt lệnh")
+                        logger.info(f"{symbol}: Cột S = '{status_str}' → Cho phép đặt lệnh")
                     else:
-                        logger.info(f"{symbol}: Trạng thái cột L = '{status_str}' (không phải Y) → Bỏ qua, không đặt lệnh")
+                        logger.info(f"{symbol}: Cột S = '{status_str}' (không phải Y) → Bỏ qua")
                 else:
-                    # Cột L rỗng hoặc không tồn tại → KHÔNG cho phép
-                    logger.info(f"{symbol}: Cột L rỗng hoặc không tồn tại → Bỏ qua, không đặt lệnh")
+                    logger.info(f"{symbol}: Cột S rỗng → Bỏ qua, không đặt lệnh")
             except Exception as e:
-                logger.warning(f"{symbol}: Lỗi đọc trạng thái từ cột L: {e} → Bỏ qua, không đặt lệnh (safety first)")
-                allow_order = False  # ✅ Lỗi thì không cho phép (an toàn)
+                logger.warning(f"{symbol}: Lỗi đọc cột S: {e} → Bỏ qua (safety first)")
+                allow_order = False
             
             if not allow_order:
-                logger.info(f"{symbol}: Không được phép đặt lệnh (cột L ≠ Y hoặc rỗng), bỏ qua")
                 continue
             
             print(f"🔍 Xử lý: {symbol} | Side: {side} | Entry: {entry_price} | Need SL: {need_sl}, TP: {need_tp}", flush=True)
             
-            # [BƯỚC 2] LẤY GIÁ KÍCH HOẠT SL/TP TỪ CỘT J, K và tính rate
-            sl_rate, tp_rate, rate_source, sl_activation_price, tp_activation_price = get_sl_tp_activation_price_from_cho_va_khop(symbol, side, row, entry_price)
-                
-            # Validate rate
-            if need_sl and sl_rate <= 0:
-                logger.warning(f"⚠️ {symbol}: Thiếu SL nhưng SL rate = {sl_rate} <= 0, bỏ qua")
+            # [TASK 1 - BƯỚC 2] ĐỌC 3 LỚP SL/TP + TỈ LỆ TỪ SHEET (cột J-R)
+            multi = parse_multi_layer_sl_tp_from_sheet(symbol, side, row, entry_price)
+            sl_prices = multi['sl_prices']  # [sl1, sl2, sl3]
+            tp_prices = multi['tp_prices']  # [tp1, tp2, tp3]
+            ratios = multi['ratios']        # [r1, r2, r3] (%)
+            has_sl_input = multi['has_sl']
+            has_tp_input = multi['has_tp']
+
+            # Nếu cần SL nhưng không có giá SL nào trong sheet → skip
+            if need_sl and not has_sl_input:
+                logger.warning(f"⚠️ {symbol}: Cần SL nhưng không có giá SL trong sheet (M/N/O rỗng), bỏ qua")
                 continue
-            if need_tp and tp_rate <= 0:
-                logger.warning(f"⚠️ {symbol}: Thiếu TP nhưng TP rate = {tp_rate} <= 0, bỏ qua")
+            if need_tp and not has_tp_input:
+                logger.warning(f"⚠️ {symbol}: Cần TP nhưng không có giá TP trong sheet (P/Q/R rỗng), bỏ qua")
                 continue
-            
+
             # [BƯỚC 3] LẤY POSITION AMOUNT TỪ BINANCE
             position_amt, entry_price_binance = get_position_amount_from_binance(symbol)
             
             if position_amt is None:
-                logger.warning(f"⚠️ {symbol}: Không tìm thấy position trên Binance (sheet có thể chưa sync)")
+                logger.warning(f"⚠️ {symbol}: Không tìm thấy position trên Binance")
                 continue
             
-            # [Optional] Verify entry price từ Binance vs Sheet (warning nếu khác)
-            if entry_price_binance and abs(entry_price_binance - entry_price) / entry_price > 0.01:  # Chênh lệch > 1%
-                logger.warning(f"⚠️ {symbol}: Entry price khác biệt - Sheet: {entry_price}, Binance: {entry_price_binance}")
-            
-            # [BƯỚC 4] ĐẶT LỆNH LẺ (có thể chỉ SL hoặc chỉ TP)
-            print(f"🎯 Đặt lệnh cho {symbol} | Entry: {entry_price} | SL: {sl_rate}%, TP: {tp_rate}% | Need SL={need_sl}, TP={need_tp}", flush=True)
-            
-            # ✅ [FIX BUG] Convert rate từ phần trăm (%) sang số thập phân cho cascade_manager
-            # cascade_manager expect rate là số thập phân (0.3 = 30%), không phải phần trăm (30.0)
-            sl_rate_decimal = sl_rate / 100.0  # 30.0% → 0.3
-            tp_rate_decimal = tp_rate / 100.0  # 60.0% → 0.6
-            logger.debug(f"{symbol}: Convert rate - SL: {sl_rate}% → {sl_rate_decimal}, TP: {tp_rate}% → {tp_rate_decimal}")
-            
+            if entry_price_binance and abs(entry_price_binance - entry_price) / entry_price > 0.01:
+                logger.warning(f"⚠️ {symbol}: Entry price Sheet={entry_price} vs Binance={entry_price_binance} (chênh >1%)")
+
+            # [TASK 1 - BƯỚC 4] TẠO 3 LỚP SL + 3 LỚP TP
+            print(f"🎯 Multi-layer: {symbol} | SL={sl_prices} TP={tp_prices} ratios={ratios}% | need_sl={need_sl} need_tp={need_tp}", flush=True)
+
             try:
-                # [Bug 3 FIX] cascade_mgr.on_entry_filled luôn tạo CẢ 2 SL+TP.
-                # Nếu chỉ thiếu 1 trong 2 → phải kiểm tra và huỷ lệnh thừa ngay sau khi tạo.
-                # Cờ need_sl / need_tp cho biết lệnh nào thực sự cần tạo.
-                if not need_sl and not need_tp:
-                    # Đã đủ cả 2 (đáng lẽ đã continue ở trên, nhưng double-check)
-                    logger.info(f"{symbol}: Đã có đủ SL và TP, bỏ qua")
-                    continue
-
-                # Gọi cascade manager với rate từ sheet (đã convert sang decimal)
-                result = cascade_mgr.on_entry_filled(
+                result = cascade_mgr.on_entry_filled_multi_layer(
                     symbol=symbol,
-                    layer_num=1,
-                    entry_price=entry_price,  # Từ sheet
-                    leverage=leverage,  # Từ sheet
-                    position_amt=position_amt,  # Từ Binance
-                    side=side,  # Từ sheet
-                    max_layers=3,
-                    lenh2_rate=sl_rate_decimal,  # ✅ Đã convert: 30.0% → 0.3
-                    lenh3_rate=tp_rate_decimal,  # ✅ Đã convert: 60.0% → 0.6
-                    lenh3_callback_rate=cst.lenh3_callback_rate,
-                    next_layer_config=None 
+                    entry_price=entry_price,
+                    leverage=leverage,
+                    position_amt=position_amt,
+                    side=side,
+                    sl_prices=sl_prices,
+                    tp_prices=tp_prices,
+                    ratios=ratios,
+                    callback_rate=cst.lenh3_callback_rate,
+                    skip_sl=not need_sl,   # Đã có SL → bỏ qua 3 lớp SL
+                    skip_tp=not need_tp,   # Đã có TP → bỏ qua 3 lớp TP
                 )
-                
-                sl_order = result.get('sl_order')
-                tp_order = result.get('tp_order')
 
-                # [Bug 3 FIX] Nếu cascade_mgr tạo lệnh mà ta không cần → huỷ ngay lập tức
-                if not need_sl and sl_order:
-                    sl_id = sl_order.get('id') or (sl_order.get('info', {}) or {}).get('orderId')
-                    if sl_id:
-                        try:
-                            exchange.cancel_order(str(sl_id), symbol)
-                            logger.info(f"[Bug3 FIX] {symbol}: Đã huỷ SL thừa (id={sl_id}) vì SL đã tồn tại trước đó")
-                        except Exception as cancel_err:
-                            logger.error(f"[Bug3 FIX] {symbol}: Không huỷ được SL thừa (id={sl_id}): {cancel_err}")
-                    sl_order = None  # Không log/coi là thành công
+                sl_orders = result['sl_orders']  # list 3 phần tử
+                tp_orders = result['tp_orders']
+                errors = result.get('errors', [])
 
-                if not need_tp and tp_order:
-                    tp_id = tp_order.get('id') or (tp_order.get('info', {}) or {}).get('algoId') or (tp_order.get('info', {}) or {}).get('orderId')
-                    if tp_id:
-                        try:
-                            # TP là algo order → dùng cancel_all_algo_orders_direct
-                            cancel_all_algo_orders_direct(symbol)
-                            logger.info(f"[Bug3 FIX] {symbol}: Đã huỷ TP thừa (algoId={tp_id}) vì TP đã tồn tại trước đó")
-                        except Exception as cancel_err:
-                            logger.error(f"[Bug3 FIX] {symbol}: Không huỷ được TP thừa (id={tp_id}): {cancel_err}")
-                    tp_order = None  # Không log/coi là thành công
-                
-                # ✅ Debug: Log chi tiết để kiểm tra
-                logger.debug(f"{symbol}: Result từ cascade_mgr - sl_order: {sl_order is not None}, tp_order: {tp_order is not None}")
-                if sl_order:
-                    logger.debug(f"{symbol}: SL order ID: {sl_order.get('id', 'N/A')}")
-                if tp_order:
-                    logger.debug(f"{symbol}: TP order ID: {tp_order.get('id', 'N/A')}")
-                else:
-                    # ✅ Debug: Log lỗi chi tiết từ cascade_manager logs
-                    logger.error(f"{symbol}: TP order = None - Xem cascade_manager logs để biết lý do")
-                    logger.error(f"{symbol}: Các nguyên nhân có thể:")
-                    logger.error(f"   1. Validation lỗi: TP LONG phải có activation_price > current_price")
-                    logger.error(f"   2. Validation lỗi: TP SHORT phải có activation_price < current_price")
-                    logger.error(f"   3. Lỗi API khi tạo trailing stop order")
-                    logger.error(f"   4. entry_price hoặc tp_rate không hợp lệ")
-                    logger.error(f"{symbol}: Debug - entry_price={entry_price}, tp_rate={tp_rate}, side={side}")
-                
-                # Log kết quả
-                orders_created = []
-                order_ids = []
-                
-                if need_sl and sl_order:
-                    sl_id = sl_order.get('id', 'N/A')
-                    orders_created.append(f"SL (ID: {sl_id})")
-                    order_ids.append(sl_id)
-                    order_logger.info(f"LỆNH 2 (SL) | {symbol} | {side} | Entry: {entry_price} | Rate: {sl_rate}%")
-                elif need_sl:
-                    logger.warning(f"⚠️ {symbol}: Cần SL nhưng cascade_mgr không trả về sl_order")
-                
-                if need_tp and tp_order:
-                    tp_id = tp_order.get('id', 'N/A')
-                    orders_created.append(f"TP (ID: {tp_id})")
-                    order_ids.append(tp_id)
-                    order_logger.info(f"LỆNH 3 (TP) | {symbol} | {side} | Entry: {entry_price} | Rate: {tp_rate}%")
-                elif need_tp:
-                    logger.warning(f"⚠️ {symbol}: Cần TP nhưng cascade_mgr không trả về tp_order")
-                
-                # ✅ Gửi Telegram và log CHỈ KHI thực sự có orders được tạo
-                if orders_created:
-                    print(f"✅ Đã tạo: {', '.join(orders_created)} cho {symbol}", flush=True)
-                    logger.info(f"✅ Tạo lệnh thành công cho {symbol}: {', '.join(orders_created)}")
-                    
-                    # ✅ Tạo thông báo Telegram với giá kích hoạt và rate tự động tính
+                sl_ids = [str(o.get('id', 'N/A')) for o in sl_orders if o]
+                tp_ids = [str(o.get('id', 'N/A')) for o in tp_orders if o]
+                created_parts = []
+                if sl_ids:
+                    created_parts.append(f"SL×{len(sl_ids)}: {', '.join(sl_ids)}")
+                    for i, o in enumerate(sl_orders):
+                        if o:
+                            order_logger.info(f"LỆNH 2 (SL{i+1}) | {symbol} | {side} | Entry: {entry_price} | Price: {sl_prices[i]} | Ratio: {ratios[i]}% | OrderID: {o.get('id')}")
+                if tp_ids:
+                    created_parts.append(f"TP×{len(tp_ids)}: {', '.join(tp_ids)}")
+                    for i, o in enumerate(tp_orders):
+                        if o:
+                            order_logger.info(f"LỆNH 3 (TP{i+1}) | {symbol} | {side} | Entry: {entry_price} | Price: {tp_prices[i]} | Ratio: {ratios[i]}% | OrderID: {o.get('id')}")
+
+                if sl_ids or tp_ids:
+                    print(f"✅ Đã tạo: {' | '.join(created_parts)} cho {symbol}", flush=True)
                     msg_parts = [
-                        f"✅ <b>ĐÃ TẠO LỆNH</b>",
-                        f"",
+                        f"✅ <b>ĐÃ TẠO LỆNH 3 LỚP</b>", "",
                         f"<b>Mã:</b> {symbol}",
                         f"<b>Side:</b> {side}",
                         f"<b>Entry:</b> {entry_price}",
-                        f"<b>Lệnh:</b> {', '.join(orders_created)}"
+                        f"<b>Tỉ lệ:</b> {ratios[0]:.0f}/{ratios[1]:.0f}/{ratios[2]:.0f}%",
                     ]
-                    
-                    # ✅ Hiển thị giá kích hoạt và rate tự động tính
-                    rate_info_parts = []
-                    
-                    if need_sl and sl_order:
-                        if sl_activation_price:
-                            # Có giá kích hoạt từ sheet → Hiển thị giá và rate tính được
-                            rate_info_parts.append(f"<b>SL:</b> Giá kích hoạt {sl_activation_price} → Rate {sl_rate}%")
-                        else:
-                            # Dùng rate từ Config
-                            rate_info_parts.append(f"<b>SL:</b> Rate {sl_rate}% (Config)")
-                    
-                    if need_tp and tp_order:
-                        if tp_activation_price:
-                            # Có giá kích hoạt từ sheet → Hiển thị giá và rate tính được
-                            rate_info_parts.append(f"<b>TP:</b> Giá kích hoạt {tp_activation_price} → Rate {tp_rate}%")
-                        else:
-                            # Dùng rate từ Config
-                            rate_info_parts.append(f"<b>TP:</b> Rate {tp_rate}% (Config)")
-                    
-                    if rate_info_parts:
-                        msg_parts.append(f"<b>Rate:</b>")
-                        msg_parts.extend(rate_info_parts)
-                    
+                    if need_sl and sl_prices:
+                        sl_summary = ", ".join([f"{p}" if p else "(rỗng)" for p in sl_prices])
+                        msg_parts.append(f"<b>SL:</b> [{sl_summary}] → Tạo {len(sl_ids)}/3 lệnh")
+                    if need_tp and tp_prices:
+                        tp_summary = ", ".join([f"{p}" if p else "(rỗng)" for p in tp_prices])
+                        msg_parts.append(f"<b>TP:</b> [{tp_summary}] → Tạo {len(tp_ids)}/3 lệnh")
+                    if errors:
+                        msg_parts.append(f"<b>⚠ Lỗi:</b> {len(errors)} lớp thất bại")
                     msg = "\n".join(msg_parts)
-                    
-                    # ✅ Gửi Telegram với try-catch để đảm bảo không bị lỗi im lặng
                     try:
                         telegram_factory.send_tele(msg, cst.chat_id, True, True)
-                        logger.info(f"✅ Đã gửi Telegram cho {symbol}")
                     except Exception as tele_error:
-                        logger.error(f"❌ Lỗi gửi Telegram cho {symbol}: {tele_error}", exc_info=True)
-                        # Vẫn tiếp tục, không block việc xử lý
-                    
+                        logger.error(f"❌ Lỗi gửi Telegram: {tele_error}", exc_info=True)
                     processed_count += 1
                 else:
-                    # ✅ Log chi tiết khi không có orders được tạo
-                    logger.warning(f"⚠️ {symbol}: Không có lệnh nào được tạo - need_sl={need_sl}, need_tp={need_tp}, sl_order={sl_order is not None}, tp_order={tp_order is not None}")
-                    # ✅ Vẫn gửi Telegram cảnh báo để user biết
-                    msg = f"⚠️ <b>KHÔNG TẠO ĐƯỢC LỆNH</b>\n\n<b>Mã:</b> {symbol}\n<b>Side:</b> {side}\n<b>Entry:</b> {entry_price}\n<b>Lý do:</b> cascade_mgr không trả về orders\n<b>Need:</b> SL={need_sl}, TP={need_tp}"
+                    logger.warning(f"⚠️ {symbol}: Không tạo được lệnh nào | errors={errors}")
+                    err_summary = " | ".join(errors[:3]) if errors else "không rõ"
+                    msg = f"⚠️ <b>KHÔNG TẠO ĐƯỢC LỆNH</b>\n\n<b>Mã:</b> {symbol}\n<b>Side:</b> {side}\n<b>Entry:</b> {entry_price}\n<b>Lỗi:</b> {err_summary}"
                     try:
                         telegram_factory.send_tele(msg, cst.chat_id, True, True)
-                    except Exception as tele_error:
-                        logger.error(f"❌ Lỗi gửi Telegram cảnh báo cho {symbol}: {tele_error}", exc_info=True)
-                    
+                    except Exception:
+                        pass
+
             except Exception as e:
-                logger.error(f"❌ Lỗi tạo lệnh cho {symbol}: {e}", exc_info=True)
-                msg = f"🚨 <b>LỖI TẠO LỆNH</b>\n\n<b>Mã:</b> {symbol}\n<b>Lỗi:</b> {str(e)}"
+                logger.error(f"❌ Lỗi tạo multi-layer cho {symbol}: {e}", exc_info=True)
+                msg = f"🚨 <b>LỖI TẠO LỆNH MULTI-LAYER</b>\n\n<b>Mã:</b> {symbol}\n<b>Lỗi:</b> {str(e)}"
                 try:
                     telegram_factory.send_tele(msg, cst.chat_id, True, True)
-                except Exception as tele_error:
-                    logger.error(f"❌ Lỗi gửi Telegram lỗi cho {symbol}: {tele_error}", exc_info=True)
+                except Exception:
+                    pass
 
         except Exception as e:
             logger.error(f"❌ Lỗi xử lý dòng sheet: {e}", exc_info=True)
