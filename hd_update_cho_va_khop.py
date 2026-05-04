@@ -170,8 +170,8 @@ def get_all_open_algo_orders_batch():
     """
     try:
         response = call_binance_api_direct('GET', '/fapi/v1/openAlgoOrders')
-        if not response:
-            return None  # None = API lỗi, khác [] = không có orders
+        if response is None:
+            return None  # None = API thực sự lỗi; [] = thành công nhưng không có orders
 
         orders_raw = []
         if isinstance(response, list):
