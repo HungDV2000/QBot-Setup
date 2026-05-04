@@ -162,27 +162,72 @@ def get_algo_orders_for_symbol(symbol):
         return []
 
 
+def get_all_open_algo_orders_batch():
+    """
+    [Bug B FIX] Lấy TẤT CẢ algo orders đang active (NEW) trong 1 API call duy nhất.
+    Dùng /fapi/v1/openAlgoOrders (không cần symbol) thay vì loop ~500 symbols.
+    Returns: list orders đã được thêm symbol_ccxt, symbol_clean
+    """
+    try:
+        response = call_binance_api_direct('GET', '/fapi/v1/openAlgoOrders')
+        if not response:
+            return None  # None = API lỗi, khác [] = không có orders
+
+        orders_raw = []
+        if isinstance(response, list):
+            orders_raw = response
+        elif isinstance(response, dict):
+            orders_raw = response.get('orders', response.get('data', []))
+
+        result = []
+        for order in orders_raw:
+            sym_clean = order.get('symbol', '')
+            # Bỏ qua delivery futures (có '-', ví dụ: BTCUSDT-260626)
+            if '-' in sym_clean:
+                continue
+            # Convert HOMEUSDT → HOME/USDT:USDT
+            if sym_clean.endswith('USDT') and '/' not in sym_clean:
+                sym_ccxt = sym_clean[:-4] + '/USDT:USDT'
+            else:
+                sym_ccxt = sym_clean
+            order['symbol_ccxt'] = sym_ccxt
+            order['symbol_clean'] = sym_clean
+            result.append(order)
+
+        print(f"✅ Tổng open algo orders (batch 1 call): {len(result)}", flush=True)
+        logger.info(f"Tổng open algo orders (batch): {len(result)}")
+        return result
+
+    except Exception as e:
+        logger.error(f"Lỗi get_all_open_algo_orders_batch: {e}", exc_info=True)
+        return None  # None để caller biết API lỗi
+
+
 def check_sl_tp_orders(symbol, orders):
     """
-    Phân tích danh sách orders để xác định có SL và TP không
-    ✅ CẬP NHẬT: Quét cả algo orders (giống hd_order_123.py)
-    
+    Phân tích danh sách orders để xác định có SL và TP không.
+    Quét cả algo orders lẫn open orders thông thường.
+
     Logic phân biệt:
-    - Algo Orders: STOP_MARKET, STOP_LOSS → SL; TRAILING_STOP → TP
-    - Open Orders: STOP, STOP_LIMIT, STOP_MARKET → SL
-    
+    - Algo Orders: STOP_MARKET, STOP_LOSS → SL; TRAILING_STOP (callbackRate>0, reduceOnly) → TP
+    - Open Orders: STOP, STOP_LIMIT, STOP_MARKET (reduceOnly) → SL
+
     Returns: (has_sl, has_tp, order_count)
     """
     has_sl = False
     has_tp = False
-    
+
     try:
-        # ✅ BƯỚC 1: QUÉT ALGO ORDERS (quan trọng nhất!)
+        # BƯỚC 1: QUÉT ALGO ORDERS (quan trọng nhất!)
         algo_orders = get_algo_orders_for_symbol(symbol)
-        active_algo_orders = [o for o in algo_orders if o.get('algoStatus', '').upper() == 'NEW']
-        
-        logger.debug(f"{symbol}: Tìm thấy {len(active_algo_orders)} active algo orders")
-        
+        # [Bug C FIX] Bắt cả TRIGGERED (TP đã kích hoạt nhưng chưa fill)
+        active_algo_orders = [
+            o for o in algo_orders
+            if o.get('algoStatus', '').upper() in ('NEW', 'TRIGGERED')
+        ]
+
+        logger.debug(f"{symbol}: Tìm thấy {len(active_algo_orders)} active/triggered algo orders")
+
         for order in active_algo_orders:
             algo_type = order.get('algoType', '').upper()
             reduce_only = order.get('reduceOnly', False)
@@ -245,43 +290,45 @@ def check_sl_tp_orders(symbol, orders):
 
 def get_all_entry_algo_orders():
     """
-    Lấy TẤT CẢ entry algo orders (NEW) trực tiếp từ Binance
-    Dùng endpoint: /fapi/v1/allAlgoOrders cho từng symbol phổ biến
-    
-    ⚠️ LỌC BỎ delivery perpetual futures (symbols có '-')
+    [Bug B FIX] Lấy TẤT CẢ algo orders đang active (NEW).
+
+    Ưu tiên: /fapi/v1/openAlgoOrders (1 API call).
+    Fallback: Loop từng symbol nếu batch endpoint không hỗ trợ.
     """
+    # Thử batch endpoint trước (1 call, nhanh, không tốn rate limit)
+    batch_result = get_all_open_algo_orders_batch()
+    if batch_result is not None:
+        # Thành công — log chi tiết để theo dõi
+        for algo in batch_result:
+            print(f"  📌 Entry algo: {algo.get('symbol_clean')}, Type={algo.get('algoType')}, AlgoId={algo.get('algoId')}", flush=True)
+        return batch_result
+
+    # Fallback: batch endpoint lỗi → loop từng symbol (phương án cũ)
+    logger.warning("[FALLBACK] /fapi/v1/openAlgoOrders thất bại, fallback sang loop từng symbol")
+    print("⚠️ Batch algo endpoint lỗi, chuyển sang loop từng symbol...", flush=True)
+
     all_entry_algo = []
-
     try:
-        # Lấy danh sách symbols từ exchange markets
         symbols = list(exchange.markets.keys())
-        print(f"🔍 Kiểm tra algo orders cho {len(symbols)} symbols...", flush=True)
-
         delivery_count = 0
         checked_count = 0
-        
+
         for sym in symbols:
             try:
-                # Chỉ kiểm tra USDT symbols
                 if ':USDT' not in sym:
                     continue
-                
-                # ⚠️ BỎ QUA delivery perpetual futures (symbols có '-', ví dụ: BTCUSDT-260626)
                 if '-' in sym:
                     delivery_count += 1
                     continue
-                
+
                 checked_count += 1
                 algo_orders = get_algo_orders_for_symbol(sym)
-
-                # Lọc NEW orders
                 new_orders = [o for o in algo_orders if o.get('algoStatus', '').upper() == 'NEW']
 
                 for algo in new_orders:
                     algo['symbol_ccxt'] = sym
                     algo['symbol_clean'] = sym.replace('/', '').replace(':USDT', '')
                     all_entry_algo.append(algo)
-
                     print(f"  📌 Entry algo: {algo['symbol_clean']}, Type={algo.get('algoType')}, AlgoId={algo.get('algoId')}", flush=True)
 
             except Exception as e:
@@ -289,13 +336,12 @@ def get_all_entry_algo_orders():
                 continue
 
         print(f"✅ Đã kiểm tra {checked_count} symbols (bỏ qua {delivery_count} delivery futures)", flush=True)
-        print(f"✅ Tổng entry algo orders: {len(all_entry_algo)}", flush=True)
-        logger.info(f"Đã kiểm tra {checked_count} symbols (bỏ qua {delivery_count} delivery futures)")
-        logger.info(f"Tổng entry algo orders: {len(all_entry_algo)}")
+        print(f"✅ Tổng entry algo orders (fallback): {len(all_entry_algo)}", flush=True)
+        logger.info(f"Fallback loop: {checked_count} symbols checked, {len(all_entry_algo)} algo orders found")
 
     except Exception as e:
-        print(f"❌ Lỗi khi lấy entry algo orders: {e}", flush=True)
-        logger.error(f"Lỗi get_all_entry_algo_orders: {e}", exc_info=True)
+        print(f"❌ Lỗi khi lấy entry algo orders (fallback): {e}", flush=True)
+        logger.error(f"Lỗi get_all_entry_algo_orders fallback: {e}", exc_info=True)
 
     return all_entry_algo
 
@@ -619,9 +665,9 @@ def do_it():
                 # Convert HOMEUSDT → HOME/USDT
                 symbol_formatted = order_symbol.replace("USDT", "/USDT") if order_symbol else ""
 
-                # Side từ algo order (side trong info)
+                # [Bug A FIX] Raw Binance algo API trả về 'side' ở top-level, không qua 'info'
                 algo_info = order.get('info', {})
-                side = algo_info.get('side', algo_info.get('side', 'UNKNOWN'))
+                side = order.get('side', algo_info.get('side', 'UNKNOWN')).upper()
                 vi_the_short_long = 'LONG' if side == "BUY" else 'SHORT'
 
                 # Giá kích hoạt
@@ -721,22 +767,20 @@ def do_it():
             
             if old_data:
                 for row in old_data:
-                    # Kiểm tra row có đủ dữ liệu không (ít nhất 15 cột để có M, N, O, P)
-                    if len(row) >= 15:
-                        symbol = str(row[0]).strip() if len(row) > 0 and row[0] else ""
-                        price_sl = str(row[9]).strip() if len(row) > 9 and row[9] else ""  # Cột J (index 9): Giá kích hoạt SL
-                        price_tp = str(row[10]).strip() if len(row) > 10 and row[10] else ""  # Cột K (index 10): Giá kích hoạt TP
-                        status = str(row[11]).strip().upper() if len(row) > 11 and row[11] else ""  # Cột L (index 11): Trạng thái Y/N
-                        col_m = str(row[12]).strip() if len(row) > 12 and row[12] else ""  # Cột M (index 12): Tick xóa lệnh 1
-                        col_n = str(row[13]).strip() if len(row) > 13 and row[13] else ""  # Cột N (index 13): Tick xóa cặp 2-3
-                        col_o = str(row[14]).strip() if len(row) > 14 and row[14] else ""  # Cột O (index 14): Tick xóa lệnh đơn
-                        
-                        # Chỉ lưu nếu có symbol
-                        if symbol:
-                            # Chuẩn hóa symbol format: HOME/USDT hoặc HOME/USDT:USDT → HOME/USDT
-                            symbol_normalized = symbol.replace(":USDT", "").strip()
-                            data_map[symbol_normalized] = (price_sl, price_tp, status, col_m, col_n, col_o)
-                            logger.debug(f"Lưu dữ liệu cho {symbol_normalized}: SL={price_sl}, TP={price_tp}, Status={status}, M={col_m}, N={col_n}, O={col_o}")
+                    # [Bug D FIX] Bỏ điều kiện len(row) >= 15, lấy từng field an toàn
+                    symbol = str(row[0]).strip() if len(row) > 0 and row[0] else ""
+                    if not symbol:
+                        continue
+                    price_sl = str(row[9]).strip()  if len(row) > 9  and row[9]  else ""  # Cột J
+                    price_tp = str(row[10]).strip() if len(row) > 10 and row[10] else ""  # Cột K
+                    status   = str(row[11]).strip().upper() if len(row) > 11 and row[11] else ""  # Cột L
+                    col_m    = str(row[12]).strip() if len(row) > 12 and row[12] else ""  # Cột M
+                    col_n    = str(row[13]).strip() if len(row) > 13 and row[13] else ""  # Cột N
+                    col_o    = str(row[14]).strip() if len(row) > 14 and row[14] else ""  # Cột O
+                    # Chuẩn hóa symbol format: HOME/USDT hoặc HOME/USDT:USDT → HOME/USDT
+                    symbol_normalized = symbol.replace(":USDT", "").strip()
+                    data_map[symbol_normalized] = (price_sl, price_tp, status, col_m, col_n, col_o)
+                    logger.debug(f"Lưu dữ liệu cho {symbol_normalized}: SL={price_sl}, TP={price_tp}, Status={status}, M={col_m}, N={col_n}, O={col_o}")
                 
                 print(f"    ✅ Đã đọc {len(data_map)} symbols từ dữ liệu cũ", flush=True)
                 logger.info(f"Đã đọc {len(data_map)} symbols từ dữ liệu cũ (bao gồm M, N, O)")

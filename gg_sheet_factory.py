@@ -625,6 +625,34 @@ def update_multi(tab_name, array_index, array_2d, from_column_alphabet_name):
   
   return execute_with_retry(_execute)
 
+def batch_clear_values(tab_name, ranges_list):
+  """
+  Xóa trắng nhiều ô/range cùng lúc trong 1 API call duy nhất (tránh 429 rate limit).
+
+  Args:
+    tab_name   : Tên tab (ví dụ: "Chờ và khớp")
+    ranges_list: Danh sách range string, ví dụ ["M5", "N5", "O5", "M8", "N8", "O8"]
+
+  Returns:
+    Response từ batchClear, hoặc None nếu rỗng
+  """
+  if not ranges_list:
+    return None
+  RANGE_NAMES = [f"'{tab_name}'!{r}" for r in ranges_list]
+  init_sheet_api()
+
+  def _execute():
+    result = spreadsheets_service.values().batchClear(
+        spreadsheetId=spreadsheetId,
+        body={"ranges": RANGE_NAMES}
+    ).execute()
+    cleared = result.get("clearedRanges", [])
+    logger.info(f"[batch_clear_values] Đã clear {len(cleared)}/{len(RANGE_NAMES)} ranges trong 1 API call")
+    return result
+
+  return execute_with_retry(_execute)
+
+
 def clear_multi(tab_name, array_index,  from_column_alphabet_name, end_row=1000, end_column="AZ"):
   """
   Clear dữ liệu trong sheet

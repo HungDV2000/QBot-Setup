@@ -384,7 +384,9 @@ def process_cancellation():
                     continue
 
                 symbols_processed += 1
-                has_any_deletion = False
+                # Luôn clear tick sau khi xử lý (dù xóa được hay không)
+                # Vì tick = "user đã yêu cầu xử lý", không nên giữ lại gây nhầm lẫn
+                symbols_to_clear_mno.append(row_idx)
 
                 # === XÓA LỆNH 1 (Entry Order) ===
                 if delete_lenh_1:
@@ -392,88 +394,91 @@ def process_cancellation():
                     logger.info(f"[{symbol_raw}] Bắt đầu xóa lệnh 1 (entry order)")
 
                     deleted_count = 0
-                    
+
                     # 1️⃣ XÓA OPEN ORDERS THÔNG THƯỜNG (LIMIT, MARKET, etc.)
                     open_orders = get_open_orders(symbol_ccxt)
-                    
+
                     entry_orders = []
                     other_orders = []
                     for order in open_orders:
-                        order_type = order.get('type', 'N/A').upper()
                         reduce_only = order.get('reduceOnly', False)
                         if not reduce_only:
                             entry_orders.append(order)
                         else:
                             other_orders.append(order)
-                    
+
                     logger.info(f"[{symbol_raw}] Tìm thấy {len(open_orders)} open orders: {len(entry_orders)} ENTRY, {len(other_orders)} OTHER")
-                    
+
                     for order in entry_orders:
                         order_id = order.get('id')
                         if order_id:
                             if cancel_open_order(symbol_ccxt, order_id):
                                 deleted_count += 1
                                 total_delete_1 += 1
-                                has_any_deletion = True
-                    
-                    # 2️⃣ XÓA ENTRY ALGO ORDERS (TRAILING_STOP với reduceOnly=False)
-                    # Entry orders trên Binance có thể là algo orders, không chỉ open orders
-                    active_algo = get_active_algo_orders(symbol_ccxt)
-                    classified = classify_algo_orders(active_algo)
+
+                    # 2️⃣ XÓA ENTRY ALGO ORDERS (NEW + TRIGGERED, reduceOnly=False)
+                    # Dùng get_removable_algo_orders để bắt cả TRIGGERED (trailing đã kích hoạt)
+                    removable_algo = get_removable_algo_orders(symbol_ccxt)
+                    classified = classify_algo_orders(removable_algo)
                     entry_algo_orders = classified.get('ENTRY', [])
-                    
-                    logger.info(f"[{symbol_raw}] Tìm thấy {len(entry_algo_orders)} ENTRY algo orders")
-                    
+
+                    logger.info(f"[{symbol_raw}] Tìm thấy {len(entry_algo_orders)} ENTRY algo orders (NEW+TRIGGERED)")
+
                     for algo in entry_algo_orders:
                         algo_id = algo.get('algoId')
                         if algo_id:
                             if cancel_algo_order(symbol_ccxt, algo_id, "ENTRY"):
                                 deleted_count += 1
                                 total_delete_1 += 1
-                                has_any_deletion = True
-                                logger.info(f"[{symbol_raw}] Đã xóa ENTRY algo: algoId={algo_id}")
+                                logger.info(f"[{symbol_raw}] Đã xóa ENTRY algo: algoId={algo_id}, status={algo.get('algoStatus')}")
 
                     print(f"   ✅ Đã xóa {deleted_count} lệnh entry cho {symbol_raw}", flush=True)
                     logger.info(f"[{symbol_raw}] Đã xóa {deleted_count} lệnh entry (open: {len(entry_orders)}, algo: {len(entry_algo_orders)})")
 
-                # === XÓA CẶP LỆNH 2-3 (SL + TP - Algo Orders) ===
+                # === XÓA CẶP LỆNH 2-3 (SL + TP) ===
                 if delete_cap_23:
                     print(f"   🗑️  [N] Xóa cặp lệnh 2-3 (SL + TP)...", flush=True)
                     logger.info(f"[{symbol_raw}] Bắt đầu xóa cặp lệnh 2-3 (SL + TP)")
-
-                    # SL và TP đều là algo orders
-                    active_algo = get_active_algo_orders(symbol_ccxt)
-
-                    # Phân loại SL vs TP
-                    classified = classify_algo_orders(active_algo)
-                    sl_orders = classified['SL']
-                    tp_orders = classified['TP']
-                    unknown_orders = classified['UNKNOWN']
-                    entry_algo_orders = classified['ENTRY']
-
-                    # Log chi tiết trước khi xóa
-                    logger.info(f"[{symbol_raw}] Tìm thấy {len(active_algo)} active algo orders:")
-                    logger.info(f"  → SL (Stop Loss): {len(sl_orders)}")
-                    for o in sl_orders:
-                        logger.info(f"     algoId={o.get('algoId')}, algoType={o.get('algoType')}, status={o.get('algoStatus')}")
-                    logger.info(f"  → TP (Take Profit): {len(tp_orders)}")
-                    for o in tp_orders:
-                        logger.info(f"     algoId={o.get('algoId')}, algoType={o.get('algoType')}, callbackRate={o.get('callbackRate', o.get('info', {}).get('callbackRate', 'N/A'))}, status={o.get('algoStatus')}")
-                    if unknown_orders:
-                        logger.info(f"  → UNKNOWN: {len(unknown_orders)}")
-                        for o in unknown_orders:
-                            logger.info(f"     algoId={o.get('algoId')}, algoType={o.get('algoType')}, reduceOnly={o.get('reduceOnly', o.get('info', {}).get('reduceOnly', 'N/A'))}")
-                    if entry_algo_orders:
-                        logger.info(f"  → ENTRY (algo): {len(entry_algo_orders)}")
-                        for o in entry_algo_orders:
-                            logger.info(f"     algoId={o.get('algoId')}, algoType={o.get('algoType')}")
 
                     deleted_count = 0
                     deleted_sl = 0
                     deleted_tp = 0
                     deleted_unknown = 0
 
-                    # Xóa SL orders
+                    # 1️⃣ XÓA SL/TP DẠNG OPEN ORDERS THÔNG THƯỜNG (STOP_MARKET, STOP_LIMIT qua CCXT)
+                    open_orders = get_open_orders(symbol_ccxt)
+                    sl_tp_open_orders = [o for o in open_orders if o.get('reduceOnly', False)]
+                    logger.info(f"[{symbol_raw}] Tìm thấy {len(sl_tp_open_orders)} SL/TP open orders (reduceOnly=True)")
+
+                    for order in sl_tp_open_orders:
+                        order_id = order.get('id')
+                        order_type_str = order.get('type', 'N/A').upper()
+                        if order_id:
+                            if cancel_open_order(symbol_ccxt, order_id):
+                                deleted_count += 1
+                                total_delete_23 += 1
+                                logger.info(f"[{symbol_raw}] Đã xóa SL/TP open order: id={order_id}, type={order_type_str}")
+
+                    # 2️⃣ XÓA SL/TP DẠNG ALGO ORDERS (NEW + TRIGGERED)
+                    # Dùng get_removable_algo_orders để bắt cả TRIGGERED
+                    removable_algo = get_removable_algo_orders(symbol_ccxt)
+                    classified = classify_algo_orders(removable_algo)
+                    sl_orders = classified['SL']
+                    tp_orders = classified['TP']
+                    unknown_orders = classified['UNKNOWN']
+                    entry_algo_orders = classified['ENTRY']
+
+                    logger.info(f"[{symbol_raw}] Tìm thấy {len(removable_algo)} removable algo orders (NEW+TRIGGERED):")
+                    logger.info(f"  → SL: {len(sl_orders)}, TP: {len(tp_orders)}, UNKNOWN: {len(unknown_orders)}, ENTRY: {len(entry_algo_orders)}")
+                    for o in sl_orders:
+                        logger.info(f"     SL: algoId={o.get('algoId')}, status={o.get('algoStatus')}")
+                    for o in tp_orders:
+                        logger.info(f"     TP: algoId={o.get('algoId')}, callbackRate={o.get('callbackRate', o.get('info', {}).get('callbackRate', 'N/A'))}, status={o.get('algoStatus')}")
+                    for o in unknown_orders:
+                        logger.info(f"     UNKNOWN: algoId={o.get('algoId')}, algoType={o.get('algoType')}, reduceOnly={o.get('reduceOnly', o.get('info', {}).get('reduceOnly', 'N/A'))}")
+                    for o in entry_algo_orders:
+                        logger.info(f"     ENTRY (bỏ qua): algoId={o.get('algoId')}")
+
                     for algo in sl_orders:
                         algo_id = algo.get('algoId')
                         if algo_id:
@@ -481,9 +486,7 @@ def process_cancellation():
                                 deleted_count += 1
                                 deleted_sl += 1
                                 total_delete_23 += 1
-                                has_any_deletion = True
 
-                    # Xóa TP orders
                     for algo in tp_orders:
                         algo_id = algo.get('algoId')
                         if algo_id:
@@ -491,9 +494,7 @@ def process_cancellation():
                                 deleted_count += 1
                                 deleted_tp += 1
                                 total_delete_23 += 1
-                                has_any_deletion = True
 
-                    # Xóa UNKNOWN orders (phòng trường hợp)
                     for algo in unknown_orders:
                         algo_id = algo.get('algoId')
                         if algo_id:
@@ -501,34 +502,44 @@ def process_cancellation():
                                 deleted_count += 1
                                 deleted_unknown += 1
                                 total_delete_23 += 1
-                                has_any_deletion = True
 
-                    print(f"   ✅ Đã xóa {deleted_count} algo orders (SL:{deleted_sl}, TP:{deleted_tp}, UNKNOWN:{deleted_unknown}) cho {symbol_raw}", flush=True)
-                    logger.info(f"[{symbol_raw}] Đã xóa {deleted_count} algo orders (SL+TP)")
+                    print(f"   ✅ Đã xóa {deleted_count} SL/TP orders (open:{len(sl_tp_open_orders)}, algo SL:{deleted_sl}, TP:{deleted_tp}, UNKNOWN:{deleted_unknown}) cho {symbol_raw}", flush=True)
+                    logger.info(f"[{symbol_raw}] Đã xóa {deleted_count} SL/TP orders")
 
                 # === XÓA LỆNH ĐƠN 2-3 SÓT LẠI ===
                 if delete_don_23:
                     print(f"   🗑️  [O] Xóa lệnh đơn 2-3 sót lại...", flush=True)
                     logger.info(f"[{symbol_raw}] Bắt đầu xóa lệnh đơn 2-3 sót lại")
 
-                    # Lệnh đơn 2-3 có thể là algo orders còn lại (không phải cặp SL+TP)
-                    # Lấy tất cả algo orders (bao gồm cả đã trigger)
-                    removable_orders = get_removable_algo_orders(symbol_ccxt)
+                    deleted_count = 0
+                    deleted_sl = 0
+                    deleted_tp = 0
+                    deleted_unknown = 0
 
-                    # Phân loại
+                    # 1️⃣ XÓA SL/TP DẠNG OPEN ORDERS SÓT LẠI (reduceOnly=True)
+                    open_orders = get_open_orders(symbol_ccxt)
+                    sl_tp_open_orders = [o for o in open_orders if o.get('reduceOnly', False)]
+                    logger.info(f"[{symbol_raw}] Tìm thấy {len(sl_tp_open_orders)} SL/TP open orders sót lại (reduceOnly=True)")
+
+                    for order in sl_tp_open_orders:
+                        order_id = order.get('id')
+                        order_type_str = order.get('type', 'N/A').upper()
+                        if order_id:
+                            if cancel_open_order(symbol_ccxt, order_id):
+                                deleted_count += 1
+                                total_delete_23_remain += 1
+                                logger.info(f"[{symbol_raw}] Đã xóa SL/TP open order sót: id={order_id}, type={order_type_str}")
+
+                    # 2️⃣ XÓA SL/TP DẠNG ALGO ORDERS SÓT LẠI (NEW + TRIGGERED, không xóa ENTRY)
+                    removable_orders = get_removable_algo_orders(symbol_ccxt)
                     classified = classify_algo_orders(removable_orders)
                     sl_orders = classified['SL']
                     tp_orders = classified['TP']
                     unknown_orders = classified['UNKNOWN']
                     entry_algo_orders = classified['ENTRY']
 
-                    # Log chi tiết
-                    logger.info(f"[{symbol_raw}] Tìm thấy {len(removable_orders)} removable algo orders:")
-                    logger.info(f"  → SL: {len(sl_orders)}")
-                    logger.info(f"  → TP: {len(tp_orders)}")
-                    logger.info(f"  → UNKNOWN: {len(unknown_orders)}")
-                    logger.info(f"  → ENTRY(algo): {len(entry_algo_orders)}")
-
+                    logger.info(f"[{symbol_raw}] Tìm thấy {len(removable_orders)} removable algo orders sót lại:")
+                    logger.info(f"  → SL: {len(sl_orders)}, TP: {len(tp_orders)}, UNKNOWN: {len(unknown_orders)}, ENTRY (bỏ qua): {len(entry_algo_orders)}")
                     for o in sl_orders:
                         logger.info(f"     SL: algoId={o.get('algoId')}, status={o.get('algoStatus')}")
                     for o in tp_orders:
@@ -536,12 +547,6 @@ def process_cancellation():
                     for o in unknown_orders:
                         logger.info(f"     UNKNOWN: algoId={o.get('algoId')}, status={o.get('algoStatus')}, algoType={o.get('algoType')}")
 
-                    deleted_count = 0
-                    deleted_sl = 0
-                    deleted_tp = 0
-                    deleted_unknown = 0
-
-                    # Xóa tất cả (SL, TP, UNKNOWN - không xóa ENTRY algo)
                     for algo in sl_orders + tp_orders + unknown_orders:
                         algo_id = algo.get('algoId')
                         order_type = get_order_type_from_algo(algo)
@@ -555,14 +560,9 @@ def process_cancellation():
                                 else:
                                     deleted_unknown += 1
                                 total_delete_23_remain += 1
-                                has_any_deletion = True
 
-                    print(f"   ✅ Đã xóa {deleted_count} lệnh đơn sót lại (SL:{deleted_sl}, TP:{deleted_tp}, UNKNOWN:{deleted_unknown}) cho {symbol_raw}", flush=True)
+                    print(f"   ✅ Đã xóa {deleted_count} lệnh đơn sót lại (open:{len(sl_tp_open_orders)}, algo SL:{deleted_sl}, TP:{deleted_tp}, UNKNOWN:{deleted_unknown}) cho {symbol_raw}", flush=True)
                     logger.info(f"[{symbol_raw}] Đã xóa {deleted_count} lệnh đơn sót lại")
-
-                # Nếu có xóa gì đó, đánh dấu symbol để clear M,N,O sau
-                if has_any_deletion:
-                    symbols_to_clear_mno.append(row_idx)
 
             except Exception as e:
                 logger.error(f"Lỗi xử lý dòng {row_idx}: {e}", exc_info=True)
@@ -571,29 +571,35 @@ def process_cancellation():
 
         # === CẬP NHẬT SHEET: Xóa tick ở cột M, N, O sau khi đã xóa lệnh ===
         if symbols_to_clear_mno:
-            print(f"\n📤 Cập nhật sheet - Xóa tick M, N, O cho {len(symbols_to_clear_mno)} symbols...", flush=True)
+            print(f"\n📤 Cập nhật sheet - Xóa tick M, N, O cho {len(symbols_to_clear_mno)} symbols (1 API call)...", flush=True)
             logger.info(f"Cập nhật sheet - Xóa tick M, N, O cho {len(symbols_to_clear_mno)} symbols")
 
+            # Gộp tất cả ranges vào 1 batchClear duy nhất → tránh 429 rate limit
+            ranges_to_clear = []
             for row_num in symbols_to_clear_mno:
-                try:
-                    # Xóa giá trị ở cột M (13), N (14), O (15)
-                    gg_sheet_factory.update_single_value(
-                        gg_sheet_factory.tab_cho_va_khop,
-                        f"M{row_num}",
-                        ""
-                    )
-                    gg_sheet_factory.update_single_value(
-                        gg_sheet_factory.tab_cho_va_khop,
-                        f"N{row_num}",
-                        ""
-                    )
-                    gg_sheet_factory.update_single_value(
-                        gg_sheet_factory.tab_cho_va_khop,
-                        f"O{row_num}",
-                        ""
-                    )
-                except Exception as e:
-                    logger.error(f"Lỗi khi update sheet cho row {row_num}: {e}")
+                ranges_to_clear.extend([f"M{row_num}", f"N{row_num}", f"O{row_num}"])
+
+            try:
+                gg_sheet_factory.batch_clear_values(
+                    gg_sheet_factory.tab_cho_va_khop,
+                    ranges_to_clear
+                )
+                print(f"   ✅ Đã xóa tick M/N/O cho {len(symbols_to_clear_mno)} rows ({len(ranges_to_clear)} ô) trong 1 API call", flush=True)
+            except Exception as e:
+                logger.error(f"Lỗi khi batch_clear M/N/O: {e}")
+                # Fallback: ghi từng ô, có delay để tránh 429
+                logger.warning("Fallback: Ghi từng ô với delay 1s")
+                for row_num in symbols_to_clear_mno:
+                    for col in ["M", "N", "O"]:
+                        try:
+                            gg_sheet_factory.update_single_value(
+                                gg_sheet_factory.tab_cho_va_khop,
+                                f"{col}{row_num}",
+                                ""
+                            )
+                            time.sleep(1)  # Tránh 429 khi fallback
+                        except Exception as e2:
+                            logger.error(f"Lỗi fallback update {col}{row_num}: {e2}")
 
         # === GỬI THÔNG BÁO TELEGRAM ===
         if symbols_processed > 0:
