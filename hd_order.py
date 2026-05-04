@@ -957,7 +957,7 @@ def do_it():
             
             print(f"💰 {sym}: Vốn = {capitalMoney:.2f} USDT", flush=True)
 
-            symbol = d[0]
+            symbol = sym  # Dùng symbol đã normalize (BTC/USDT:USDT), không dùng d[0] raw
             
             # Xác định side
             if type == "BUY":

@@ -214,35 +214,44 @@ def call_binance_api_direct(method, endpoint, params=None, api_key=None, secret_
         return None
 
 def get_algo_orders_for_symbol(symbol):
+    """
+    Returns:
+        None  → API thực sự lỗi (không xác định được trạng thái)
+        []    → API thành công, không có orders
+        [..] → API thành công, có danh sách orders
+    """
     try:
-        # ✅ [FIX BUG] Binance API yêu cầu symbol format: HOMEUSDT (không có / và :USDT)
-        # HOME/USDT:USDT -> HOMEUSDT
-        # HOMEUSDT:USDT -> HOMEUSDT
         symbol_clean = symbol.replace('/', '').replace(':USDT', '').upper()
-        
-        # ⚠️ BỎ QUA delivery perpetual futures (symbols có '-', ví dụ: BTCUSDT-260626)
-        # Endpoint /fapi/v1/ chỉ hoạt động với USDT-M perpetual futures
+
         if '-' in symbol_clean:
             logger.debug(f"Bỏ qua delivery futures symbol: {symbol_clean}")
             return []
-        
+
         params = {'symbol': symbol_clean}
         logger.debug(f"Lấy algo orders cho {symbol} (cleaned: {symbol_clean})")
         response = call_binance_api_direct('GET', '/fapi/v1/allAlgoOrders', params)
-        if not response: return []
+
+        # [Bug 5 FIX] None = API thực sự lỗi (khác [] = thành công nhưng không có order)
+        if response is None:
+            return None
+
         if isinstance(response, list): return response
         elif isinstance(response, dict):
             if 'data' in response: return response['data']
-            elif response.get('code') == 200: return response
-            else: return []
-        else: return []
+            elif response.get('code') == 200: return []
+            else:
+                logger.warning(f"Response code khác 200 cho {symbol}: {response}")
+                return None  # Không chắc chắn → None để caller xử lý an toàn
+        else:
+            logger.warning(f"Response format không đúng cho {symbol}: {type(response)}")
+            return None
     except Exception as e:
-        # Chỉ log lỗi HTTP 400 (delivery futures) ở debug level
         if '400' in str(e):
             logger.debug(f"Lỗi 400 cho {symbol} - có thể là delivery futures, bỏ qua")
+            return []
         else:
             logger.error(f"Lỗi khi lấy algo orders: {e}", exc_info=True)
-        return []
+        return None
 
 def cancel_all_algo_orders_direct(symbol):
     try:
@@ -287,6 +296,12 @@ def cancel_all_algo_orders_direct(symbol):
 def has_sl_tp_orders(symbol, exchange):
     try:
         algo_orders = get_algo_orders_for_symbol(symbol)
+
+        # [Bug 5 FIX] None = API lỗi → chặn tạo lệnh để tránh trùng (safety first)
+        if algo_orders is None:
+            logger.warning(f"⚠️ {symbol}: API lỗi khi lấy algo orders → Chặn tạo lệnh (safety first)")
+            return True, True
+
         try: open_orders = exchange.fetch_open_orders(symbol)
         except: open_orders = []
             
@@ -294,7 +309,8 @@ def has_sl_tp_orders(symbol, exchange):
         has_tp = False
         
         # --- 1. QUÉT ALGO ORDERS ---
-        active_algo_orders = [o for o in algo_orders if o.get('algoStatus', '').upper() == 'NEW']
+        # [Bug C FIX] Bắt cả TRIGGERED (TP đã kích hoạt nhưng chưa fill)
+        active_algo_orders = [o for o in algo_orders if o.get('algoStatus', '').upper() in ('NEW', 'TRIGGERED')]
         
         for order in active_algo_orders:
             algo_type = order.get('algoType', '').upper()
@@ -565,7 +581,7 @@ def do_it():
                 logger.warning(f"⚠️ {symbol}: Entry price khác biệt - Sheet: {entry_price}, Binance: {entry_price_binance}")
             
             # [BƯỚC 4] ĐẶT LỆNH LẺ (có thể chỉ SL hoặc chỉ TP)
-            print(f"🎯 Đặt lệnh cho {symbol} | Entry: {entry_price} | SL: {sl_rate}%, TP: {tp_rate}%", flush=True)
+            print(f"🎯 Đặt lệnh cho {symbol} | Entry: {entry_price} | SL: {sl_rate}%, TP: {tp_rate}% | Need SL={need_sl}, TP={need_tp}", flush=True)
             
             # ✅ [FIX BUG] Convert rate từ phần trăm (%) sang số thập phân cho cascade_manager
             # cascade_manager expect rate là số thập phân (0.3 = 30%), không phải phần trăm (30.0)
@@ -574,6 +590,14 @@ def do_it():
             logger.debug(f"{symbol}: Convert rate - SL: {sl_rate}% → {sl_rate_decimal}, TP: {tp_rate}% → {tp_rate_decimal}")
             
             try:
+                # [Bug 3 FIX] cascade_mgr.on_entry_filled luôn tạo CẢ 2 SL+TP.
+                # Nếu chỉ thiếu 1 trong 2 → phải kiểm tra và huỷ lệnh thừa ngay sau khi tạo.
+                # Cờ need_sl / need_tp cho biết lệnh nào thực sự cần tạo.
+                if not need_sl and not need_tp:
+                    # Đã đủ cả 2 (đáng lẽ đã continue ở trên, nhưng double-check)
+                    logger.info(f"{symbol}: Đã có đủ SL và TP, bỏ qua")
+                    continue
+
                 # Gọi cascade manager với rate từ sheet (đã convert sang decimal)
                 result = cascade_mgr.on_entry_filled(
                     symbol=symbol,
@@ -591,6 +615,28 @@ def do_it():
                 
                 sl_order = result.get('sl_order')
                 tp_order = result.get('tp_order')
+
+                # [Bug 3 FIX] Nếu cascade_mgr tạo lệnh mà ta không cần → huỷ ngay lập tức
+                if not need_sl and sl_order:
+                    sl_id = sl_order.get('id') or (sl_order.get('info', {}) or {}).get('orderId')
+                    if sl_id:
+                        try:
+                            exchange.cancel_order(str(sl_id), symbol)
+                            logger.info(f"[Bug3 FIX] {symbol}: Đã huỷ SL thừa (id={sl_id}) vì SL đã tồn tại trước đó")
+                        except Exception as cancel_err:
+                            logger.error(f"[Bug3 FIX] {symbol}: Không huỷ được SL thừa (id={sl_id}): {cancel_err}")
+                    sl_order = None  # Không log/coi là thành công
+
+                if not need_tp and tp_order:
+                    tp_id = tp_order.get('id') or (tp_order.get('info', {}) or {}).get('algoId') or (tp_order.get('info', {}) or {}).get('orderId')
+                    if tp_id:
+                        try:
+                            # TP là algo order → dùng cancel_all_algo_orders_direct
+                            cancel_all_algo_orders_direct(symbol)
+                            logger.info(f"[Bug3 FIX] {symbol}: Đã huỷ TP thừa (algoId={tp_id}) vì TP đã tồn tại trước đó")
+                        except Exception as cancel_err:
+                            logger.error(f"[Bug3 FIX] {symbol}: Không huỷ được TP thừa (id={tp_id}): {cancel_err}")
+                    tp_order = None  # Không log/coi là thành công
                 
                 # ✅ Debug: Log chi tiết để kiểm tra
                 logger.debug(f"{symbol}: Result từ cascade_mgr - sl_order: {sl_order is not None}, tp_order: {tp_order is not None}")
