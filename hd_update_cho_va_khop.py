@@ -542,12 +542,13 @@ def build_cho_va_khop_row(
     else:  # ĐÓNG
         cho_khop = "N"
 
-    # [TASK 1] Default values cho cột J-S
+    # [TASK 1] Default values cho cột J-W
     if getattr(cst, 'fill_default_cho_va_khop', True):
         default_r1 = cst.default_ratio_layer_1
         default_r2 = cst.default_ratio_layer_2
         default_r3 = cst.default_ratio_layer_3
         default_s = cst.default_allow_order  # "N" mặc định
+        default_tick = "N"  # T/U/V/W default N (user đổi sang "Y" để trigger xóa)
 
         # Chỉ compute SL/TP default khi có entry_price > 0 VÀ side hợp lệ VÀ status_d không phải "ĐÓNG"
         # (ĐÓNG = position đã đóng, không cần SL/TP placeholder)
@@ -562,6 +563,7 @@ def build_cho_va_khop_row(
     else:
         default_r1 = default_r2 = default_r3 = ""
         default_s = ""
+        default_tick = ""
         sl_defaults = [None, None, None]
         tp_defaults = [None, None, None]
 
@@ -588,10 +590,10 @@ def build_cho_va_khop_row(
         _cell(tp_defaults[1]),             # Q: Giá TP2
         _cell(tp_defaults[2]),             # R: Giá TP3
         default_s,                         # S: Cho phép đặt (default N)
-        "",                                # T: Tick xóa entry
-        "",                                # U: Tick xóa cặp SL+TP
-        "",                                # V: Tick xóa lệnh sót
-        "",                                # W: Tick xóa lệnh ngược (ĐÓNG)
+        default_tick,                      # T: Tick xóa entry (default N)
+        default_tick,                      # U: Tick xóa cặp SL+TP (default N)
+        default_tick,                      # V: Tick xóa lệnh sót (default N)
+        default_tick,                      # W: Tick xóa lệnh ngược ĐÓNG (default N)
     )
 
 
@@ -1073,21 +1075,38 @@ def do_it():
             print("  🔄 Merge user input (J-L % lớp, M-R giá SL/TP, S allow, T-W tick) vào dữ liệu mới...", flush=True)
             merged_count = 0
             
+            # Helper: xác định cell cũ có "đáng giữ" không (để override default mới).
+            #   - Cột giá SL/TP (M-R, idx 12..17): "0", "0.0"... coi là CHƯA SET → dùng default.
+            #   - Các cột khác: chỉ rỗng mới coi là chưa set.
+            def _is_meaningful(val, col_idx):
+                if val is None:
+                    return False
+                s = str(val).strip()
+                if not s:
+                    return False
+                if 12 <= col_idx <= 17:  # M-R: giá SL/TP
+                    try:
+                        if float(s) == 0:
+                            return False
+                    except (ValueError, TypeError):
+                        pass
+                return True
+
             for i, row in enumerate(tab_100_ma_2d_arr):
                 symbol = str(row[0]).strip() if row[0] else ""
                 symbol_normalized = symbol.replace(":USDT", "").strip()
-                
+
                 if symbol_normalized in data_map:
                     user_values = data_map[symbol_normalized]
                     row_list = list(row)
                     # Bảo đảm đủ 23 cột
                     while len(row_list) < 23:
                         row_list.append("")
-                    # Merge từng field nếu user có nhập (không rỗng)
+                    # Merge từng field nếu user có nhập giá trị "có ý nghĩa" (không rỗng, không phải 0 cho cột giá)
                     # user_values mapping to row indices 9..22
                     for off, val in enumerate(user_values):
                         idx = 9 + off  # cột J..W
-                        if val:
+                        if _is_meaningful(val, idx):
                             row_list[idx] = val
                     tab_100_ma_2d_arr[i] = tuple(row_list)
                     merged_count += 1
