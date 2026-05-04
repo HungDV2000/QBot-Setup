@@ -660,8 +660,16 @@ def do_it():
                 print(f"    📌 Algo Order: AlgoId={algo_id}, Type={algo_type}, Status={algo_status}", flush=True)
                 logger.info(f"Xử lý algo order: AlgoId={algo_id}, Type={algo_type}, Status={algo_status}")
 
-                # Symbol từ order
-                order_symbol = order.get('symbol', order.get('symbol_ccxt', ''))
+                # Symbol từ order (Binance raw format: 1000CATUSDT)
+                order_symbol = order.get('symbol', order.get('symbol_clean', order.get('symbol_ccxt', '')))
+                # Chuẩn hóa về format HOMEUSDT để so sánh với position['symbol']
+                order_symbol_clean = order_symbol.replace('/', '').replace(':USDT', '')
+
+                # Skip nếu symbol đã có position (tránh dup dữ liệu — giống check ở open orders)
+                if next((p for p in res if p.get('symbol', '') == order_symbol_clean), None):
+                    print(f"    ⏭️  Bỏ qua algo order (đã có position cho {order_symbol_clean})", flush=True)
+                    logger.info(f"Bỏ qua algo order {algo_id} của {order_symbol_clean}: đã có position")
+                    continue
                 # Convert HOMEUSDT → HOME/USDT
                 symbol_formatted = order_symbol.replace("USDT", "/USDT") if order_symbol else ""
 
