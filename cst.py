@@ -41,3 +41,30 @@ delay_periodic_report = config.getint('global', 'delay_periodic_report')
 # Mặc định False: nếu config.ini chưa có run_tele_command thì không chạy (tránh bật nhầm)
 run_tele_command = config.getboolean('global', 'run_tele_command', fallback=False)
 
+# ─────────────────────────────────────────────────────────────────────────────
+# [TASK 1] Default values cho sheet "Chờ và khớp" (cột J-S)
+# Tất cả đều có fallback cứng — file config.ini cũ vẫn chạy được.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# % phân bổ qty theo 3 lớp (tổng phải = 100, mặc định 40/40/20)
+default_ratio_layer_1 = config.getfloat('global', 'default_ratio_layer_1', fallback=40.0)
+default_ratio_layer_2 = config.getfloat('global', 'default_ratio_layer_2', fallback=40.0)
+default_ratio_layer_3 = config.getfloat('global', 'default_ratio_layer_3', fallback=20.0)
+
+# % SL (cắt lỗ) cho 3 lớp — tính từ entry price
+# LONG: SL_price = entry × (1 - rate/100);  SHORT: SL_price = entry × (1 + rate/100)
+default_sl_rate_layer_1 = config.getfloat('global', 'default_sl_rate_layer_1', fallback=2.0)
+default_sl_rate_layer_2 = config.getfloat('global', 'default_sl_rate_layer_2', fallback=5.0)
+default_sl_rate_layer_3 = config.getfloat('global', 'default_sl_rate_layer_3', fallback=10.0)
+
+# % TP (chốt lời) cho 3 lớp — tính từ entry price
+# LONG: TP_price = entry × (1 + rate/100);  SHORT: TP_price = entry × (1 - rate/100)
+default_tp_rate_layer_1 = config.getfloat('global', 'default_tp_rate_layer_1', fallback=3.0)
+default_tp_rate_layer_2 = config.getfloat('global', 'default_tp_rate_layer_2', fallback=6.0)
+default_tp_rate_layer_3 = config.getfloat('global', 'default_tp_rate_layer_3', fallback=10.0)
+
+# Cột S "Cho phép đặt lệnh" — mặc định N (user phải chủ động đổi sang Y)
+default_allow_order = config.get('global', 'default_allow_order', fallback='N').strip().upper()
+# Bật/tắt tính năng auto-fill default (tắt → cột J-S luôn rỗng như trước)
+fill_default_cho_va_khop = config.getboolean('global', 'fill_default_cho_va_khop', fallback=True)
+

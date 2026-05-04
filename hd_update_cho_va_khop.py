@@ -464,6 +464,58 @@ def detect_closed_positions_with_residual_orders(opened_positions_symbols):
     return closed_list
 
 
+def _round_price_for_sheet(price, entry_price):
+    """Làm tròn giá hiển thị trên sheet theo scale của entry price (khớp hiển thị UI)."""
+    if price is None or entry_price is None or entry_price <= 0:
+        return price
+    # Quy tắc hiển thị: <1 → 6 decimals; <100 → 4; <10000 → 2; else 0
+    if entry_price < 1:
+        return round(price, 6)
+    if entry_price < 100:
+        return round(price, 4)
+    if entry_price < 10000:
+        return round(price, 2)
+    return round(price, 1)
+
+
+def compute_default_sl_tp_prices(side, entry_price):
+    """
+    [TASK 1] Tính default 3 giá SL + 3 giá TP từ entry price và rates trong config.
+
+    Args:
+        side: "LONG" / "SHORT"
+        entry_price: float > 0
+
+    Returns:
+        (sl_list, tp_list) — mỗi list 3 phần tử (float).
+        Nếu entry_price <= 0 hoặc side không hợp lệ → trả về ([None]*3, [None]*3).
+    """
+    if not entry_price or entry_price <= 0:
+        return [None, None, None], [None, None, None]
+
+    is_long = (str(side).upper() == 'LONG')
+    sl_rates = [cst.default_sl_rate_layer_1, cst.default_sl_rate_layer_2, cst.default_sl_rate_layer_3]
+    tp_rates = [cst.default_tp_rate_layer_1, cst.default_tp_rate_layer_2, cst.default_tp_rate_layer_3]
+
+    sl_prices = []
+    tp_prices = []
+    for r in sl_rates:
+        if is_long:
+            p = entry_price * (1 - r / 100.0)
+        else:
+            p = entry_price * (1 + r / 100.0)
+        sl_prices.append(_round_price_for_sheet(p, entry_price) if p > 0 else None)
+
+    for r in tp_rates:
+        if is_long:
+            p = entry_price * (1 + r / 100.0)
+        else:
+            p = entry_price * (1 - r / 100.0)
+        tp_prices.append(_round_price_for_sheet(p, entry_price) if p > 0 else None)
+
+    return sl_prices, tp_prices
+
+
 def build_cho_va_khop_row(
     symbol_formatted, side, status_d, entry_price, leverage, has_sl, has_tp, order_count
 ):
@@ -473,11 +525,12 @@ def build_cho_va_khop_row(
     Layout:
       A=Symbol, B=Side, C=Chờ khớp (Y/N), D=Trạng thái (Y/N/ĐÓNG),
       E=Giá vào, F=Đòn bẩy, G=Có SL (Y/N), H=Có TP (Y/N), I=Số orders,
-      J=% lớp 1, K=% lớp 2, L=% lớp 3  ← user nhập (default 40/40/20),
-      M=SL1, N=SL2, O=SL3, P=TP1, Q=TP2, R=TP3  ← user nhập giá,
-      S=Cho phép đặt (Y/N), T/U/V=Tick xóa 1/2-3/sót, W=Tick xóa ngược (ĐÓNG).
+      J=% lớp 1, K=% lớp 2, L=% lớp 3  ← default từ config (user chỉnh tự do),
+      M=SL1, N=SL2, O=SL3, P=TP1, Q=TP2, R=TP3  ← compute từ entry + rates,
+      S=Cho phép đặt (Y/N) ← default N, T/U/V=Tick xóa 1/2-3/sót, W=Tick xóa ngược (ĐÓNG).
 
-    Các cột user-input (J-S) và tick (T-W) để trống, sẽ merge từ dữ liệu cũ.
+    Các cột user-input sẽ được MERGE từ dữ liệu cũ (nếu user đã nhập) ở bước sau.
+    Nếu cst.fill_default_cho_va_khop = False → các cột J-S luôn rỗng.
     """
     lenh_ls = "Y" if has_sl else "N"
     lenh_tp = "Y" if has_tp else "N"
@@ -489,30 +542,56 @@ def build_cho_va_khop_row(
     else:  # ĐÓNG
         cho_khop = "N"
 
+    # [TASK 1] Default values cho cột J-S
+    if getattr(cst, 'fill_default_cho_va_khop', True):
+        default_r1 = cst.default_ratio_layer_1
+        default_r2 = cst.default_ratio_layer_2
+        default_r3 = cst.default_ratio_layer_3
+        default_s = cst.default_allow_order  # "N" mặc định
+
+        # Chỉ compute SL/TP default khi có entry_price > 0 VÀ side hợp lệ VÀ status_d không phải "ĐÓNG"
+        # (ĐÓNG = position đã đóng, không cần SL/TP placeholder)
+        if status_d != "ĐÓNG" and side in ("LONG", "SHORT"):
+            try:
+                ep = float(entry_price) if entry_price not in (None, "") else 0.0
+            except (ValueError, TypeError):
+                ep = 0.0
+            sl_defaults, tp_defaults = compute_default_sl_tp_prices(side, ep)
+        else:
+            sl_defaults, tp_defaults = [None, None, None], [None, None, None]
+    else:
+        default_r1 = default_r2 = default_r3 = ""
+        default_s = ""
+        sl_defaults = [None, None, None]
+        tp_defaults = [None, None, None]
+
+    def _cell(v):
+        return "" if v is None else v
+
     return (
-        symbol_formatted,        # A: Symbol
-        side,                    # B: LONG/SHORT
-        cho_khop,                # C: Chờ khớp (auto)
-        status_d,                # D: Trạng thái (Y/N/ĐÓNG) — auto
-        entry_price,             # E: Giá vào (auto)
-        leverage,                # F: Đòn bẩy (auto)
-        lenh_ls,                 # G: Có SL (auto)
-        lenh_tp,                 # H: Có TP (auto)
-        order_count,             # I: Số orders (auto)
-        "",                      # J: % lớp 1 (user, default 40)
-        "",                      # K: % lớp 2 (user, default 40)
-        "",                      # L: % lớp 3 (user, default 20)
-        "",                      # M: Giá SL1 (user)
-        "",                      # N: Giá SL2 (user)
-        "",                      # O: Giá SL3 (user)
-        "",                      # P: Giá TP1 (user)
-        "",                      # Q: Giá TP2 (user)
-        "",                      # R: Giá TP3 (user)
-        "",                      # S: Cho phép đặt (user - Y/N)
-        "",                      # T: Tick xóa entry
-        "",                      # U: Tick xóa cặp SL+TP
-        "",                      # V: Tick xóa lệnh sót
-        "",                      # W: Tick xóa lệnh ngược (ĐÓNG)
+        symbol_formatted,                  # A: Symbol
+        side,                              # B: LONG/SHORT
+        cho_khop,                          # C: Chờ khớp (auto)
+        status_d,                          # D: Trạng thái (Y/N/ĐÓNG) — auto
+        entry_price,                       # E: Giá vào (auto)
+        leverage,                          # F: Đòn bẩy (auto)
+        lenh_ls,                           # G: Có SL (auto)
+        lenh_tp,                           # H: Có TP (auto)
+        order_count,                       # I: Số orders (auto)
+        default_r1,                        # J: % lớp 1 (default 40)
+        default_r2,                        # K: % lớp 2 (default 40)
+        default_r3,                        # L: % lớp 3 (default 20)
+        _cell(sl_defaults[0]),             # M: Giá SL1 (default từ entry × rate)
+        _cell(sl_defaults[1]),             # N: Giá SL2
+        _cell(sl_defaults[2]),             # O: Giá SL3
+        _cell(tp_defaults[0]),             # P: Giá TP1
+        _cell(tp_defaults[1]),             # Q: Giá TP2
+        _cell(tp_defaults[2]),             # R: Giá TP3
+        default_s,                         # S: Cho phép đặt (default N)
+        "",                                # T: Tick xóa entry
+        "",                                # U: Tick xóa cặp SL+TP
+        "",                                # V: Tick xóa lệnh sót
+        "",                                # W: Tick xóa lệnh ngược (ĐÓNG)
     )
 
 
