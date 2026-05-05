@@ -273,11 +273,35 @@ cd qbot_setup\setup
 **Giải pháp:**
 1. Kiểm tra internet
 2. Tắt VPN/Proxy (nếu có)
-3. Thử cài thủ công:
+3. Thử cài thủ công (vào đúng thư mục `qbot_setup` — nơi có `requirements.txt`):
    ```bash
-   cd qbot_setup
-   pip install -r requirements.txt
+   cd C:\đường\dẫn\qbot_setup
+   py -m pip install --upgrade pip
+   py -m pip install -r requirements.txt
    ```
+   Nếu máy đã có `python` / `pip` trong PATH thì có thể dùng `python -m pip ...` thay cho `py -m pip ...`.
+
+---
+
+🔴 Lỗi: `'python' is not recognized` hoặc `'pip' is not recognized` (nhưng `py --version` vẫn chạy)
+
+**Nguyên nhân:** Python đã cài nhưng **chưa thêm vào PATH** (hoặc chỉ có **Python Launcher** `py.exe` được nhận).
+
+**Giải pháp nhanh — dùng launcher `py` (khuyến nghị):**
+```bash
+cd qbot_setup
+py --version
+py -m pip install --upgrade pip
+py -m pip install -r requirements.txt
+```
+
+**Giải pháp lâu dài — thêm Python vào PATH:**  
+Vào **Settings → System → About → Advanced system settings → Environment Variables**, trong **Path** của user hoặc system thêm (đường dẫn có thể khác một chút theo máy bạn):
+
+- `C:\Users\...\AppData\Local\Programs\Python\Python311\`
+- `C:\Users\...\AppData\Local\Programs\Python\Python311\Scripts\`
+
+Hoặc chạy lại installer Python, tick **Add python.exe to PATH**, rồi **mở CMD mới** và thử lại `python --version`.
 
 ---
 
@@ -327,9 +351,9 @@ cd qbot_setup\setup
 🟡 Cảnh báo: "Python đã cài nhưng chưa thấy trong PATH"
 
 **Giải pháp:**
-1. **ĐÓNG** cửa sổ CMD hiện tại
-2. **MỞ LẠI** CMD mới
-3. **CHẠY LẠI** `1_setup_install.bat`
+1. Thử lệnh **`py --version`** — nếu OK thì dùng **`py -m pip`** / **`py script.py`** cho đến khi sửa PATH (xem mục lỗi `python`/`pip` not recognized ở trên).
+2. **ĐÓNG** cửa sổ CMD hiện tại, **mở lại** CMD mới rồi thử `python --version` lại.
+3. **CHẠY LẠI** `1_setup_install.bat` (sau khi đã thêm PATH hoặc dùng `py`).
 
 ---
 
@@ -352,7 +376,7 @@ cd qbot_setup\setup
 
 📝 VIII. CHECKLIST TRƯỚC KHI CHẠY BOT
 
-- [ ] ✅ Python đã cài (check bằng `python --version`)
+- [ ] ✅ Python đã cài (`python --version` hoặc `py --version`; cài thư viện: `py -m pip install -r requirements.txt` nếu chưa có `pip` trong PATH)
 - [ ] ✅ Thư viện đã cài (check bằng option 6)
 - [ ] ✅ `config.ini` đã điền đầy đủ
 - [ ] ✅ `credentials.json` đã copy vào folder

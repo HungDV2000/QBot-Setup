@@ -572,14 +572,14 @@ def build_cho_va_khop_row(
             # M = giá SL chính: LONG → E*(1-U), SHORT → E*(1+V)
             # Q = giá TP chính: LONG → E*(1+W), SHORT → E*(1-X)
             # N/O/P, R/S/T: default = M, Q (user override để scale-out 3 mức giá khác nhau)
-            f_M = '=IF($B{ROW}="LONG",$E{ROW}*(1-$U{ROW}),$E{ROW}*(1+$V{ROW}))'
-            f_Q = '=IF($B{ROW}="LONG",$E{ROW}*(1+$W{ROW}),$E{ROW}*(1-$X{ROW}))'
-            f_N = '=$M{ROW}'
-            f_O = '=$M{ROW}'
-            f_P = '=$M{ROW}'
-            f_R = '=$Q{ROW}'
-            f_S = '=$Q{ROW}'
-            f_T = '=$Q{ROW}'
+            f_M = "" #'=IF($B{ROW}="LONG",$E{ROW}*(1-$U{ROW}),$E{ROW}*(1+$V{ROW}))'
+            f_Q = "" #'=IF($B{ROW}="LONG",$E{ROW}*(1+$W{ROW}),$E{ROW}*(1-$X{ROW}))'
+            f_N = "" #'=$M{ROW}'
+            f_O = "" #'=$M{ROW}'
+            f_P = "" #'=$M{ROW}'
+            f_R = "" #'=$Q{ROW}'
+            f_S = "" #'=$Q{ROW}'
+            f_T = "" #'=$Q{ROW}'
         else:
             f_M = f_N = f_O = f_P = f_Q = f_R = f_S = f_T = ""
     else:
