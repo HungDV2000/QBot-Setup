@@ -328,21 +328,22 @@ def process_cancellation():
         print(f"{'='*80}\n", flush=True)
         logger.info(f"[{current_time}] Bắt đầu cancel orders có chọn lọc")
 
-        # [TASK 1+2] Đọc sheet "Chờ và khớp" layout 23 cột (A-W)
+        # [TASK v2] Đọc sheet "Chờ và khớp" layout 29 cột (A-AC)
         #   Cột A: Symbol
         #   Cột D: Trạng thái (Y/N/ĐÓNG)
-        #   Cột T (idx 19): Tick xóa lệnh 1 entry (cũ = M)
-        #   Cột U (idx 20): Tick xóa cặp SL+TP (cũ = N)
-        #   Cột V (idx 21): Tick xóa lệnh sót (cũ = O)
-        #   Cột W (idx 22): Tick xóa tất cả lệnh ngược (vị thế ĐÓNG) — MỚI
-        sheet_data = gg_sheet_factory.get_cho_va_khop("A3:W100")
+        #   Cột Z  (idx 25): Tick xóa lệnh 1 entry         [cũ T]
+        #   Cột AA (idx 26): Tick xóa cặp 2-3 (SL+TP)      [cũ U]
+        #   Cột AB (idx 27): Tick xóa lệnh sót             [cũ V]
+        #   Cột AC (idx 28): Tick xóa lệnh ngược (ĐÓNG)    [cũ W]
+        # Data bắt đầu ở row 4 (row 1=MODE, row 2=timestamp, row 3=column headers)
+        sheet_data = gg_sheet_factory.get_cho_va_khop("A4:AC100")
 
         if not sheet_data:
             print("⚠️  Không có dữ liệu từ sheet", flush=True)
             logger.warning("Không có dữ liệu từ sheet 'Chờ và khớp'")
             return
 
-        # Danh sách rows cần clear tick (T/U/V/W)
+        # Danh sách rows cần clear tick (Z/AA/AB/AC)
         symbols_to_clear_ticks = []
 
         # Đếm tổng
@@ -353,7 +354,7 @@ def process_cancellation():
         symbols_processed = 0
         symbol_reports = []
 
-        for row_idx, row in enumerate(sheet_data, start=3):
+        for row_idx, row in enumerate(sheet_data, start=4):
             try:
                 if not row or len(row) == 0:
                     continue
@@ -371,30 +372,30 @@ def process_cancellation():
 
                 print(f"\n🔍 [{row_idx}] Xử lý: {symbol_raw}", flush=True)
 
-                # [TASK 1+2] Layout 23 cột: tick dịch sang T/U/V, thêm W
-                #   Cột T (idx 19) = xóa lệnh 1 (entry)          [cũ: M idx 12]
-                #   Cột U (idx 20) = xóa cặp 2-3 (SL+TP)         [cũ: N idx 13]
-                #   Cột V (idx 21) = xóa lệnh 2-3 sót            [cũ: O idx 14]
-                #   Cột W (idx 22) = xóa TẤT CẢ lệnh ngược (ĐÓNG) [MỚI]
-                col_t = row[19] if len(row) > 19 else None
-                delete_lenh_1 = has_tick(col_t)
+                # [TASK v2] Layout 29 cột: tick ở Z/AA/AB/AC
+                #   Cột Z  (idx 25) = xóa lệnh 1 (entry)
+                #   Cột AA (idx 26) = xóa cặp 2-3 (SL+TP)
+                #   Cột AB (idx 27) = xóa lệnh 2-3 sót
+                #   Cột AC (idx 28) = xóa TẤT CẢ lệnh ngược (ĐÓNG)
+                col_z = row[25] if len(row) > 25 else None
+                delete_lenh_1 = has_tick(col_z)
 
-                col_u = row[20] if len(row) > 20 else None
-                delete_cap_23 = has_tick(col_u)
+                col_aa = row[26] if len(row) > 26 else None
+                delete_cap_23 = has_tick(col_aa)
 
-                col_v = row[21] if len(row) > 21 else None
-                delete_don_23 = has_tick(col_v)
+                col_ab = row[27] if len(row) > 27 else None
+                delete_don_23 = has_tick(col_ab)
 
-                col_w = row[22] if len(row) > 22 else None
-                delete_all_closed = has_tick(col_w)
+                col_ac = row[28] if len(row) > 28 else None
+                delete_all_closed = has_tick(col_ac)
 
-                # [TASK 2] Đọc trạng thái D để biết có phải vị thế ĐÓNG không
+                # Đọc trạng thái D để biết có phải vị thế ĐÓNG không
                 col_d_status = str(row[3]).strip().upper() if len(row) > 3 and row[3] else ""
                 is_closed_position = col_d_status == "ĐÓNG"
 
                 logger.info(
                     f"[{row_idx}] {symbol_raw}: D={col_d_status} | "
-                    f"T(entry)={delete_lenh_1}, U(cặp)={delete_cap_23}, V(sót)={delete_don_23}, W(đóng)={delete_all_closed}"
+                    f"Z(entry)={delete_lenh_1}, AA(cặp)={delete_cap_23}, AB(sót)={delete_don_23}, AC(đóng)={delete_all_closed}"
                 )
 
                 # Nếu không có tick nào, bỏ qua
@@ -402,10 +403,10 @@ def process_cancellation():
                     print(f"   ⏭️  Không có tick xóa, bỏ qua", flush=True)
                     continue
 
-                # [TASK 2] Cảnh báo khi tick W mà D ≠ ĐÓNG (user có thể xóa nhầm vị thế đang mở)
+                # Cảnh báo khi tick AC mà D ≠ ĐÓNG (user có thể xóa nhầm vị thế đang mở)
                 if delete_all_closed and not is_closed_position:
-                    print(f"   ⚠️  [W] Cột D='{col_d_status}' không phải ĐÓNG — vẫn xử lý theo yêu cầu user", flush=True)
-                    logger.warning(f"[{row_idx}] {symbol_raw}: Tick W nhưng D={col_d_status} (expected ĐÓNG)")
+                    print(f"   ⚠️  [AC] Cột D='{col_d_status}' không phải ĐÓNG — vẫn xử lý theo yêu cầu user", flush=True)
+                    logger.warning(f"[{row_idx}] {symbol_raw}: Tick AC nhưng D={col_d_status} (expected ĐÓNG)")
 
                 symbols_processed += 1
                 symbols_to_clear_ticks.append(row_idx)
@@ -419,17 +420,17 @@ def process_cancellation():
                     'details': [],
                 }
                 if delete_lenh_1:
-                    row_report['ticks'].append('T — lệnh 1 (entry)')
+                    row_report['ticks'].append('Z — lệnh 1 (entry)')
                 if delete_cap_23:
-                    row_report['ticks'].append('U — cặp 2+3 (SL+TP)')
+                    row_report['ticks'].append('AA — cặp 2+3 (SL+TP)')
                 if delete_don_23:
-                    row_report['ticks'].append('V — lệnh 2–3 sót')
+                    row_report['ticks'].append('AB — lệnh 2–3 sót')
                 if delete_all_closed:
-                    row_report['ticks'].append('W — xóa TẤT CẢ (ĐÓNG)')
+                    row_report['ticks'].append('AC — xóa TẤT CẢ (ĐÓNG)')
 
                 # === XÓA LỆNH 1 (Entry Order) ===
                 if delete_lenh_1:
-                    print(f"   🗑️  [M] Xóa lệnh 1 (entry order)...", flush=True)
+                    print(f"   🗑️  [Z] Xóa lệnh 1 (entry order)...", flush=True)
                     logger.info(f"[{symbol_raw}] Bắt đầu xóa lệnh 1 (entry order)")
 
                     deleted_count = 0
@@ -478,7 +479,7 @@ def process_cancellation():
 
                     print(f"   ✅ Đã xóa {deleted_count} lệnh entry cho {symbol_raw}", flush=True)
                     logger.info(f"[{symbol_raw}] Đã xóa {deleted_count} lệnh entry (open: {len(entry_orders)}, algo: {len(entry_algo_orders)})")
-                    line_m = f"<b>Lệnh 1 (T):</b> đã hủy {deleted_count} lệnh"
+                    line_m = f"<b>Lệnh 1 (Z):</b> đã hủy {deleted_count} lệnh"
                     if m_items:
                         line_m += "\n    ▸ " + "\n    ▸ ".join(m_items[:10])
                         if len(m_items) > 10:
@@ -489,7 +490,7 @@ def process_cancellation():
 
                 # === XÓA CẶP LỆNH 2-3 (SL + TP) ===
                 if delete_cap_23:
-                    print(f"   🗑️  [N] Xóa cặp lệnh 2-3 (SL + TP)...", flush=True)
+                    print(f"   🗑️  [AA] Xóa cặp lệnh 2-3 (SL + TP)...", flush=True)
                     logger.info(f"[{symbol_raw}] Bắt đầu xóa cặp lệnh 2-3 (SL + TP)")
 
                     deleted_count = 0
@@ -563,7 +564,7 @@ def process_cancellation():
                     print(f"   ✅ Đã xóa {deleted_count} SL/TP orders (open:{len(sl_tp_open_orders)}, algo SL:{deleted_sl}, TP:{deleted_tp}, UNKNOWN:{deleted_unknown}) cho {symbol_raw}", flush=True)
                     logger.info(f"[{symbol_raw}] Đã xóa {deleted_count} SL/TP orders")
                     line_n = (
-                        f"<b>Cặp 2+3 (U):</b> đã hủy {deleted_count} "
+                        f"<b>Cặp 2+3 (AA):</b> đã hủy {deleted_count} "
                         f"(open reduceOnly: {len(sl_tp_open_orders)} tìm thấy; algo SL:{deleted_sl}, TP:{deleted_tp}, khác:{deleted_unknown})"
                     )
                     if n_items:
@@ -576,7 +577,7 @@ def process_cancellation():
 
                 # === XÓA LỆNH ĐƠN 2-3 SÓT LẠI ===
                 if delete_don_23:
-                    print(f"   🗑️  [O] Xóa lệnh đơn 2-3 sót lại...", flush=True)
+                    print(f"   🗑️  [AB] Xóa lệnh đơn 2-3 sót lại...", flush=True)
                     logger.info(f"[{symbol_raw}] Bắt đầu xóa lệnh đơn 2-3 sót lại")
 
                     deleted_count = 0
@@ -635,7 +636,7 @@ def process_cancellation():
                     print(f"   ✅ Đã xóa {deleted_count} lệnh đơn sót lại (open:{len(sl_tp_open_orders)}, algo SL:{deleted_sl}, TP:{deleted_tp}, UNKNOWN:{deleted_unknown}) cho {symbol_raw}", flush=True)
                     logger.info(f"[{symbol_raw}] Đã xóa {deleted_count} lệnh đơn sót lại")
                     line_o = (
-                        f"<b>Lệnh sót (V):</b> đã hủy {deleted_count} "
+                        f"<b>Lệnh sót (AB):</b> đã hủy {deleted_count} "
                         f"(algo SL:{deleted_sl}, TP:{deleted_tp}, khác:{deleted_unknown})"
                     )
                     if o_items:
@@ -648,7 +649,7 @@ def process_cancellation():
 
                 # === [TASK 2] XÓA TẤT CẢ LỆNH NGƯỢC (vị thế ĐÓNG) ===
                 if delete_all_closed:
-                    print(f"   🗑️  [W] Xóa TẤT CẢ lệnh ngược còn treo (vị thế ĐÓNG)...", flush=True)
+                    print(f"   🗑️  [AC] Xóa TẤT CẢ lệnh ngược còn treo (vị thế ĐÓNG)...", flush=True)
                     logger.info(f"[{symbol_raw}] Bắt đầu xóa tất cả lệnh ngược (D={col_d_status})")
 
                     deleted_count = 0
@@ -682,10 +683,10 @@ def process_cancellation():
                                 total_delete_closed += 1
                                 w_items.append(f"{order_type} algo #{algo_id} ({algo.get('algoStatus', '')})")
 
-                    print(f"   ✅ [W] Đã xóa {deleted_count} lệnh ngược cho {symbol_raw} (D={col_d_status})", flush=True)
-                    logger.info(f"[{symbol_raw}] W: Đã xóa tổng {deleted_count} lệnh ngược")
+                    print(f"   ✅ [AC] Đã xóa {deleted_count} lệnh ngược cho {symbol_raw} (D={col_d_status})", flush=True)
+                    logger.info(f"[{symbol_raw}] AC: Đã xóa tổng {deleted_count} lệnh ngược")
                     line_w = (
-                        f"<b>Xóa tất cả (W):</b> đã hủy {deleted_count} lệnh (D={col_d_status}) "
+                        f"<b>Xóa tất cả (AC):</b> đã hủy {deleted_count} lệnh (D={col_d_status}) "
                         f"(open:{len(open_orders)}, algo:{len(all_algo)})"
                     )
                     if w_items:
@@ -703,28 +704,30 @@ def process_cancellation():
                 print(f"   ❌ Lỗi xử lý dòng {row_idx}: {e}", flush=True)
                 continue
 
-        # === [TASK 1+2] CẬP NHẬT SHEET: Xóa tick ở cột T, U, V, W sau khi đã xử lý ===
+        # === [TASK v2] CẬP NHẬT SHEET: Xóa tick ở cột Z, AA, AB, AC sau khi đã xử lý ===
         if symbols_to_clear_ticks:
-            print(f"\n📤 Cập nhật sheet - Xóa tick T, U, V, W cho {len(symbols_to_clear_ticks)} symbols (1 API call)...", flush=True)
-            logger.info(f"Xóa tick T/U/V/W cho {len(symbols_to_clear_ticks)} symbols")
+            print(f"\n📤 Cập nhật sheet - Xóa tick Z, AA, AB, AC cho {len(symbols_to_clear_ticks)} symbols (1 API call)...", flush=True)
+            logger.info(f"Xóa tick Z/AA/AB/AC cho {len(symbols_to_clear_ticks)} symbols")
 
             # Gộp tất cả ranges vào 1 batchClear duy nhất → tránh 429 rate limit
+            tick_columns = ["Z", "AA", "AB", "AC"]
             ranges_to_clear = []
             for row_num in symbols_to_clear_ticks:
-                ranges_to_clear.extend([f"T{row_num}", f"U{row_num}", f"V{row_num}", f"W{row_num}"])
+                for col in tick_columns:
+                    ranges_to_clear.append(f"{col}{row_num}")
 
             try:
                 gg_sheet_factory.batch_clear_values(
                     gg_sheet_factory.tab_cho_va_khop,
                     ranges_to_clear
                 )
-                print(f"   ✅ Đã xóa tick T/U/V/W cho {len(symbols_to_clear_ticks)} rows ({len(ranges_to_clear)} ô) trong 1 API call", flush=True)
+                print(f"   ✅ Đã xóa tick Z/AA/AB/AC cho {len(symbols_to_clear_ticks)} rows ({len(ranges_to_clear)} ô) trong 1 API call", flush=True)
             except Exception as e:
-                logger.error(f"Lỗi khi batch_clear T/U/V/W: {e}")
+                logger.error(f"Lỗi khi batch_clear Z/AA/AB/AC: {e}")
                 # Fallback: ghi từng ô, có delay để tránh 429
                 logger.warning("Fallback: Ghi từng ô với delay 1s")
                 for row_num in symbols_to_clear_ticks:
-                    for col in ["T", "U", "V", "W"]:
+                    for col in tick_columns:
                         try:
                             gg_sheet_factory.update_single_value(
                                 gg_sheet_factory.tab_cho_va_khop,

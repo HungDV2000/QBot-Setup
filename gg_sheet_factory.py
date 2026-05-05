@@ -395,15 +395,26 @@ def get_dat_lenh(range):
   
   return execute_with_retry(_execute)
 
-def get_cho_va_khop(range):
+def get_cho_va_khop(range, value_render_option=None):
+  """Đọc dữ liệu từ tab "Chờ và khớp".
+
+  Args:
+    range: range string, vd "A2:AC1000"
+    value_render_option: tùy chọn Google Sheets render. Mặc định FORMATTED_VALUE
+        (tương thích cũ). Đặt 'FORMULA' để phân biệt cell có công thức (=IF...)
+        vs cell user nhập giá trị cứng.
+  """
   RANGE_NAME = f"'{tab_cho_va_khop}'!{range}"
   init_sheet_api()
   
   def _execute():
+    kwargs = {"spreadsheetId": spreadsheetId, "range": RANGE_NAME}
+    if value_render_option:
+        kwargs["valueRenderOption"] = value_render_option
     result = (
       spreadsheets_service  # ✅ Dùng cached resource
       .values()
-      .get(spreadsheetId=spreadsheetId, range=RANGE_NAME)
+      .get(**kwargs)
       .execute()
     )
     return result.get("values", [])

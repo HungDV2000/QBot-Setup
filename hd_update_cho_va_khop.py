@@ -520,17 +520,24 @@ def build_cho_va_khop_row(
     symbol_formatted, side, status_d, entry_price, leverage, has_sl, has_tp, order_count
 ):
     """
-    [TASK 1+2] Dựng row 23 cột cho sheet "Chờ và khớp" (A-W).
+    [TASK 1+2 v2] Dựng row 29 cột cho sheet "Chờ và khớp" (A-AC).
 
     Layout:
       A=Symbol, B=Side, C=Chờ khớp (Y/N), D=Trạng thái (Y/N/ĐÓNG),
       E=Giá vào, F=Đòn bẩy, G=Có SL (Y/N), H=Có TP (Y/N), I=Số orders,
-      J=% lớp 1, K=% lớp 2, L=% lớp 3  ← default từ config (user chỉnh tự do),
-      M=SL1, N=SL2, O=SL3, P=TP1, Q=TP2, R=TP3  ← compute từ entry + rates,
-      S=Cho phép đặt (Y/N) ← default N, T/U/V=Tick xóa 1/2-3/sót, W=Tick xóa ngược (ĐÓNG).
+      J=% lớp 1, K=% lớp 2, L=% lớp 3  ← default từ config, dùng cho mode 3 lớp,
+      M=Giá SL  (formula =E*(1-U) cho LONG, =E*(1+V) cho SHORT) — mode 1 lớp,
+      N=Giá SL1, O=Giá SL2, P=Giá SL3 (formula default = M, user override) — mode 3 lớp,
+      Q=Giá TP  (formula =E*(1+W) cho LONG, =E*(1-X) cho SHORT) — mode 1 lớp,
+      R=Giá TP1, S=Giá TP2, T=Giá TP3 (formula default = Q) — mode 3 lớp,
+      U=Lệnh 2 rate LONG (default cst.lenh2_rate_long, decimal: 0.3 = 30%),
+      V=Lệnh 2 rate SHORT (default cst.lenh2_rate_short),
+      W=Lệnh 3 rate LONG (default cst.lenh3_rate_long),
+      X=Lệnh 3 rate SHORT (default cst.lenh3_rate_short),
+      Y=ĐẶT LỆNH (Y/N) — default N,
+      Z=Xóa entry, AA=Xóa SL/TP, AB=Xóa lệnh sót, AC=Xóa lệnh ngược (default N).
 
-    Các cột user-input sẽ được MERGE từ dữ liệu cũ (nếu user đã nhập) ở bước sau.
-    Nếu cst.fill_default_cho_va_khop = False → các cột J-S luôn rỗng.
+    Formula chứa placeholder "{ROW}" — replace bằng row index khi ghi sheet.
     """
     lenh_ls = "Y" if has_sl else "N"
     lenh_tp = "Y" if has_tp else "N"
@@ -542,59 +549,101 @@ def build_cho_va_khop_row(
     else:  # ĐÓNG
         cho_khop = "N"
 
-    # [TASK 1] Default values cho cột J-W
+    # Defaults cho cột user-input
     if getattr(cst, 'fill_default_cho_va_khop', True):
         default_r1 = cst.default_ratio_layer_1
         default_r2 = cst.default_ratio_layer_2
         default_r3 = cst.default_ratio_layer_3
-        default_s = cst.default_allow_order  # "N" mặc định
-        default_tick = "N"  # T/U/V/W default N (user đổi sang "Y" để trigger xóa)
+        # Rates — decimal (0.3 = 30%) khớp với cst.lenh2_rate_long/short
+        default_u = getattr(cst, 'lenh2_rate_long', 0.3)
+        default_v = getattr(cst, 'lenh2_rate_short', 0.3)
+        default_w = getattr(cst, 'lenh3_rate_long', 0.6)
+        default_x = getattr(cst, 'lenh3_rate_short', 0.6)
+        default_y = getattr(cst, 'default_allow_order', 'N')  # cột Y = ĐẶT LỆNH
+        default_tick = "N"  # cột Z, AA, AB, AC
 
-        # Chỉ compute SL/TP default khi có entry_price > 0 VÀ side hợp lệ VÀ status_d không phải "ĐÓNG"
-        # (ĐÓNG = position đã đóng, không cần SL/TP placeholder)
-        if status_d != "ĐÓNG" and side in ("LONG", "SHORT"):
-            try:
-                ep = float(entry_price) if entry_price not in (None, "") else 0.0
-            except (ValueError, TypeError):
-                ep = 0.0
-            sl_defaults, tp_defaults = compute_default_sl_tp_prices(side, ep)
+        # Formula M-T: chỉ ghi khi có entry > 0 VÀ side hợp lệ VÀ status không phải "ĐÓNG"
+        try:
+            ep = float(entry_price) if entry_price not in (None, "") else 0.0
+        except (ValueError, TypeError):
+            ep = 0.0
+
+        if status_d != "ĐÓNG" and side in ("LONG", "SHORT") and ep > 0:
+            # M = giá SL chính: LONG → E*(1-U), SHORT → E*(1+V)
+            # Q = giá TP chính: LONG → E*(1+W), SHORT → E*(1-X)
+            # N/O/P, R/S/T: default = M, Q (user override để scale-out 3 mức giá khác nhau)
+            f_M = '=IF($B{ROW}="LONG",$E{ROW}*(1-$U{ROW}),$E{ROW}*(1+$V{ROW}))'
+            f_Q = '=IF($B{ROW}="LONG",$E{ROW}*(1+$W{ROW}),$E{ROW}*(1-$X{ROW}))'
+            f_N = '=$M{ROW}'
+            f_O = '=$M{ROW}'
+            f_P = '=$M{ROW}'
+            f_R = '=$Q{ROW}'
+            f_S = '=$Q{ROW}'
+            f_T = '=$Q{ROW}'
         else:
-            sl_defaults, tp_defaults = [None, None, None], [None, None, None]
+            f_M = f_N = f_O = f_P = f_Q = f_R = f_S = f_T = ""
     else:
         default_r1 = default_r2 = default_r3 = ""
-        default_s = ""
+        default_u = default_v = default_w = default_x = ""
+        default_y = ""
         default_tick = ""
-        sl_defaults = [None, None, None]
-        tp_defaults = [None, None, None]
-
-    def _cell(v):
-        return "" if v is None else v
+        f_M = f_N = f_O = f_P = f_Q = f_R = f_S = f_T = ""
 
     return (
-        symbol_formatted,                  # A: Symbol
-        side,                              # B: LONG/SHORT
-        cho_khop,                          # C: Chờ khớp (auto)
-        status_d,                          # D: Trạng thái (Y/N/ĐÓNG) — auto
-        entry_price,                       # E: Giá vào (auto)
-        leverage,                          # F: Đòn bẩy (auto)
-        lenh_ls,                           # G: Có SL (auto)
-        lenh_tp,                           # H: Có TP (auto)
-        order_count,                       # I: Số orders (auto)
-        default_r1,                        # J: % lớp 1 (default 40)
-        default_r2,                        # K: % lớp 2 (default 40)
-        default_r3,                        # L: % lớp 3 (default 20)
-        _cell(sl_defaults[0]),             # M: Giá SL1 (default từ entry × rate)
-        _cell(sl_defaults[1]),             # N: Giá SL2
-        _cell(sl_defaults[2]),             # O: Giá SL3
-        _cell(tp_defaults[0]),             # P: Giá TP1
-        _cell(tp_defaults[1]),             # Q: Giá TP2
-        _cell(tp_defaults[2]),             # R: Giá TP3
-        default_s,                         # S: Cho phép đặt (default N)
-        default_tick,                      # T: Tick xóa entry (default N)
-        default_tick,                      # U: Tick xóa cặp SL+TP (default N)
-        default_tick,                      # V: Tick xóa lệnh sót (default N)
-        default_tick,                      # W: Tick xóa lệnh ngược ĐÓNG (default N)
+        symbol_formatted,    # A: Symbol
+        side,                # B: LONG/SHORT
+        cho_khop,            # C: Chờ khớp (auto)
+        status_d,            # D: Trạng thái Y/N/ĐÓNG (auto)
+        entry_price,         # E: Giá vào (auto)
+        leverage,            # F: Đòn bẩy (auto)
+        lenh_ls,             # G: Có SL (auto)
+        lenh_tp,             # H: Có TP (auto)
+        order_count,         # I: Số orders (auto)
+        default_r1,          # J: % lớp 1 (default 40)
+        default_r2,          # K: % lớp 2 (default 40)
+        default_r3,          # L: % lớp 3 (default 20)
+        f_M,                 # M: Giá SL (formula)
+        f_N,                 # N: Giá SL1 (formula =M)
+        f_O,                 # O: Giá SL2 (formula =M)
+        f_P,                 # P: Giá SL3 (formula =M)
+        f_Q,                 # Q: Giá TP (formula)
+        f_R,                 # R: Giá TP1 (formula =Q)
+        f_S,                 # S: Giá TP2 (formula =Q)
+        f_T,                 # T: Giá TP3 (formula =Q)
+        default_u,           # U: Lệnh 2 rate LONG (decimal)
+        default_v,           # V: Lệnh 2 rate SHORT
+        default_w,           # W: Lệnh 3 rate LONG
+        default_x,           # X: Lệnh 3 rate SHORT
+        default_y,           # Y: ĐẶT LỆNH (Y/N — default N)
+        default_tick,        # Z: Xóa entry
+        default_tick,        # AA: Xóa SL/TP
+        default_tick,        # AB: Xóa lệnh sót
+        default_tick,        # AC: Xóa lệnh ngược (ĐÓNG)
     )
+
+
+def replace_row_placeholder(rows, start_sheet_row=2):
+    """
+    [TASK 2 v2] Thay thế placeholder "{ROW}" trong các cell formula bằng số dòng thực tế.
+
+    Args:
+        rows: list of tuples (mỗi tuple = 1 dòng dữ liệu)
+        start_sheet_row: số dòng đầu tiên trong sheet (mặc định 2, vì hàng 1 là header)
+
+    Returns:
+        list of tuples mới với "{ROW}" đã được replace.
+    """
+    out = []
+    for i, row in enumerate(rows):
+        sheet_row = i + start_sheet_row
+        new_row = []
+        for cell in row:
+            if isinstance(cell, str) and "{ROW}" in cell:
+                new_row.append(cell.replace("{ROW}", str(sheet_row)))
+            else:
+                new_row.append(cell)
+        out.append(tuple(new_row))
+    return out
 
 
 def get_all_open_orders_with_single_order():
@@ -1024,72 +1073,79 @@ def do_it():
     logger.info(f"Tổng dòng dữ liệu: {len(tab_100_ma_2d_arr)} (ĐÓNG: {len(closed_list)})")
     
     try:
-        # [TASK 1+2] BƯỚC 5.1: ĐỌC DỮ LIỆU CŨ (A-W) để giữ lại user input
-        # User nhập: cột J-L (% lớp 1/2/3), M-R (giá SL/TP), S (allow), T-W (tick)
-        print("  📖 Đọc dữ liệu cũ (A-W) để giữ user input (J-L %, M-R giá, S allow, T-W tick)...", flush=True)
-        # data_map: {symbol: (p_l1, p_l2, p_l3, sl1, sl2, sl3, tp1, tp2, tp3, allow, tick_t, tick_u, tick_v, tick_w)}
+        # [TASK v2] BƯỚC 5.1: ĐỌC DỮ LIỆU CŨ (A-AC, 29 cột) để giữ lại user input
+        # User nhập: J-L (% lớp), M-T (giá SL/TP — formula HOẶC user override),
+        #            U-X (rates), Y (ĐẶT LỆNH), Z-AC (tick xóa)
+        # Dùng valueRenderOption='FORMULA' để phân biệt cell có formula (=...) vs user override.
+        print("  📖 Đọc dữ liệu cũ (A-AC, FORMULA mode) để giữ user input...", flush=True)
+        # data_map: {symbol: tuple(20 user-input cells, indices 9..28 of sheet row)}
         data_map = {}
-        
+
         try:
-            # Đọc A2:W1000 (23 cột)
-            old_data = gg_sheet_factory.get_cho_va_khop("A2:W1000")
-            
+            # Read từ row 4 (data row đầu tiên — row 1=MODE, row 2=timestamp, row 3=column headers)
+            old_data = gg_sheet_factory.get_cho_va_khop("A4:AC1000", value_render_option="FORMULA")
+
             if old_data:
                 for row in old_data:
                     symbol = str(row[0]).strip() if len(row) > 0 and row[0] else ""
                     if not symbol:
                         continue
-                    # Giữ tất cả user-input cols (J-W, index 9-22, tổng 14 cột)
+                    # Helper: lấy raw value (giữ nguyên type — số/string)
                     def _g(i):
-                        return str(row[i]).strip() if len(row) > i and row[i] else ""
-                    user_values = (
-                        _g(9),   # J: % lớp 1
-                        _g(10),  # K: % lớp 2
-                        _g(11),  # L: % lớp 3
-                        _g(12),  # M: Giá SL1
-                        _g(13),  # N: Giá SL2
-                        _g(14),  # O: Giá SL3
-                        _g(15),  # P: Giá TP1
-                        _g(16),  # Q: Giá TP2
-                        _g(17),  # R: Giá TP3
-                        _g(18),  # S: Cho phép đặt
-                        _g(19),  # T: Tick xóa entry
-                        _g(20),  # U: Tick xóa cặp SL+TP
-                        _g(21),  # V: Tick xóa sót
-                        _g(22),  # W: Tick xóa lệnh ngược (ĐÓNG)
-                    )
+                        if len(row) <= i:
+                            return ""
+                        v = row[i]
+                        if v is None:
+                            return ""
+                        return v if not isinstance(v, str) else v.strip()
+                    # 20 user-input cells từ J (idx 9) đến AC (idx 28)
+                    user_values = tuple(_g(9 + k) for k in range(20))
                     symbol_normalized = symbol.replace(":USDT", "").strip()
                     data_map[symbol_normalized] = user_values
-                
-                print(f"    ✅ Đã đọc {len(data_map)} symbols từ dữ liệu cũ", flush=True)
-                logger.info(f"Đã đọc {len(data_map)} symbols từ dữ liệu cũ (A-W)")
+
+                print(f"    ✅ Đã đọc {len(data_map)} symbols từ dữ liệu cũ (29 cột)", flush=True)
+                logger.info(f"Đã đọc {len(data_map)} symbols từ dữ liệu cũ A-AC")
             else:
                 print("    ℹ️  Không có dữ liệu cũ", flush=True)
-                
+
         except Exception as e:
             print(f"    ⚠️  Lỗi khi đọc dữ liệu cũ: {e} (tiếp tục không merge)", flush=True)
             logger.warning(f"Lỗi đọc dữ liệu cũ để merge: {e}", exc_info=True)
-        
-        # [TASK 1+2] BƯỚC 5.2: MERGE USER INPUT (J-W) vào dữ liệu mới
+
+        # [TASK v2] BƯỚC 5.2: MERGE USER INPUT vào dữ liệu mới
         if data_map:
-            print("  🔄 Merge user input (J-L % lớp, M-R giá SL/TP, S allow, T-W tick) vào dữ liệu mới...", flush=True)
+            print("  🔄 Merge user input (J-L %, M-T giá, U-X rate, Y allow, Z-AC tick)...", flush=True)
             merged_count = 0
-            
-            # Helper: xác định cell cũ có "đáng giữ" không (để override default mới).
-            #   - Cột giá SL/TP (M-R, idx 12..17): "0", "0.0"... coi là CHƯA SET → dùng default.
-            #   - Các cột khác: chỉ rỗng mới coi là chưa set.
-            def _is_meaningful(val, col_idx):
+
+            # Helper: xác định cell cũ có "user override" không (để giữ qua merge).
+            # - Cột giá M-T (idx 12-19): nếu là FORMULA "=..." → bot tạo, KHÔNG merge (để bot ghi lại formula).
+            #                             Nếu là số > 0 → user override, MERGE.
+            # - Các cột khác: chỉ rỗng mới coi là chưa set.
+            def _is_user_value(val, col_idx):
                 if val is None:
                     return False
-                s = str(val).strip()
-                if not s:
-                    return False
-                if 12 <= col_idx <= 17:  # M-R: giá SL/TP
+                if isinstance(val, str):
+                    s = val.strip()
+                    if not s:
+                        return False
+                    # Cột giá M-T: nếu là formula thì để bot ghi lại
+                    if 12 <= col_idx <= 19 and s.startswith("="):
+                        return False
+                    # Số 0 ở cột giá → coi như rỗng
+                    if 12 <= col_idx <= 19:
+                        try:
+                            if float(s) == 0:
+                                return False
+                        except (ValueError, TypeError):
+                            pass
+                    return True
+                # Numeric type (int/float)
+                if 12 <= col_idx <= 19:
                     try:
-                        if float(s) == 0:
+                        if float(val) == 0:
                             return False
                     except (ValueError, TypeError):
-                        pass
+                        return False
                 return True
 
             for i, row in enumerate(tab_100_ma_2d_arr):
@@ -1099,35 +1155,38 @@ def do_it():
                 if symbol_normalized in data_map:
                     user_values = data_map[symbol_normalized]
                     row_list = list(row)
-                    # Bảo đảm đủ 23 cột
-                    while len(row_list) < 23:
+                    # Bảo đảm đủ 29 cột
+                    while len(row_list) < 29:
                         row_list.append("")
-                    # Merge từng field nếu user có nhập giá trị "có ý nghĩa" (không rỗng, không phải 0 cho cột giá)
-                    # user_values mapping to row indices 9..22
+                    # Merge từng field — user_values mapping to row indices 9..28
                     for off, val in enumerate(user_values):
-                        idx = 9 + off  # cột J..W
-                        if _is_meaningful(val, idx):
+                        idx = 9 + off  # cột J..AC
+                        if _is_user_value(val, idx):
                             row_list[idx] = val
                     tab_100_ma_2d_arr[i] = tuple(row_list)
                     merged_count += 1
-            
+
             print(f"    ✅ Đã merge user input cho {merged_count} symbols", flush=True)
-            logger.info(f"Merged user-input (J-W) cho {merged_count} symbols")
-        
-        # [TASK 1+2] Clear chỉ cột A-I (auto-populated), giữ J-W (user input + tick)
-        print("  🗑️  Xóa dữ liệu cũ (chỉ cột A-I auto, giữ J-W user input)...", flush=True)
+            logger.info(f"Merged user-input (J-AC) cho {merged_count} symbols")
+
+        # [TASK v2] Clear cột A-I (auto), giữ J-AC (user input + formula + tick)
+        print("  🗑️  Xóa dữ liệu cũ (chỉ cột A-I auto, giữ J-AC user input)...", flush=True)
         gg_sheet_factory.clear_multi(gg_sheet_factory.tab_cho_va_khop, 2, "a", end_row=1000, end_column="I")
         
         timestamp_str = current_time.strftime("%Y-%m-%d %H:%M:%S")
         print(f"  📅 Cập nhật timestamp vào A2: {timestamp_str}", flush=True)
         gg_sheet_factory.update_single_value(gg_sheet_factory.tab_cho_va_khop, "A2", timestamp_str)
-        
-        # Ghi dữ liệu mới 23 cột (update_multi sẽ dùng range A..ZZ)
-        print("  ✍️  Ghi dữ liệu mới 23 cột (A-W, đã merge user input)...", flush=True)
+
+        # [TASK v2] Replace placeholder {ROW} trong formula bằng số dòng sheet thực tế
+        # update_multi(tab, 2, ...) → index = 2 + 2 = 4 → array[i] ghi vào sheet row (i+4)
+        tab_100_ma_2d_arr = replace_row_placeholder(tab_100_ma_2d_arr, start_sheet_row=4)
+
+        # Ghi dữ liệu mới 29 cột (A-AC) — formula M-T sẽ tự eval khi USER_ENTERED
+        print("  ✍️  Ghi dữ liệu mới 29 cột (A-AC, formula M-T đã replace ROW)...", flush=True)
         gg_sheet_factory.update_multi(gg_sheet_factory.tab_cho_va_khop, 2, tab_100_ma_2d_arr, "a")
-        
-        print(f"✅ Hoàn thành! Đã cập nhật {len(tab_100_ma_2d_arr)} dòng vào sheet (đã giữ lại rate)", flush=True)
-        logger.info(f"✅ Hoàn thành cập nhật sheet: {len(tab_100_ma_2d_arr)} dòng (đã merge rate)")
+
+        print(f"✅ Hoàn thành! Đã cập nhật {len(tab_100_ma_2d_arr)} dòng vào sheet", flush=True)
+        logger.info(f"✅ Hoàn thành cập nhật sheet: {len(tab_100_ma_2d_arr)} dòng (29 cột, đã merge user input)")
         
     except HttpError as e:
         # ✅ Xử lý đặc biệt cho lỗi 403 (Permission denied)

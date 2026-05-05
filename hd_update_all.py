@@ -116,6 +116,12 @@ _DEBUG_COL_NAMES = [
     "Score LONG/SHORT (-10..+10)",     # AY
     "Gợi ý",                           # AZ — "LONG mạnh" / "LONG nhẹ" / "Trung tính" / "SHORT nhẹ" / "SHORT mạnh"
     "Lý do score",                     # BA — chi tiết thành phần
+    # ── TASK A: Bổ sung giá tham chiếu + Stochastic Oscillator (BB → BF) ─────
+    "Open 1h",                          # BB — open price của nến 1h gần nhất
+    "High 1h gần đây",                  # BC — highest high trong 24 nến 1h gần đây
+    "Low 1h gần đây",                   # BD — lowest low trong 24 nến 1h gần đây
+    "Stoch %K (1h)",                    # BE — Stochastic Oscillator %K, period 14
+    "Stoch %D (1h)",                    # BF — Stochastic Oscillator %D = SMA(%K, 3)
 ]
 
 
@@ -717,6 +723,42 @@ def _compute_stoch_rsi(closes, rsi_period=14, stoch_period=14, k_smooth=3, d_smo
     # %D = SMA d_smooth của %K
     d_now = float(np.mean(k_clean[-d_smooth:]))
     k_now = k_clean[-1]
+    return k_now, d_now
+
+
+def _compute_stochastic(highs, lows, closes, k_period=14, d_period=3):
+    """
+    [TASK A] Stochastic Oscillator (chuẩn — dùng High/Low/Close trực tiếp).
+    Khác Stoch RSI: Stoch dùng giá thực, Stoch RSI dùng chuỗi RSI làm input.
+
+    %K (raw) = (close - lowest_low_n) / (highest_high_n - lowest_low_n) × 100
+    %D       = SMA(%K, d_period)
+
+    Trả về (%K, %D) thang 0-100, hoặc (None, None) nếu thiếu dữ liệu.
+    """
+    if not highs or not lows or not closes:
+        return None, None
+    n = min(len(highs), len(lows), len(closes))
+    if n < k_period + d_period:
+        return None, None
+
+    # Tính chuỗi %K cho từng thời điểm có đủ window k_period
+    k_series = []
+    for i in range(k_period - 1, n):
+        window_highs = highs[i - k_period + 1:i + 1]
+        window_lows = lows[i - k_period + 1:i + 1]
+        h_max = max(window_highs)
+        l_min = min(window_lows)
+        if h_max - l_min == 0:
+            k_series.append(0.0)
+        else:
+            k_series.append((closes[i] - l_min) / (h_max - l_min) * 100)
+
+    if len(k_series) < d_period:
+        return None, None
+
+    k_now = k_series[-1]
+    d_now = float(np.mean(k_series[-d_period:]))
     return k_now, d_now
 
 
@@ -1778,6 +1820,38 @@ def do_it():
         row.append(suggest)
         row.append(reasons)
 
+        # ── TASK A: Bổ sung giá tham chiếu + Stochastic Oscillator (BB → BF) ──
+        # BB: Open của nến 1h gần nhất (open price)
+        if ohlcv_1h:
+            row.append(round(float(ohlcv_1h[-1][1]), 8))
+        else:
+            row.append("")
+
+        # BC, BD: High & Low recent trong 24 nến 1h gần nhất (1 ngày)
+        if ohlcv_1h and len(ohlcv_1h) >= 24:
+            recent_highs_1h = [float(c[2]) for c in ohlcv_1h[-24:]]
+            recent_lows_1h = [float(c[3]) for c in ohlcv_1h[-24:]]
+            row.append(round(max(recent_highs_1h), 8))
+            row.append(round(min(recent_lows_1h), 8))
+        elif ohlcv_1h:
+            recent_highs_1h = [float(c[2]) for c in ohlcv_1h]
+            recent_lows_1h = [float(c[3]) for c in ohlcv_1h]
+            row.append(round(max(recent_highs_1h), 8))
+            row.append(round(min(recent_lows_1h), 8))
+        else:
+            row.extend(["", ""])
+
+        # BE, BF: Stochastic Oscillator %K/%D (dùng high/low/close trực tiếp, period 14/3)
+        if ohlcv_1h and len(ohlcv_1h) >= 17:  # cần >= k_period(14) + d_period(3)
+            highs_1h = [float(c[2]) for c in ohlcv_1h]
+            lows_1h = [float(c[3]) for c in ohlcv_1h]
+            closes_1h_for_stoch = [float(c[4]) for c in ohlcv_1h]
+            stoch_k_val, stoch_d_val = _compute_stochastic(highs_1h, lows_1h, closes_1h_for_stoch)
+            row.append(round(stoch_k_val, 2) if stoch_k_val is not None else "")
+            row.append(round(stoch_d_val, 2) if stoch_d_val is not None else "")
+        else:
+            row.extend(["", ""])
+
         logger.info(f"get_row_result xong: {symbol}")
         if ENABLE_DEBUG_DATA:
             write_symbol_debug_log(symbol, row)
@@ -1989,6 +2063,12 @@ def do_it():
         "Score LONG/SHORT",             # AY — -10..+10
         "Gợi ý",                        # AZ — LONG mạnh/LONG nhẹ/Trung tính/SHORT nhẹ/SHORT mạnh
         "Lý do score",                  # BA — các thành phần cấu thành điểm
+        # ── TASK A: Bổ sung giá tham chiếu + Stochastic Oscillator (BB → BF) ──
+        "Open 1h",                      # BB — open của nến 1h gần nhất
+        "High 1h gần đây",              # BC — high cao nhất trong 24 nến 1h
+        "Low 1h gần đây",               # BD — low thấp nhất trong 24 nến 1h
+        "Stoch %K (1h)",                # BE — Stochastic Oscillator %K (14)
+        "Stoch %D (1h)",                # BF — Stochastic Oscillator %D = SMA(%K, 3)
     ]
     
     # Thêm header vào đầu array
