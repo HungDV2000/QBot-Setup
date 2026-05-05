@@ -188,7 +188,7 @@ REM BƯỚC 1: KIỂM TRA VÀ CÀI ĐẶT PYTHON TỰ ĐỘNG
 REM ============================================================================
 :Step1_CheckPython
 echo [1/6] Đang kiểm tra Python...
-call :LogInfo "STEP 1 of 6 - Checking Python installation"
+call :LogInfo "[STEP 1/6] Checking Python installation"
 
 python --version >nul 2>&1
 if errorlevel 1 (
@@ -391,7 +391,7 @@ REM BƯỚC 2: KIỂM TRA PIP
 REM ============================================================================
 :Step2_CheckPip
 echo [2/6] Đang kiểm tra pip (Python package manager)...
-call :LogInfo "STEP 2 of 6 - Checking pip"
+call :LogInfo "[STEP 2/6] Checking pip"
 
 python -m pip --version >nul 2>&1
 if errorlevel 1 (
@@ -419,7 +419,7 @@ REM BƯỚC 3: CÀI ĐẶT THƯ VIỆN
 REM ============================================================================
 :Step3_InstallLibraries
 echo [3/6] Đang cài đặt thư viện Python...
-call :LogInfo "STEP 3 of 6 - Installing Python libraries"
+call :LogInfo "[STEP 3/6] Installing Python libraries"
 echo.
 echo 📦 Danh sách thư viện sẽ được cài đặt:
 echo    - ccxt (Binance API)
@@ -490,7 +490,7 @@ REM BƯỚC 4: TẠO CONFIG FILE (NẾU CHƯA CÓ)
 REM ============================================================================
 :Step4_CreateConfig
 echo [4/6] Đang kiểm tra file config...
-call :LogInfo "STEP 4 of 6 - Checking config.ini"
+call :LogInfo "[STEP 4/6] Checking config.ini"
 echo.
 
 if exist ../config.ini (
@@ -575,7 +575,7 @@ REM BƯỚC 5: KIỂM TRA CÁC FILE CẦN THIẾT
 REM ============================================================================
 :Step5_CheckFiles
 echo [5/6] Đang kiểm tra các file cần thiết...
-call :LogInfo "STEP 5 of 6 - Checking required files"
+call :LogInfo "[STEP 5/6] Checking required files"
 echo.
 
 set MISSING_FILES=0
@@ -694,7 +694,7 @@ echo ║                        CÀI ĐẶT HOÀN TẤT!                        
 echo ╚════════════════════════════════════════════════════════════════════════╝
 echo.
 
-call :LogInfo "STEP 6 of 6 - Installation summary"
+call :LogInfo "[STEP 6/6] Installation summary"
 call :LogInfo "Python: %PYTHON_VERSION%"
 call :LogInfo "pip: Ready"
 call :LogInfo "Libraries: Installed"
@@ -991,7 +991,7 @@ if "%SYS_PATH%"=="" (
     echo ⚠️  CẢNH BÁO: Không đọc được System PATH từ registry
 )
 if "%USER_PATH%"=="" (
-    call :LogInfo "User PATH not found in registry - OK to skip"
+    call :LogInfo "User PATH not found in registry (this is OK)"
 )
 
 set "PATH=%SYS_PATH%;%USER_PATH%"
@@ -1000,17 +1000,25 @@ echo ✅ PATH đã được refresh
 goto :eof
 
 :LogInfo
-REM Một chuỗi -Command duy nhất + env (không truyền thêm "arg" sau -Command — PS sẽ chạy arg như lệnh riêng)
+REM Log information with timestamp to info.txt
 if "%LOGGING_DISABLED%"=="1" goto :eof
-set "PS_LOGMSG=%~1"
-set "PS_LOGPATH=%INFO_LOG%"
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "$m=$env:PS_LOGMSG; $p=$env:PS_LOGPATH; if ([string]::IsNullOrWhiteSpace($p)) { exit 0 }; $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'; try { Add-Content -LiteralPath $p -Encoding UTF8 -Value ($ts + ' [INFO] ' + $m) } catch { $par = Split-Path -Parent $p; if ([string]::IsNullOrWhiteSpace($par)) { $par = (Get-Location).Path }; $fb = Join-Path $par 'setup_info_fallback.txt'; Add-Content -LiteralPath $fb -Encoding UTF8 -Value ($ts + ' [INFO] ' + $m) }"
+REM Bỏ ( ) trong date/time — nhiều locale Windows có dạng "dd/mm/yyyy (Tên thứ)" và làm hỏng set "var=...)"
+set "LOG_TS=%date:)=-%"
+set "LOG_TS=%LOG_TS:(=-%"
+set "LOG_TT=%time:)=-%"
+set "LOG_TT=%LOG_TT:(=-%"
+echo [%LOG_TS% %LOG_TT%] [INFO] %~1 >> "%INFO_LOG%" 2>nul
+REM Không hiển thị error nữa vì đã cảnh báo ở đầu
 goto :eof
 
 :LogError
+REM Log error with timestamp to error.txt
 if "%LOGGING_DISABLED%"=="1" goto :eof
-set "PS_LOGMSG=%~1"
-set "PS_LOGERR=%ERROR_LOG%"
-set "PS_LOGINF=%INFO_LOG%"
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "$m=$env:PS_LOGMSG; $pe=$env:PS_LOGERR; $pi=$env:PS_LOGINF; if ([string]::IsNullOrWhiteSpace($pe)) { exit 0 }; $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'; $line = $ts + ' [ERROR] ' + $m; try { Add-Content -LiteralPath $pe -Encoding UTF8 -Value $line; if (-not [string]::IsNullOrWhiteSpace($pi)) { Add-Content -LiteralPath $pi -Encoding UTF8 -Value $line } } catch { $par = Split-Path -Parent $pe; if ([string]::IsNullOrWhiteSpace($par)) { $par = (Get-Location).Path }; $fb = Join-Path $par 'setup_error_fallback.txt'; Add-Content -LiteralPath $fb -Encoding UTF8 -Value $line }"
+set "LOG_TS=%date:)=-%"
+set "LOG_TS=%LOG_TS:(=-%"
+set "LOG_TT=%time:)=-%"
+set "LOG_TT=%LOG_TT:(=-%"
+echo [%LOG_TS% %LOG_TT%] [ERROR] %~1 >> "%ERROR_LOG%" 2>nul
+echo [%LOG_TS% %LOG_TT%] [ERROR] %~1 >> "%INFO_LOG%" 2>nul
+REM Không hiển thị error nữa vì đã cảnh báo ở đầu
 goto :eof

@@ -91,7 +91,7 @@ REM BƯỚC 1: GỠ PYTHON (NẾU CHỌN)
 REM ============================================================================
 if /i "!DELETE_PYTHON!"=="Y" (
     echo [1/8] Đang gỡ cài đặt Python...
-    call :LogInfo "STEP 1 of 8 - Uninstalling Python (user chose Y)"
+    call :LogInfo "[STEP 1/8] Uninstalling Python (user chose Y)"
     echo.
     
     python --version >nul 2>&1
@@ -154,7 +154,7 @@ if /i "!DELETE_PYTHON!"=="Y" (
     )
 ) else (
     echo [1/8] Bỏ qua gỡ Python ^(giữ nguyên^)
-    call :LogInfo "STEP 1 of 8 - Skipping Python uninstall (user chose N)"
+    call :LogInfo "[STEP 1/8] Skipping Python uninstall (user chose N)"
     echo    ✅ Python được giữ lại trên máy
 )
 
@@ -164,7 +164,7 @@ REM ============================================================================
 REM BƯỚC 2: BACKUP CONFIG.INI
 REM ============================================================================
 echo [2/8] Backup config.ini...
-call :LogInfo "STEP 2 of 8 - Backing up config.ini"
+call :LogInfo "[STEP 2/8] Backing up config.ini"
 
 if exist ../config.ini (
     set BACKUP_NAME=config.backup_%date:~-4,4%%date:~-10,2%%date:~-7,2%_%time:~0,2%%time:~3,2%%time:~6,2%.ini
@@ -188,7 +188,7 @@ REM ============================================================================
 REM BƯỚC 3: GỠ CÀI ĐẶT THƯ VIỆN PYTHON
 REM ============================================================================
 echo [3/8] Đang gỡ cài đặt thư viện Python...
-call :LogInfo "STEP 3 of 8 - Uninstalling Python libraries from requirements.txt"
+call :LogInfo "[STEP 3/8] Uninstalling Python libraries from requirements.txt"
 
 python --version >nul 2>&1
 if not errorlevel 1 (
@@ -229,7 +229,7 @@ REM ============================================================================
 REM BƯỚC 4: XÓA VIRTUAL ENVIRONMENT
 REM ============================================================================
 echo [4/8] Đang xóa virtual environment...
-call :LogInfo "STEP 4 of 8 - Removing virtual environment"
+call :LogInfo "[STEP 4/8] Removing virtual environment"
 
 if exist ../venv (
     call :LogInfo "venv folder found, removing..."
@@ -239,7 +239,7 @@ if exist ../venv (
         call :LogInfo "venv removed successfully"
         echo    ✅ Đã xóa venv
     ) else (
-        call :LogError "Failed to remove venv - may be in use"
+        call :LogError "Failed to remove venv (may be in use)"
         echo    ⚠️  Không thể xóa venv ^(có thể đang được sử dụng^)
     )
 ) else (
@@ -253,7 +253,7 @@ REM ============================================================================
 REM BƯỚC 5: XÓA CONFIG.INI
 REM ============================================================================
 echo [5/8] Đang xóa config.ini...
-call :LogInfo "STEP 5 of 8 - Removing config.ini"
+call :LogInfo "[STEP 5/8] Removing config.ini"
 
 if exist ../config.ini (
     call :LogInfo "config.ini found, removing..."
@@ -276,7 +276,7 @@ REM ============================================================================
 REM BƯỚC 6: XÓA CACHE VÀ TEMP FILES
 REM ============================================================================
 echo [6/8] Đang xóa cache và temp files...
-call :LogInfo "STEP 6 of 8 - Removing cache and temp files"
+call :LogInfo "[STEP 6/8] Removing cache and temp files"
 
 REM Xóa __pycache__
 set PYCACHE_COUNT=0
@@ -375,7 +375,7 @@ REM ============================================================================
 REM BƯỚC 7: XÓA LOG FILES
 REM ============================================================================
 echo [7/8] Đang xóa log files...
-call :LogInfo "STEP 7 of 8 - Removing log files"
+call :LogInfo "[STEP 7/8] Removing log files"
 
 set /p DELETE_LOGS="   Bạn có muốn XÓA TẤT CẢ FILE LOG không? (Y/N): "
 call :LogInfo "Delete logs choice: %DELETE_LOGS%"
@@ -411,7 +411,7 @@ REM ============================================================================
 REM BƯỚC 8: XÓA CONFIG BACKUP FILES (TÙY CHỌN)
 REM ============================================================================
 echo [8/8] Đang kiểm tra config backup files...
-call :LogInfo "STEP 8 of 8 - Checking config backup files"
+call :LogInfo "[STEP 8/8] Checking config backup files"
 
 REM Count backup files
 set BACKUP_COUNT=0
@@ -584,14 +584,22 @@ REM HELPER FUNCTIONS
 REM ============================================================================
 
 :LogInfo
-set "PS_LOGMSG=%~1"
-set "PS_LOGPATH=%INFO_LOG%"
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "$m=$env:PS_LOGMSG; $p=$env:PS_LOGPATH; if ([string]::IsNullOrWhiteSpace($p)) { exit 0 }; $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'; try { Add-Content -LiteralPath $p -Encoding UTF8 -Value ($ts + ' [INFO] ' + $m) } catch { $par = Split-Path -Parent $p; if ([string]::IsNullOrWhiteSpace($par)) { $par = (Get-Location).Path }; $fb = Join-Path $par 'clear_info_fallback.txt'; Add-Content -LiteralPath $fb -Encoding UTF8 -Value ($ts + ' [INFO] ' + $m) }"
+REM Log information with timestamp to clear_info.txt
+call :LogTimestamp
+>>"%INFO_LOG%" echo [%LOG_TS%] [INFO] %~1
 goto :eof
 
 :LogError
-set "PS_LOGMSG=%~1"
-set "PS_LOGERR=%ERROR_LOG%"
-set "PS_LOGINF=%INFO_LOG%"
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "$m=$env:PS_LOGMSG; $pe=$env:PS_LOGERR; $pi=$env:PS_LOGINF; if ([string]::IsNullOrWhiteSpace($pe)) { exit 0 }; $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'; $line = $ts + ' [ERROR] ' + $m; try { Add-Content -LiteralPath $pe -Encoding UTF8 -Value $line; if (-not [string]::IsNullOrWhiteSpace($pi)) { Add-Content -LiteralPath $pi -Encoding UTF8 -Value $line } } catch { $par = Split-Path -Parent $pe; if ([string]::IsNullOrWhiteSpace($par)) { $par = (Get-Location).Path }; $fb = Join-Path $par 'clear_error_fallback.txt'; Add-Content -LiteralPath $fb -Encoding UTF8 -Value $line }"
+REM Log error with timestamp to clear_error.txt
+call :LogTimestamp
+>>"%ERROR_LOG%" echo [%LOG_TS%] [ERROR] %~1
+>>"%INFO_LOG%" echo [%LOG_TS%] [ERROR] %~1
+goto :eof
+
+:LogTimestamp
+set "LOG_TS="
+for /f "tokens=1* delims==" %%A in ('wmic os get localdatetime /value 2^>nul') do (
+    if /I "%%A"=="LocalDateTime" set "LOG_TS=%%B"
+)
+if not defined LOG_TS set "LOG_TS=unknown"
 goto :eof
