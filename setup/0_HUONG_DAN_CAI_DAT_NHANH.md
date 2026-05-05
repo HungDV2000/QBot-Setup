@@ -225,7 +225,7 @@ Cách gỡ:
 
 **Nguyên nhân:** Một số máy/VPS dùng **định dạng ngày giờ Windows** có dấu `(` `)` trong `%date%` / `%time%`. Lệnh ghi log `set "TIMESTAMP=%date% %time%"` bị CMD hiểu sai → lỗi cú pháp (không liên quan Python).
 
-**Giải pháp:** Cập nhật `setup/1_setup_install.bat` (và `5_clear_setup.bat` nếu dùng) từ bản repo mới nhất — log dùng `wmic LocalDateTime` + dạng `>>"file" echo ...` để tránh lỗi `%date%`/`echo ... >>` trên một số VPS.
+**Giải pháp:** Cập nhật `setup/1_setup_install.bat` (và `5_clear_setup.bat` nếu dùng) từ bản repo mới nhất — log ghi bằng **PowerShell `Add-Content`** (tránh CMD hiểu nhầm `1/6` trong chuỗi thành redirect). Nếu không thấy `setup_info.txt`, xem file dự phòng cùng thư mục: `setup_info_fallback.txt` (hoặc `clear_info_fallback.txt` khi chạy clear).
 
 ---
 

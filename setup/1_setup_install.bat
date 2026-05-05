@@ -1000,12 +1000,17 @@ echo ✅ PATH đã được refresh
 goto :eof
 
 :LogInfo
-REM Ghi log bằng PowerShell — CMD "echo ... >> file" dễ lỗi cú pháp nếu message có dạng 1/6, (, ), & ...
+REM Một chuỗi -Command duy nhất + env (không truyền thêm "arg" sau -Command — PS sẽ chạy arg như lệnh riêng)
 if "%LOGGING_DISABLED%"=="1" goto :eof
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "Param([string]$m,[string]$p); $ts=(Get-Date).ToString('yyyy-MM-dd HH:mm:ss'); try { Add-Content -LiteralPath $p -Encoding UTF8 -Value ($ts + ' [INFO] ' + $m) } catch { $fb = Join-Path (Split-Path -Parent $p) 'setup_info_fallback.txt'; Add-Content -LiteralPath $fb -Encoding UTF8 -Value ($ts + ' [INFO] ' + $m) }" "%~1" "%INFO_LOG%"
+set "PS_LOGMSG=%~1"
+set "PS_LOGPATH=%INFO_LOG%"
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "$m=$env:PS_LOGMSG; $p=$env:PS_LOGPATH; if ([string]::IsNullOrWhiteSpace($p)) { exit 0 }; $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'; try { Add-Content -LiteralPath $p -Encoding UTF8 -Value ($ts + ' [INFO] ' + $m) } catch { $par = Split-Path -Parent $p; if ([string]::IsNullOrWhiteSpace($par)) { $par = (Get-Location).Path }; $fb = Join-Path $par 'setup_info_fallback.txt'; Add-Content -LiteralPath $fb -Encoding UTF8 -Value ($ts + ' [INFO] ' + $m) }"
 goto :eof
 
 :LogError
 if "%LOGGING_DISABLED%"=="1" goto :eof
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "Param([string]$m,[string]$pe,[string]$pi); $ts=(Get-Date).ToString('yyyy-MM-dd HH:mm:ss'); $line=$ts + ' [ERROR] ' + $m; try { Add-Content -LiteralPath $pe -Encoding UTF8 -Value $line; Add-Content -LiteralPath $pi -Encoding UTF8 -Value $line } catch { $d=Split-Path -Parent $pe; $fb=Join-Path $d 'setup_error_fallback.txt'; Add-Content -LiteralPath $fb -Encoding UTF8 -Value $line }" "%~1" "%ERROR_LOG%" "%INFO_LOG%"
+set "PS_LOGMSG=%~1"
+set "PS_LOGERR=%ERROR_LOG%"
+set "PS_LOGINF=%INFO_LOG%"
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "$m=$env:PS_LOGMSG; $pe=$env:PS_LOGERR; $pi=$env:PS_LOGINF; if ([string]::IsNullOrWhiteSpace($pe)) { exit 0 }; $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'; $line = $ts + ' [ERROR] ' + $m; try { Add-Content -LiteralPath $pe -Encoding UTF8 -Value $line; if (-not [string]::IsNullOrWhiteSpace($pi)) { Add-Content -LiteralPath $pi -Encoding UTF8 -Value $line } } catch { $par = Split-Path -Parent $pe; if ([string]::IsNullOrWhiteSpace($par)) { $par = (Get-Location).Path }; $fb = Join-Path $par 'setup_error_fallback.txt'; Add-Content -LiteralPath $fb -Encoding UTF8 -Value $line }"
 goto :eof
