@@ -124,7 +124,7 @@ if %AUTH_RESULT%==0 (
     echo 📊 TRẠNG THÁI:
     echo.
     echo    ✅ credentials.json
-    echo    ✅ token.json (đã tạo)
+    echo    ✅ token.json ^(đã tạo^)
     echo    ✅ Kết nối Google Sheets API thành công
     echo.
     echo ═══════════════════════════════════════════════════════════════════════
@@ -132,7 +132,7 @@ if %AUTH_RESULT%==0 (
     echo 📝 CÁC BƯỚC TIẾP THEO:
     echo.
     echo    1️⃣  Mở file config.ini
-    echo        Điền spreadsheet_id (ID của Google Sheet bạn muốn dùng)
+    echo        Điền spreadsheet_id ^(ID của Google Sheet bạn muốn dùng^)
     echo.
     echo    2️⃣  Chạy kiểm tra môi trường:
     echo        2_check_environment.bat

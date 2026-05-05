@@ -153,7 +153,7 @@ if /i "!DELETE_PYTHON!"=="Y" (
         echo    ℹ️  Python không có sẵn, bỏ qua
     )
 ) else (
-    echo [1/8] Bỏ qua gỡ Python (giữ nguyên)
+    echo [1/8] Bỏ qua gỡ Python ^(giữ nguyên^)
     call :LogInfo "[STEP 1/8] Skipping Python uninstall (user chose N)"
     echo    ✅ Python được giữ lại trên máy
 )
@@ -240,7 +240,7 @@ if exist ../venv (
         echo    ✅ Đã xóa venv
     ) else (
         call :LogError "Failed to remove venv (may be in use)"
-        echo    ⚠️  Không thể xóa venv (có thể đang được sử dụng)
+        echo    ⚠️  Không thể xóa venv ^(có thể đang được sử dụng^)
     )
 ) else (
     call :LogInfo "venv not found, skipping"
@@ -420,7 +420,7 @@ for %%f in (../config.backup_*.ini) do (
 )
 
 if !BACKUP_COUNT! GTR 0 (
-    echo    📦 Tìm thấy !BACKUP_COUNT! file(s) backup config
+    echo    📦 Tìm thấy !BACKUP_COUNT! file^(s^) backup config
     echo.
     set /p DELETE_BACKUPS="   Bạn có muốn XÓA CÁC FILE BACKUP CŨ không? (Y/N): "
     call :LogInfo "Delete backups choice: !DELETE_BACKUPS!"
@@ -516,9 +516,9 @@ if /i "!DELETE_LOGS!"=="Y" (
 )
 if !BACKUP_COUNT! GTR 0 (
     if /i "!DELETE_BACKUPS!"=="Y" (
-        echo    ✅ Xóa !BACKUP_COUNT! config backup file(s)
+        echo    ✅ Xóa !BACKUP_COUNT! config backup file^(s^)
     ) else (
-        echo    ℹ️  Giữ lại !BACKUP_COUNT! config backup file(s)
+        echo    ℹ️  Giữ lại !BACKUP_COUNT! config backup file^(s^)
     )
 )
 echo.
@@ -532,7 +532,7 @@ echo       📌 Chạy file: 1_setup_install.bat
 echo       📌 Làm theo hướng dẫn
 echo.
 if not "!BACKUP_NAME!"=="" (
-    echo    2️⃣  KHÔI PHỤC CONFIG (NẾU CẦN)
+    echo    2️⃣  KHÔI PHỤC CONFIG ^(NẾU CẦN^)
     echo.
     echo       📌 File backup: !BACKUP_NAME!
     echo       📌 Đổi tên thành: config.ini
@@ -543,7 +543,7 @@ echo.
 echo 💡 LƯU Ý:
 echo.
 if /i not "!DELETE_PYTHON!"=="Y" (
-    echo    - Python vẫn còn trên máy (chưa bị xóa)
+    echo    - Python vẫn còn trên máy ^(chưa bị xóa^)
 )
 echo    - Source code (.py) vẫn còn nguyên
 echo    - credentials.json vẫn còn nguyên (nếu có)

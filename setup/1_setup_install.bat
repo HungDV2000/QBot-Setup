@@ -197,7 +197,7 @@ if errorlevel 1 (
     echo ⚠️  Python chưa được cài đặt!
     echo.
     echo 🤖 Đang chuẩn bị CÀI ĐẶT TỰ ĐỘNG Python...
-    echo    (Quá trình này sẽ mất 2-5 phút)
+    echo    ^(Quá trình này sẽ mất 2-5 phút^)
     echo.
     
     REM Ask user for confirmation
@@ -276,7 +276,7 @@ if errorlevel 1 (
     call :LogInfo "Trying Method 2: Direct download from Python.org"
     echo.
     echo 📥 Đang tải Python 3.11.9 installer...
-    echo    (Kích thước: ~27 MB)
+    echo    ^(Kích thước: ~27 MB^)
     echo.
     
     REM Download Python installer using PowerShell
@@ -308,7 +308,7 @@ if errorlevel 1 (
     echo ✅ Tải xuống thành công!
     echo.
     echo 🔧 Đang cài đặt Python...
-    echo    (Cửa sổ UAC sẽ hiện ra, vui lòng click "Yes/Có")
+    echo    ^(Cửa sổ UAC sẽ hiện ra — vui lòng bấm Yes hoặc Có trên hộp thoại UAC^)
     echo.
     
     REM Install Python silently with PATH
@@ -541,7 +541,7 @@ if exist ../config.ini (
         echo spreadsheet_id = YOUR_GOOGLE_SPREADSHEET_ID
         echo tab_dat_lenh = ĐẶT LỆNH ^(100 MÃ^)
         echo.
-        echo ; === DELAY SETTINGS (seconds) ===
+        echo ; === DELAY SETTINGS ^(seconds^) ===
         echo delay_vao_lenh = 60
         echo delay_vao_lenh_123 = 300
         echo delay_cho_va_khop = 600
@@ -818,7 +818,7 @@ python --version >nul 2>&1
 if errorlevel 1 (
     echo ❌ LỖI: Python chưa được cài đặt!
     echo.
-    echo 💡 Vui lòng cài Python trước (chọn Option 2 hoặc Option 1)
+    echo 💡 Vui lòng cài Python trước ^(chọn Option 2 hoặc Option 1^)
     echo.
     pause
     goto :MainMenu
@@ -957,7 +957,7 @@ if %ENV_OK%==1 (
 ) else (
     echo ⚠️  MÔI TRƯỜNG CHƯA ĐẦY ĐỦ! Vui lòng cài đặt các phần còn thiếu.
     echo.
-    echo 💡 Gợi ý: Chọn Option 1 (Cài đặt toàn bộ) từ menu chính.
+    echo 💡 Gợi ý: Chọn Option 1 ^(Cài đặt toàn bộ^) từ menu chính.
 )
 echo ═══════════════════════════════════════════════════════════════════════
 echo.

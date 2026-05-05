@@ -234,9 +234,9 @@ echo ═════════════════════════
 
 python -c "import PyInstaller" 2>nul
 if errorlevel 1 (
-    echo ⚠️  INFO: PyInstaller chưa cài (chỉ cần khi build .exe)
+    echo ⚠️  INFO: PyInstaller chưa cài ^(chỉ cần khi build .exe^)
 ) else (
-    echo ✅ INFO: PyInstaller đã cài đặt (có thể build .exe)
+    echo ✅ INFO: PyInstaller đã cài đặt ^(có thể build .exe^)
 )
 echo.
 
@@ -271,7 +271,7 @@ if %FAILED_CHECKS% equ 0 (
         echo.
     ) else (
         echo.
-        echo ⚠️  MÔI TRƯỜNG GẦN HOÀN CHỈNH (có một số cảnh báo)
+        echo ⚠️  MÔI TRƯỜNG GẦN HOÀN CHỈNH ^(có một số cảnh báo^)
         echo.
         echo 📌 NÊN KHẮC PHỤC:
         if not exist credentials.json (

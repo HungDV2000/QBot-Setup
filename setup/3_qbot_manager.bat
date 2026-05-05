@@ -315,7 +315,7 @@ if errorlevel 1 (
     echo ⚠️  Module này đang chạy!
     echo.
     echo Lựa chọn:
-    echo  [1] Dừng và khởi động lại (Restart)
+    echo  [1] Dừng và khởi động lại ^(Restart^)
     echo  [2] Chỉ dừng
     echo  [0] Không làm gì
     echo.

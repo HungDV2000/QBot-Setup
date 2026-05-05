@@ -213,6 +213,14 @@ Cách gỡ:
 
 ❓ VII. GẶP VẤN ĐỀ - TROUBLESHOOTING
 
+🔴 Lỗi: Nhiều dòng `'cho'`, `'TOÀN'`, `'ept-source-agreements'`… *is not recognized*
+
+**Nguyên nhân:** File `.bat` dùng khối lệnh `if ... (` … `)` trong CMD; nếu trong khối có dòng `echo` chứa dấu `)` chưa escape, CMD hiểu nhầm là kết thúc khối → phần còn lại bị chạy như lệnh rời (trông giống lỗi encoding nhưng là lỗi cú pháp batch).
+
+**Giải pháp:** Dùng bản `qbot_setup` đã cập nhật (script `setup/*.bat` đã escape `(` `)` trong các `echo` nằm trong khối). Hoặc copy lại folder `setup` từ repo mới nhất, chạy lại `1_setup_install.bat`.
+
+---
+
 🔴 Lỗi: "Python không cài được"
 
 **Nguyên nhân:** Thiếu quyền Administrator
