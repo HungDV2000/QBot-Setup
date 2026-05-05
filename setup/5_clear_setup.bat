@@ -585,20 +585,21 @@ REM ============================================================================
 
 :LogInfo
 REM Log information with timestamp to clear_info.txt
-REM Tránh ( ) trong %date%/%time% — một số locale làm hỏng set "var=..."
-set "LOG_TS=%date:)=-%"
-set "LOG_TS=%LOG_TS:(=-%"
-set "LOG_TT=%time:)=-%"
-set "LOG_TT=%LOG_TT:(=-%"
-echo [%LOG_TS% %LOG_TT%] [INFO] %~1 >> "%INFO_LOG%"
+call :LogTimestamp
+>>"%INFO_LOG%" echo [%LOG_TS%] [INFO] %~1
 goto :eof
 
 :LogError
 REM Log error with timestamp to clear_error.txt
-set "LOG_TS=%date:)=-%"
-set "LOG_TS=%LOG_TS:(=-%"
-set "LOG_TT=%time:)=-%"
-set "LOG_TT=%LOG_TT:(=-%"
-echo [%LOG_TS% %LOG_TT%] [ERROR] %~1 >> "%ERROR_LOG%"
-echo [%LOG_TS% %LOG_TT%] [ERROR] %~1 >> "%INFO_LOG%"
+call :LogTimestamp
+>>"%ERROR_LOG%" echo [%LOG_TS%] [ERROR] %~1
+>>"%INFO_LOG%" echo [%LOG_TS%] [ERROR] %~1
+goto :eof
+
+:LogTimestamp
+set "LOG_TS="
+for /f "tokens=1* delims==" %%A in ('wmic os get localdatetime /value 2^>nul') do (
+    if /I "%%A"=="LocalDateTime" set "LOG_TS=%%B"
+)
+if not defined LOG_TS set "LOG_TS=unknown"
 goto :eof

@@ -1002,23 +1002,24 @@ goto :eof
 :LogInfo
 REM Log information with timestamp to info.txt
 if "%LOGGING_DISABLED%"=="1" goto :eof
-REM Bỏ ( ) trong date/time — nhiều locale Windows có dạng "dd/mm/yyyy (Tên thứ)" và làm hỏng set "var=...)"
-set "LOG_TS=%date:)=-%"
-set "LOG_TS=%LOG_TS:(=-%"
-set "LOG_TT=%time:)=-%"
-set "LOG_TT=%LOG_TT:(=-%"
-echo [%LOG_TS% %LOG_TT%] [INFO] %~1 >> "%INFO_LOG%" 2>nul
-REM Không hiển thị error nữa vì đã cảnh báo ở đầu
+call :LogTimestamp
+REM Dùng >>"file" echo ... (không dùng echo ... >>) để tránh CMD parse sai khi message có / ) & ...
+>>"%INFO_LOG%" echo [%LOG_TS%] [INFO] %~1
 goto :eof
 
 :LogError
 REM Log error with timestamp to error.txt
 if "%LOGGING_DISABLED%"=="1" goto :eof
-set "LOG_TS=%date:)=-%"
-set "LOG_TS=%LOG_TS:(=-%"
-set "LOG_TT=%time:)=-%"
-set "LOG_TT=%LOG_TT:(=-%"
-echo [%LOG_TS% %LOG_TT%] [ERROR] %~1 >> "%ERROR_LOG%" 2>nul
-echo [%LOG_TS% %LOG_TT%] [ERROR] %~1 >> "%INFO_LOG%" 2>nul
-REM Không hiển thị error nữa vì đã cảnh báo ở đầu
+call :LogTimestamp
+>>"%ERROR_LOG%" echo [%LOG_TS%] [ERROR] %~1
+>>"%INFO_LOG%" echo [%LOG_TS%] [ERROR] %~1
+goto :eof
+
+:LogTimestamp
+REM ISO-like time từ WMI, không phụ thuộc %date%/%time% (locale / ngoặc / ký tự đặc biệt)
+set "LOG_TS="
+for /f "tokens=1* delims==" %%A in ('wmic os get localdatetime /value 2^>nul') do (
+    if /I "%%A"=="LocalDateTime" set "LOG_TS=%%B"
+)
+if not defined LOG_TS set "LOG_TS=unknown"
 goto :eof
