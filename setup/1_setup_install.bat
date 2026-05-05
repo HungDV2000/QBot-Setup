@@ -188,7 +188,7 @@ REM BƯỚC 1: KIỂM TRA VÀ CÀI ĐẶT PYTHON TỰ ĐỘNG
 REM ============================================================================
 :Step1_CheckPython
 echo [1/6] Đang kiểm tra Python...
-call :LogInfo "[STEP 1/6] Checking Python installation"
+call :LogInfo "STEP 1 of 6 - Checking Python installation"
 
 python --version >nul 2>&1
 if errorlevel 1 (
@@ -391,7 +391,7 @@ REM BƯỚC 2: KIỂM TRA PIP
 REM ============================================================================
 :Step2_CheckPip
 echo [2/6] Đang kiểm tra pip (Python package manager)...
-call :LogInfo "[STEP 2/6] Checking pip"
+call :LogInfo "STEP 2 of 6 - Checking pip"
 
 python -m pip --version >nul 2>&1
 if errorlevel 1 (
@@ -419,7 +419,7 @@ REM BƯỚC 3: CÀI ĐẶT THƯ VIỆN
 REM ============================================================================
 :Step3_InstallLibraries
 echo [3/6] Đang cài đặt thư viện Python...
-call :LogInfo "[STEP 3/6] Installing Python libraries"
+call :LogInfo "STEP 3 of 6 - Installing Python libraries"
 echo.
 echo 📦 Danh sách thư viện sẽ được cài đặt:
 echo    - ccxt (Binance API)
@@ -490,7 +490,7 @@ REM BƯỚC 4: TẠO CONFIG FILE (NẾU CHƯA CÓ)
 REM ============================================================================
 :Step4_CreateConfig
 echo [4/6] Đang kiểm tra file config...
-call :LogInfo "[STEP 4/6] Checking config.ini"
+call :LogInfo "STEP 4 of 6 - Checking config.ini"
 echo.
 
 if exist ../config.ini (
@@ -575,7 +575,7 @@ REM BƯỚC 5: KIỂM TRA CÁC FILE CẦN THIẾT
 REM ============================================================================
 :Step5_CheckFiles
 echo [5/6] Đang kiểm tra các file cần thiết...
-call :LogInfo "[STEP 5/6] Checking required files"
+call :LogInfo "STEP 5 of 6 - Checking required files"
 echo.
 
 set MISSING_FILES=0
@@ -694,7 +694,7 @@ echo ║                        CÀI ĐẶT HOÀN TẤT!                        
 echo ╚════════════════════════════════════════════════════════════════════════╝
 echo.
 
-call :LogInfo "[STEP 6/6] Installation summary"
+call :LogInfo "STEP 6 of 6 - Installation summary"
 call :LogInfo "Python: %PYTHON_VERSION%"
 call :LogInfo "pip: Ready"
 call :LogInfo "Libraries: Installed"
@@ -991,7 +991,7 @@ if "%SYS_PATH%"=="" (
     echo ⚠️  CẢNH BÁO: Không đọc được System PATH từ registry
 )
 if "%USER_PATH%"=="" (
-    call :LogInfo "User PATH not found in registry (this is OK)"
+    call :LogInfo "User PATH not found in registry - OK to skip"
 )
 
 set "PATH=%SYS_PATH%;%USER_PATH%"
@@ -1000,26 +1000,12 @@ echo ✅ PATH đã được refresh
 goto :eof
 
 :LogInfo
-REM Log information with timestamp to info.txt
+REM Ghi log bằng PowerShell — CMD "echo ... >> file" dễ lỗi cú pháp nếu message có dạng 1/6, (, ), & ...
 if "%LOGGING_DISABLED%"=="1" goto :eof
-call :LogTimestamp
-REM Dùng >>"file" echo ... (không dùng echo ... >>) để tránh CMD parse sai khi message có / ) & ...
->>"%INFO_LOG%" echo [%LOG_TS%] [INFO] %~1
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "Param([string]$m,[string]$p); $ts=(Get-Date).ToString('yyyy-MM-dd HH:mm:ss'); try { Add-Content -LiteralPath $p -Encoding UTF8 -Value ($ts + ' [INFO] ' + $m) } catch { $fb = Join-Path (Split-Path -Parent $p) 'setup_info_fallback.txt'; Add-Content -LiteralPath $fb -Encoding UTF8 -Value ($ts + ' [INFO] ' + $m) }" "%~1" "%INFO_LOG%"
 goto :eof
 
 :LogError
-REM Log error with timestamp to error.txt
 if "%LOGGING_DISABLED%"=="1" goto :eof
-call :LogTimestamp
->>"%ERROR_LOG%" echo [%LOG_TS%] [ERROR] %~1
->>"%INFO_LOG%" echo [%LOG_TS%] [ERROR] %~1
-goto :eof
-
-:LogTimestamp
-REM ISO-like time từ WMI, không phụ thuộc %date%/%time% (locale / ngoặc / ký tự đặc biệt)
-set "LOG_TS="
-for /f "tokens=1* delims==" %%A in ('wmic os get localdatetime /value 2^>nul') do (
-    if /I "%%A"=="LocalDateTime" set "LOG_TS=%%B"
-)
-if not defined LOG_TS set "LOG_TS=unknown"
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "Param([string]$m,[string]$pe,[string]$pi); $ts=(Get-Date).ToString('yyyy-MM-dd HH:mm:ss'); $line=$ts + ' [ERROR] ' + $m; try { Add-Content -LiteralPath $pe -Encoding UTF8 -Value $line; Add-Content -LiteralPath $pi -Encoding UTF8 -Value $line } catch { $d=Split-Path -Parent $pe; $fb=Join-Path $d 'setup_error_fallback.txt'; Add-Content -LiteralPath $fb -Encoding UTF8 -Value $line }" "%~1" "%ERROR_LOG%" "%INFO_LOG%"
 goto :eof
