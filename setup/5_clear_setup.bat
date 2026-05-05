@@ -585,13 +585,20 @@ REM ============================================================================
 
 :LogInfo
 REM Log information with timestamp to clear_info.txt
-set "TIMESTAMP=%date% %time%"
-echo [%TIMESTAMP%] [INFO] %~1 >> "%INFO_LOG%"
+REM Tránh ( ) trong %date%/%time% — một số locale làm hỏng set "var=..."
+set "LOG_TS=%date:)=-%"
+set "LOG_TS=%LOG_TS:(=-%"
+set "LOG_TT=%time:)=-%"
+set "LOG_TT=%LOG_TT:(=-%"
+echo [%LOG_TS% %LOG_TT%] [INFO] %~1 >> "%INFO_LOG%"
 goto :eof
 
 :LogError
 REM Log error with timestamp to clear_error.txt
-set "TIMESTAMP=%date% %time%"
-echo [%TIMESTAMP%] [ERROR] %~1 >> "%ERROR_LOG%"
-echo [%TIMESTAMP%] [ERROR] %~1 >> "%INFO_LOG%"
+set "LOG_TS=%date:)=-%"
+set "LOG_TS=%LOG_TS:(=-%"
+set "LOG_TT=%time:)=-%"
+set "LOG_TT=%LOG_TT:(=-%"
+echo [%LOG_TS% %LOG_TT%] [ERROR] %~1 >> "%ERROR_LOG%"
+echo [%LOG_TS% %LOG_TT%] [ERROR] %~1 >> "%INFO_LOG%"
 goto :eof

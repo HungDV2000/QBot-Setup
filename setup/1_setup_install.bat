@@ -1002,16 +1002,23 @@ goto :eof
 :LogInfo
 REM Log information with timestamp to info.txt
 if "%LOGGING_DISABLED%"=="1" goto :eof
-set "TIMESTAMP=%date% %time%"
-echo [%TIMESTAMP%] [INFO] %~1 >> "%INFO_LOG%" 2>nul
+REM Bỏ ( ) trong date/time — nhiều locale Windows có dạng "dd/mm/yyyy (Tên thứ)" và làm hỏng set "var=...)"
+set "LOG_TS=%date:)=-%"
+set "LOG_TS=%LOG_TS:(=-%"
+set "LOG_TT=%time:)=-%"
+set "LOG_TT=%LOG_TT:(=-%"
+echo [%LOG_TS% %LOG_TT%] [INFO] %~1 >> "%INFO_LOG%" 2>nul
 REM Không hiển thị error nữa vì đã cảnh báo ở đầu
 goto :eof
 
 :LogError
 REM Log error with timestamp to error.txt
 if "%LOGGING_DISABLED%"=="1" goto :eof
-set "TIMESTAMP=%date% %time%"
-echo [%TIMESTAMP%] [ERROR] %~1 >> "%ERROR_LOG%" 2>nul
-echo [%TIMESTAMP%] [ERROR] %~1 >> "%INFO_LOG%" 2>nul
+set "LOG_TS=%date:)=-%"
+set "LOG_TS=%LOG_TS:(=-%"
+set "LOG_TT=%time:)=-%"
+set "LOG_TT=%LOG_TT:(=-%"
+echo [%LOG_TS% %LOG_TT%] [ERROR] %~1 >> "%ERROR_LOG%" 2>nul
+echo [%LOG_TS% %LOG_TT%] [ERROR] %~1 >> "%INFO_LOG%" 2>nul
 REM Không hiển thị error nữa vì đã cảnh báo ở đầu
 goto :eof

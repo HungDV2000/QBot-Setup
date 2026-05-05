@@ -221,6 +221,14 @@ Cách gỡ:
 
 ---
 
+🔴 Lỗi: `The syntax of the command is incorrect.` ngay sau `[1/6] Đang kiểm tra Python...`
+
+**Nguyên nhân:** Một số máy/VPS dùng **định dạng ngày giờ Windows** có dấu `(` `)` trong `%date%` / `%time%`. Lệnh ghi log `set "TIMESTAMP=%date% %time%"` bị CMD hiểu sai → lỗi cú pháp (không liên quan Python).
+
+**Giải pháp:** Cập nhật `setup/1_setup_install.bat` (và `5_clear_setup.bat` nếu dùng) từ bản repo mới nhất — timestamp log đã được xử lý an toàn.
+
+---
+
 🔴 Lỗi: "Python không cài được"
 
 **Nguyên nhân:** Thiếu quyền Administrator
