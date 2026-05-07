@@ -203,6 +203,48 @@ def get_all_open_algo_orders_batch():
         return None  # None để caller biết API lỗi
 
 
+def get_position_leverage_map():
+    """
+    Lấy leverage thực tế theo symbol từ Binance position risk endpoint.
+
+    Returns:
+        dict[str, int] ví dụ {"BTCUSDT": 20, "ETHUSDT": 10}
+    """
+    leverage_map = {}
+    try:
+        response = call_binance_api_direct('GET', '/fapi/v2/positionRisk')
+        if response is None:
+            logger.warning("Không lấy được /fapi/v2/positionRisk để map leverage")
+            return leverage_map
+
+        rows = response if isinstance(response, list) else response.get('data', [])
+        for item in rows:
+            if not isinstance(item, dict):
+                continue
+            sym = str(item.get('symbol', '')).strip().upper()
+            if not sym or '-' in sym:
+                continue
+            raw = item.get('leverage', item.get('initialLeverage'))
+            if raw in (None, "", 0, "0"):
+                continue
+            try:
+                lev = int(float(str(raw).strip()))
+                if lev >= 1:
+                    leverage_map[sym] = lev
+            except (ValueError, TypeError):
+                continue
+
+        logger.info(f"Đã map leverage từ positionRisk cho {len(leverage_map)} symbols")
+        if leverage_map:
+            preview_items = sorted(leverage_map.items())[:20]
+            preview_text = ", ".join([f"{k}:{v}x" for k, v in preview_items])
+            logger.info(f"[LEVERAGE MAP PREVIEW] {preview_text}")
+        return leverage_map
+    except Exception as e:
+        logger.warning(f"Lỗi lấy leverage map từ positionRisk: {e}")
+        return leverage_map
+
+
 def check_sl_tp_orders(symbol, orders):
     """
     Phân tích danh sách orders để xác định có SL và TP không.
@@ -681,6 +723,7 @@ def get_opened_possition():
         return []
     
     opened_possition = []
+    leverage_map = get_position_leverage_map()
     
     for position in positions:
         try:
@@ -725,7 +768,11 @@ def get_opened_possition():
             else:
                 unrealized_pnl = 0.0
             
-            leverage = resolve_leverage_from_ccxt_position(symbol, position)
+            leverage = leverage_map.get(symbol)
+            leverage_source = "positionRisk"
+            if leverage is None:
+                leverage = resolve_leverage_from_ccxt_position(symbol, position)
+                leverage_source = "ccxt_position"
 
             # Thêm position vào danh sách
             # Lưu cả symbol gốc (CCXT format) và symbol format (để tương thích)
@@ -733,10 +780,14 @@ def get_opened_possition():
             position['symbol_ccxt'] = symbol_ccxt  # Format "HOME/USDT:USDT" để dùng cho API calls
             position['positionAmt'] = str(position_amt)  # Thêm positionAmt để tương thích
             position['leverage'] = leverage  # Bắt buộc: do_it() đọc key này (trước đây không gán → hay thành 1)
+            position['leverage_source'] = leverage_source
 
             opened_possition.append(position)
             print(f"📊 {symbol}: Pos={position_amt}, Entry={entry_price}, PnL={unrealized_pnl:.2f}, Lev={leverage}x", flush=True)
-            logger.info(f"Position: {symbol}, Amt={position_amt}, Entry={entry_price}, PnL={unrealized_pnl}, Lev={leverage}")
+            logger.info(
+                f"Position: {symbol}, Amt={position_amt}, Entry={entry_price}, "
+                f"PnL={unrealized_pnl}, Lev={leverage}, source={leverage_source}"
+            )
             
             # Debug: Log nếu entry price = 0 (không nên xảy ra với fetch_positions())
             if entry_price == 0.0:
