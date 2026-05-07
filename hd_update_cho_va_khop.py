@@ -624,6 +624,48 @@ def get_all_open_orders_with_single_order():
 
     return res
 
+
+def resolve_leverage_from_ccxt_position(symbol_label, position):
+    """
+    Đọc đòn bẩy từ object position của CCXT (Binance USDT-M).
+
+    CCXT đôi khi để `leverage` trống ở top-level; Binance thường trả trong `info`:
+    `leverage`, `initialLeverage` (chuỗi hoặc số).
+    """
+    candidates = []
+
+    def _add(val):
+        if val is None:
+            return
+        if isinstance(val, str) and not str(val).strip():
+            return
+        if isinstance(val, (int, float)) and float(val) == 0:
+            return
+        candidates.append(val)
+
+    _add(position.get('leverage'))
+    _add(position.get('initialLeverage'))
+
+    info = position.get('info')
+    if isinstance(info, dict):
+        _add(info.get('leverage'))
+        _add(info.get('initialLeverage'))
+
+    for raw in candidates:
+        try:
+            val = float(str(raw).strip().replace(',', ''))
+            if val >= 1:
+                return int(val)
+        except (ValueError, TypeError):
+            continue
+
+    logger.warning(
+        f"{symbol_label}: Không parse được đòn bẩy từ CCXT (fallback 1x). "
+        f"info keys (mẫu): {list(info.keys())[:12] if isinstance(info, dict) else 'N/A'}"
+    )
+    return 1
+
+
 def get_opened_possition():
     """
     Lấy tất cả positions đang mở (position_amt != 0)
@@ -683,22 +725,15 @@ def get_opened_possition():
             else:
                 unrealized_pnl = 0.0
             
-            # Parse leverage - fetch_positions() CÓ leverage!
-            leverage_raw = position.get('leverage')
-            if leverage_raw is not None and leverage_raw != '' and leverage_raw != 0:
-                try:
-                    leverage = int(float(leverage_raw))
-                except (ValueError, TypeError):
-                    leverage = 1
-            else:
-                leverage = 1
-            
+            leverage = resolve_leverage_from_ccxt_position(symbol, position)
+
             # Thêm position vào danh sách
             # Lưu cả symbol gốc (CCXT format) và symbol format (để tương thích)
             position['symbol'] = symbol  # Format "HOMEUSDT" để tương thích với code hiện tại
             position['symbol_ccxt'] = symbol_ccxt  # Format "HOME/USDT:USDT" để dùng cho API calls
             position['positionAmt'] = str(position_amt)  # Thêm positionAmt để tương thích
-            
+            position['leverage'] = leverage  # Bắt buộc: do_it() đọc key này (trước đây không gán → hay thành 1)
+
             opened_possition.append(position)
             print(f"📊 {symbol}: Pos={position_amt}, Entry={entry_price}, PnL={unrealized_pnl:.2f}, Lev={leverage}x", flush=True)
             logger.info(f"Position: {symbol}, Amt={position_amt}, Entry={entry_price}, PnL={unrealized_pnl}, Lev={leverage}")
