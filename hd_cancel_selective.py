@@ -171,27 +171,26 @@ def get_order_type_from_algo(algo):
     Returns: 'SL', 'TP', 'ENTRY', 'UNKNOWN'
     """
     try:
-        algo_type = algo.get('algoType', '').upper()
-        reduce_only = algo.get('reduceOnly', False)
-        callback_rate = algo.get('callbackRate', algo.get('priceRate', 0))
-
-        # Thử lấy từ info chi tiết hơn
+        # Ưu tiên lấy reduceOnly từ info (Binance API đặt trong info, không phải top-level)
         info = algo.get('info', {})
-        if info:
-            reduce_only = info.get('reduceOnly', reduce_only)
-            callback_rate = float(info.get('callbackRate', callback_rate) or 0)
+        reduce_only = info.get('reduceOnly', algo.get('reduceOnly', False))
+        callback_rate = float(info.get('callbackRate', algo.get('callbackRate', algo.get('priceRate', 0)) or 0))
+        algo_type = algo.get('algoType', info.get('algoType', '')).upper()
 
-        logger.debug(f"[ORDER TYPE CHECK] algoType={algo_type}, reduceOnly={reduce_only}, callbackRate={callback_rate}")
+        logger.info(
+            f"[ORDER TYPE] algoId={algo.get('algoId')}, algoType={algo_type}, "
+            f"reduceOnly={reduce_only}, callbackRate={callback_rate}"
+        )
 
-        # TP (Take Profit): Trailing Stop - reduceOnly=true, có callbackRate
+        # TP (Take Profit): reduceOnly=true + có callbackRate → Trailing Stop
         if reduce_only and callback_rate > 0:
             return 'TP'
 
-        # SL (Stop Loss): Stop Market - reduceOnly=true, không có callbackRate
+        # SL (Stop Loss): reduceOnly=true + callbackRate=0 → Stop Market thường
         if reduce_only and callback_rate == 0:
             return 'SL'
 
-        # Entry Order (không phải reduceOnly)
+        # Entry Order: reduceOnly=false hoặc None
         if not reduce_only:
             return 'ENTRY'
 
@@ -634,64 +633,82 @@ def process_cancellation():
                         logger.info(f"     UNKNOWN: algoId={o.get('algoId')}, status={o.get('algoStatus')}, algoType={o.get('algoType')}")
 
                     # L = XÓA LỆNH SÓT: chỉ xóa khi THỰC SỰ là lệnh sót 1 phía (chỉ SL hoặc chỉ TP).
-                    has_sl_any = (len(sl_open_orders) + len(sl_orders)) > 0
-                    has_tp_any = (len(tp_open_orders) + len(tp_orders)) > 0
-
-                    if has_sl_any and has_tp_any:
+                    # AN TOÀN: nếu K cũng đang tick → K đã xử lý cặp SL/TP, L bỏ qua tuyệt đối.
+                    if delete_cap_23:
                         logger.warning(
-                            f"[{symbol_raw}] Tick L nhưng đang có đủ cả SL và TP → không xóa để tránh đụng logic K"
+                            f"[{symbol_raw}] Tick K và L cùng lúc → L bỏ qua, K đã xử lý SL/TP"
                         )
                         row_report['details'].append(
-                            "<b>Lệnh sót (L):</b> bỏ qua vì đang có đủ cả SL và TP (dùng K để xóa cặp)."
+                            "<b>Lệnh sót (L):</b> bỏ qua vì K cũng đang tick (K sẽ xử lý SL/TP)."
                         )
-                        symbol_reports.append(row_report)
-                        continue
-
-                    # Chỉ xóa 1 phía còn sót, bỏ qua UNKNOWN/ENTRY
-                    open_to_cancel = sl_open_orders if has_sl_any else tp_open_orders
-                    algo_to_cancel = sl_orders if has_sl_any else tp_orders
-
-                    for order in open_to_cancel:
-                        order_id = order.get('id')
-                        order_type_str = order.get('type', 'N/A').upper()
-                        if order_id and cancel_open_order(symbol_ccxt, order_id):
-                            deleted_count += 1
-                            total_delete_23_remain += 1
-                            if has_sl_any:
-                                deleted_sl += 1
-                            else:
-                                deleted_tp += 1
-                            logger.info(f"[{symbol_raw}] Đã xóa open order sót: id={order_id}, type={order_type_str}")
-                            o_items.append(f"open reduceOnly #{order_id} ({order_type_str})")
-
-                    for algo in algo_to_cancel:
-                        algo_id = algo.get('algoId')
-                        order_type = get_order_type_from_algo(algo)
-                        if algo_id:
-                            if cancel_algo_order(symbol_ccxt, algo_id, order_type):
-                                deleted_count += 1
-                                if order_type == 'SL':
-                                    deleted_sl += 1
-                                elif order_type == 'TP':
-                                    deleted_tp += 1
-                                else:
-                                    deleted_unknown += 1
-                                total_delete_23_remain += 1
-                                o_items.append(f"{order_type} algo #{algo_id} ({algo.get('algoStatus', '')})")
-
-                    print(f"   ✅ Đã xóa {deleted_count} lệnh đơn sót lại (open SL:{len(sl_open_orders)}, open TP:{len(tp_open_orders)}, algo SL:{len(sl_orders)}, algo TP:{len(tp_orders)}) cho {symbol_raw}", flush=True)
-                    logger.info(f"[{symbol_raw}] Đã xóa {deleted_count} lệnh đơn sót lại")
-                    line_o = (
-                        f"<b>Lệnh sót (L):</b> đã hủy {deleted_count} "
-                        f"(algo SL:{deleted_sl}, TP:{deleted_tp}, khác:{deleted_unknown})"
-                    )
-                    if o_items:
-                        line_o += "\n    ▸ " + "\n    ▸ ".join(o_items[:10])
-                        if len(o_items) > 10:
-                            line_o += f"\n    ▸ … (+{len(o_items) - 10} nữa)"
+                        # Không continue — vẫn cho phép nhánh M chạy nếu tick M
                     else:
-                        line_o += "\n    <i>(Không còn lệnh 2–3 sót trên sàn)</i>"
-                    row_report['details'].append(line_o)
+                        has_sl_any = (len(sl_open_orders) + len(sl_orders)) > 0
+                        has_tp_any = (len(tp_open_orders) + len(tp_orders)) > 0
+
+                        if has_sl_any and has_tp_any:
+                            logger.warning(
+                                f"[{symbol_raw}] Tick L nhưng đang có đủ cả SL và TP → không xóa để tránh đụng logic K"
+                            )
+                            row_report['details'].append(
+                                "<b>Lệnh sót (L):</b> bỏ qua vì đang có đủ cả SL và TP (dùng K để xóa cặp)."
+                            )
+                        elif not has_sl_any and not has_tp_any:
+                            logger.info(f"[{symbol_raw}] Tick L nhưng không còn SL/TP nào trên sàn → bỏ qua")
+                            row_report['details'].append(
+                                "<b>Lệnh sót (L):</b> bỏ qua vì không còn lệnh SL/TP nào trên sàn."
+                            )
+                        else:
+                            # Chỉ xóa 1 phía còn sót, bỏ qua UNKNOWN/ENTRY
+                            open_to_cancel = sl_open_orders if has_sl_any else tp_open_orders
+                            algo_to_cancel = sl_orders if has_sl_any else tp_orders
+                            side_name = "SL" if has_sl_any else "TP"
+
+                            logger.info(
+                                f"[{symbol_raw}] L: Phát hiện lệnh sót {side_name} → xóa "
+                                f"(open:{len(open_to_cancel)}, algo:{len(algo_to_cancel)})"
+                            )
+
+                            for order in open_to_cancel:
+                                order_id = order.get('id')
+                                order_type_str = order.get('type', 'N/A').upper()
+                                if order_id and cancel_open_order(symbol_ccxt, order_id):
+                                    deleted_count += 1
+                                    total_delete_23_remain += 1
+                                    if has_sl_any:
+                                        deleted_sl += 1
+                                    else:
+                                        deleted_tp += 1
+                                    logger.info(f"[{symbol_raw}] Đã xóa open order sót: id={order_id}, type={order_type_str}")
+                                    o_items.append(f"open reduceOnly #{order_id} ({order_type_str})")
+
+                            for algo in algo_to_cancel:
+                                algo_id = algo.get('algoId')
+                                order_type = get_order_type_from_algo(algo)
+                                if algo_id:
+                                    if cancel_algo_order(symbol_ccxt, algo_id, order_type):
+                                        deleted_count += 1
+                                        if order_type == 'SL':
+                                            deleted_sl += 1
+                                        elif order_type == 'TP':
+                                            deleted_tp += 1
+                                        else:
+                                            deleted_unknown += 1
+                                        total_delete_23_remain += 1
+                                        logger.info(f"[{symbol_raw}] Đã xóa algo sót {side_name}: algoId={algo_id}")
+                                        o_items.append(f"{order_type} algo #{algo_id} ({algo.get('algoStatus', '')})")
+
+                            line_o = (
+                                f"<b>Lệnh sót (L):</b> đã hủy {deleted_count} "
+                                f"({side_name} sót — open:{len(open_to_cancel)}, algo:{len(algo_to_cancel)})"
+                            )
+                            if o_items:
+                                line_o += "\n    ▸ " + "\n    ▸ ".join(o_items[:10])
+                                if len(o_items) > 10:
+                                    line_o += f"\n    ▸ … (+{len(o_items) - 10} nữa)"
+                            else:
+                                line_o += "\n    <i>(Không còn lệnh 2–3 sót trên sàn)</i>"
+                            row_report['details'].append(line_o)
 
                 # === [TASK 2] XÓA TẤT CẢ LỆNH NGƯỢC (vị thế ĐÓNG) ===
                 if delete_all_closed:
