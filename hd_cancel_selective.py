@@ -616,7 +616,7 @@ def process_cancellation():
                         f"[{symbol_raw}] Open reduceOnly sót: SL={len(sl_open_orders)}, TP={len(tp_open_orders)}, UNKNOWN={len(unknown_open_orders)}"
                     )
 
-                    # 2️⃣ XÓA SL/TP DẠNG ALGO ORDERS SÓT LẠI (NEW + TRIGGERED, không xóa ENTRY)
+                    # 2️⃣ XÓA SL/TP DẠNG ALGO ORDERS SÓT LẠI (NEW + TRIGGERED, không xóa ENTRY) 
                     removable_orders = get_removable_algo_orders(symbol_ccxt)
                     classified = classify_algo_orders(removable_orders)
                     sl_orders = classified['SL']
