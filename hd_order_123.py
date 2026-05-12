@@ -245,6 +245,7 @@ def call_binance_api_direct(method, endpoint, params=None, api_key=None, secret_
     if secret_key is None: secret_key = cst.secret_binance
     
     params['timestamp'] = int(time.time() * 1000)
+    params['recvWindow'] = 60000
     query_string = urllib.parse.urlencode(params)
     signature = hmac.new(
         secret_key.encode('utf-8'),
