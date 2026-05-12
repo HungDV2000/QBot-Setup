@@ -266,6 +266,10 @@ def call_binance_api_direct(method, endpoint, params=None, api_key=None, secret_
             
         response.raise_for_status()
         return response.json()
+    except requests.exceptions.HTTPError as e:
+        body = e.response.text if e.response else str(e)
+        logger.error(f"Lỗi HTTP {e.response.status_code if e.response else 'N/A'}: {body}")
+        return None
     except Exception as e:
         logger.error(f"Lỗi khi gọi Binance API trực tiếp ({method} {endpoint}): {e}")
         return None
