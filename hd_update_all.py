@@ -199,6 +199,199 @@ def _ticker_fields_for_audit(ticker: dict) -> dict:
     return out
 
 
+def _format_audit_human_cell(v) -> str:
+    if v is None or v == "":
+        return "(trống)"
+    if isinstance(v, float):
+        if math.isfinite(v):
+            s = f"{v:,.10g}"
+            if "e" in s.lower():
+                return s
+            if "." in s:
+                s = s.rstrip("0").rstrip(".")
+            return s or "0"
+        return str(v)
+    return str(v)
+
+
+def _build_column_audit_provenance_table():
+    """
+    Mỗi phần tử: (ý_nghĩa_ngắn, nguồn_API_hoặc_hàm, gợi_ý_trường_raw).
+    Khớp thứ tự index với _DEBUG_COL_NAMES (A=0 … BF=57).
+    """
+    OH = "CCXT `exchange.fetch_ohlcv(pair, timeframe, limit)` → Binance USDⓈ-M `GET /fapi/v1/klines`."
+    TK = (
+        "CCXT `exchange.fetch_tickers()` (một lần đầu `do_it`, batch). "
+        "Unified: last, percentage, quoteVolume; REST tương đương `/fapi/v1/ticker/24hr`."
+    )
+    BB20 = "BB(20,2,SMA) trên **close** của **20 nến gần nhất gồm nến đang chạy** — `_bb_upper_lower_from_closes`."
+    rows = [
+        ("Mã hiển thị trên sheet (BASE/USDT).", "Chuỗi `pair = symbol.replace(':USDT','')`; không API.", "—"),
+        ("% thay đổi giá rolling 24h (cùng định nghĩa ticker Binance).", TK, "`ticker['percentage']`; `info['priceChangePercent']`."),
+        ("Giá last / hiện tại từ ticker (không nhất thiết = close nến 1h đang chạy).", TK, "`ticker['last']`; `info['lastPrice']`."),
+        ("Dải Bollinger trên — khung 1h.", f"{OH} Sau đó {BB20}", "20 close cuối của `ohlcv_1h`."),
+        ("Dải Bollinger dưới — khung 1h.", f"{OH} {BB20}", "20 close cuối của `ohlcv_1h`."),
+        ("BB trên — khung 4h.", f"{OH} {BB20}", "20 close cuối của `ohlcv_4h`."),
+        ("BB dưới — khung 4h.", f"{OH} {BB20}", "20 close cuối của `ohlcv_4h`."),
+        ("BB trên — khung 1d.", f"{OH} {BB20}", "20 close cuối của `ohlcv_1d`."),
+        ("BB dưới — khung 1d.", f"{OH} {BB20}", "20 close cuối của `ohlcv_1d`."),
+        ("Biên độ % nến 1h tối đa (chiều tăng) trong ~7 ngày.", f"{OH} + `calculate_price_range(pair, 7, '1h')` (pandas).", "Công thức high/low/open/close trong hàm đó."),
+        ("Biên độ % nến 1h tối đa (chiều giảm) trong ~7 ngày.", f"{OH} + `calculate_price_range(pair, 7, '1h')`.", "Giống cột J, nhánh giảm."),
+        ("Giá High lớn nhất trong N nến 1d (`calculate_high_low_day_total`).", f"{OH} `calculate_high_low_30d(symbol, '1d')`.", "`df['high'].max()`."),
+        ("Giá Low nhỏ nhất trong N nến 1d.", f"{OH} `calculate_high_low_30d`.", "`df['low'].min()`."),
+        ("Max % (close−open)/open trên tập nến 4h (~60 ngày).", f"{OH} `calculate_max_increase_decrease_4h(symbol)`.", "Theo `max_increase_decrease_4h_day_count` trong config."),
+        ("Min % body nến 4h (cùng tập nến).", f"{OH} `calculate_max_increase_decrease_4h`.", "Lấy min toàn tập."),
+        ("BB tuần — dải trên (header sheet: Giá Cao Nhất).", f"{OH} `get_bb(pair, ['1w'])` — 20 nến tuần.", "Upper BB(20,2) trên close tuần."),
+        ("BB tuần — dải dưới.", f"{OH} `get_bb(pair, ['1w'])`.", "Lower BB tuần."),
+        ("Biên độ 30d (nhánh tăng) từ 30 nến 1d cuối hoặc fallback `calculate_price_range`.", f"{OH} `_amplitude_range_from_ohlcv_slice` / `calculate_price_range(30,'1d')`.", "30 nến `ohlcv_1d` gần nhất."),
+        ("Biên độ 30d (nhánh giảm).", f"{OH} Cùng khối với cột R.", "30 nến 1d."),
+        ("Khối lượng giao dịch 24h dạng quote (USDT) — rolling ticker.", TK, "`ticker['quoteVolume']`; `info['quoteVolume']`."),
+        ("RSI(14) Wilder trên close 1d; khi đủ dữ liệu bỏ nến ngày đang chạy.", f"{OH} `_rsi_wilder_from_closes(closes_1d[:-1], 14)`.", "Chuỗi close 1d."),
+        ("Giữ trống theo thiết kế sheet.", "Không nguồn.", "—"),
+        ("Tỷ số BB tuần dưới / Min 40 ngày (cột Q hoặc BB lower / M).", "Từ các cột đã tính trong cùng `get_row_result`.", "`bb_1w[1] / low` (low = Min 40 ngày)."),
+        ("% khoảng cách giá (C) tới BB1h trên (D): (D−C)/C×100.", "Công thức nội bộ từ ticker + BB1h.", "price = ticker last; D,E từ OHLCV 1h."),
+        ("% khoảng cách giá tới BB1h dưới (E): (C−E)/C×100.", "Công thức nội bộ.", "Giống X."),
+        ("Volume nến 1h hiện tại quy USDT: base_volume × close nến.", f"{OH} Nến cuối `ohlcv_1h[-1]`.", "`ohlcv[-1][5] * ohlcv[-1][4]`."),
+        ("Volume nến 4h hiện tại quy USDT.", f"{OH} Nến cuối `ohlcv_4h[-1]`.", "`volume × close` nến 4h."),
+        ("Trạng thái niêm yết Futures (metadata).", "`exchange.markets[symbol]` sau `load_markets` (CCXT).", "`exchangeInfo` USDT-M — status/contractType (qua CCXT)."),
+        ("Trạng thái Spot cùng cặp BASE/USDT nếu có.", "`spot_markets_by_pair` (markets spot đã load).", "Không có → 'Không có spot'."),
+        ("Biên độ ngày lớn nhất % trong ~365 ngày: (High−Low)/Open×100.", f"{OH} `_max_daily_volatility_from_ohlcv`.", "Nến 1d trong cửa sổ."),
+        ("Ngày (timestamp) ứng với biên độ AD.", "Cùng khối AD.", "Timestamp nến max."),
+        ("BB width 1d tại phiên “3 ngày trước” (logic trong `_bb_width_3d_and_now_from_ohlcv`).", f"{OH} Hàm width.", "(Upper−Lower)/Middle."),
+        ("BB width 1d hiện tại.", f"{OH} Hàm width.", "Cùng công thức, mốc hiện tại."),
+        ("RSI(14) Wilder trên close 4h (bỏ nến đang chạy khi đủ dữ liệu).", f"{OH} `_rsi_wilder_from_closes(closes_4h[:-1], 14)`.", "closes 4h."),
+        ("Volume 1h hiện tại USDT (20 nến cuối — nến cuối trong cửa sổ MA20).", f"{OH} `ohlcv_1h[-20:]` volume×close.", "Nến cuối trong 20."),
+        ("Trung bình volume×close 20 nến 1h gần nhất (MA20).", f"{OH} Trung bình `vols_usdt_last20`.", "mean 20 giá trị."),
+        ("Cảnh báo delist (API tháng + catalog Support/CMS).", "`_load_future_delist_by_pair_from_api` + `_build_upcoming_delist_by_pair` (gộp trong `do_it` / `get_row_result`).", "Không phải giá — text cảnh báo."),
+        ("SMA(7) trên close 1h.", f"{OH} `_sma_last(closes_1h, 7)`.", "7 close cuối."),
+        ("SMA(25) trên close 1h.", f"{OH} `_sma_last(closes_1h, 25)`.", "25 close."),
+        ("SMA(99) trên close 1h.", f"{OH} `_sma_last(closes_1h, 99)`.", "99 close."),
+        ("MACD line (12,26,9 EMA) trên close 1h.", f"{OH} `_compute_macd(closes_1h)`.", "Chuẩn MACD."),
+        ("MACD signal.", f"{OH} `_compute_macd`.", "EMA của MACD line."),
+        ("MACD histogram.", f"{OH} `_compute_macd`.", "line − signal."),
+        ("Stoch RSI %K (1h) — khác Stochastic cổ điển BE/BF.", f"{OH} `_compute_stoch_rsi(closes_1h)`.", "Từ chuỗi RSI Wilder."),
+        ("Stoch RSI %D.", f"{OH} `_compute_stoch_rsi`.", "Làm mượt %K."),
+        ("Open Interest tổng giá trị USDT (điểm mới nhất trong chuỗi hist).", "REST `GET https://fapi.binance.com/futures/data/openInterestHist` (`_fetch_oi_hist_delta_pct`).", "`sumOpenInterestValue` phần tử cuối."),
+        ("Δ% OI 24h: so điểm đầu vs cuối 25 mốc 1h trong openInterestHist.", "Cùng endpoint `openInterestHist`, limit=25, period=1h.", "Điểm [0] vs [-1] trong response."),
+        ("Long/Short ratio toàn tài khoản (global).", "REST `GET /futures/data/globalLongShortAccountRatio` (`_fetch_long_short_ratio`, period 1h).", "`longShortRatio` mốc mới nhất."),
+        ("Long/Short top traders theo vị thế.", "REST `GET /futures/data/topLongShortPositionRatio`.", "`longShortRatio`."),
+        ("Tỷ số (volume×close nến 1h hiện tại) / MA20 volume USDT.", "Từ `ohlcv_1h` + MA20 đã tính (AI/AJ).", "`vol_now / vol_1h_ma20`."),
+        ("Điểm tổng hợp −10…+10 (logic nội bộ).", "`_compute_long_short_score`.", "Kết hợp MA, MACD, Stoch RSI, L/S, OI delta."),
+        ("Nhãn gợi ý LONG/SHORT/Trung tính theo score.", "Quy tắc ngưỡng trong `get_row_result`.", "Từ score."),
+        ("Chuỗi lý do các thành phần score (nối reasons bằng dấu |).", "`_compute_long_short_score` trả về (score, reasons_str).", "Text nội bộ."),
+        ("Open nến 1h mới nhất.", f"{OH} `ohlcv_1h[-1][1]`.", "Cột open kline."),
+        ("High cao nhất trong 24 nến 1h gần nhất (hoặc tất cả nếu <24).", f"{OH} Max high 24 cây cuối.", "`max(high)` slice."),
+        ("Low thấp nhất trong 24 nến 1h gần nhất.", f"{OH} Min low 24 cây.", "`min(low)` slice."),
+        ("Stochastic %K (14) cổ điển trên H/L/C 1h.", f"{OH} `_compute_stochastic`.", "Không phải Stoch RSI."),
+        ("Stochastic %D = SMA(%K, 3).", f"{OH} `_compute_stochastic`.", "Làm mượt %K."),
+    ]
+    assert len(rows) == len(_DEBUG_COL_NAMES), (
+        f"provenance table length {len(rows)} != columns {len(_DEBUG_COL_NAMES)}"
+    )
+    return rows
+
+
+_COLUMN_AUDIT_PROVENANCE = _build_column_audit_provenance_table()
+
+
+def _ticker_raw_snapshot_lines(ticker_audit: dict, col_index: int) -> list:
+    """Thêm dòng raw cụ thể cho các cột lấy trực tiếp từ ticker."""
+    lines = []
+    if col_index not in (1, 2, 19):
+        return lines
+    inf = ticker_audit.get("info_subset") or {}
+    if col_index == 1:
+        lines.append(f"  [raw ticker] percentage = {ticker_audit.get('percentage')!r}")
+        if inf:
+            lines.append(f"  [raw Binance info subset] priceChangePercent = {inf.get('priceChangePercent')!r}")
+    elif col_index == 2:
+        lines.append(f"  [raw ticker] last = {ticker_audit.get('last')!r}")
+        if inf:
+            lines.append(f"  [raw Binance info subset] lastPrice = {inf.get('lastPrice')!r}")
+    elif col_index == 19:
+        lines.append(f"  [raw ticker] quoteVolume = {ticker_audit.get('quoteVolume')!r}")
+        if inf:
+            lines.append(f"  [raw Binance info subset] quoteVolume = {inf.get('quoteVolume')!r}")
+    return lines
+
+
+def write_column_audit_human_txt(
+    symbol: str,
+    pair: str,
+    row: list,
+    ticker: dict,
+    *,
+    ohlcv_1h,
+    ohlcv_1d,
+    ohlcv_4h,
+    exchange_ms: int,
+):
+    """
+    File log dạng văn bản (tiếng Việt): từng cột A→BF — ý nghĩa, API, gợi ý raw.
+    Ghi cùng điều kiện với `write_column_audit_json`.
+    """
+    try:
+        audit_dir = Path("logs")
+        audit_dir.mkdir(exist_ok=True)
+        ticker_audit = _ticker_fields_for_audit(ticker or {})
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe = pair.replace("/", "_").replace(":", "_")
+
+        lines = [
+            "=" * 78,
+            "COLUMN AUDIT — Human-readable (debug_column_audit_symbol)",
+            "=" * 78,
+            f"Thời gian (local): {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            f"exchange.milliseconds() sau khi dựng dòng: {exchange_ms}",
+            f"symbol (CCXT): {symbol}",
+            f"pair (sheet): {pair}",
+            "",
+            "--- Snapshot ticker (subset, cùng nguồn với JSON ticker_audit) ---",
+            json.dumps(ticker_audit, ensure_ascii=False, indent=2, default=str),
+            "",
+            "--- Đuôi nến (rút gọn, cùng logic JSON ohlcv_tail) ---",
+            json.dumps(
+                {
+                    "1h_last_3": _ohlcv_rows_tail_serializable(ohlcv_1h, 3),
+                    "1d_last_2": _ohlcv_rows_tail_serializable(ohlcv_1d, 2),
+                    "4h_last_2": _ohlcv_rows_tail_serializable(ohlcv_4h, 2),
+                },
+                ensure_ascii=False,
+                indent=2,
+                default=str,
+            ),
+            "",
+            "=" * 78,
+            "TỪNG CỘT (giá trị trên sheet = dòng đã build)",
+            "=" * 78,
+            "",
+        ]
+
+        for i, name in enumerate(_DEBUG_COL_NAMES):
+            letter = _col_letter(i)
+            val = row[i] if i < len(row) else None
+            meaning, api_src, raw_hint = _COLUMN_AUDIT_PROVENANCE[i]
+            cell = _format_audit_human_cell(val)
+            lines.append("-" * 78)
+            lines.append(f"Cột {letter} — {name}")
+            lines.append(f"  Giá trị (sheet): {cell}")
+            lines.append(f"  Ý nghĩa: {meaning}")
+            lines.append(f"  Nguồn / API: {api_src}")
+            lines.append(f"  Gợi ý trường raw / công thức: {raw_hint}")
+            lines.extend(_ticker_raw_snapshot_lines(ticker_audit, i))
+            lines.append("")
+
+        text = "\n".join(lines) + "\n"
+        path_ts = audit_dir / f"column_audit_{safe}_{ts}_human.txt"
+        path_last = audit_dir / "column_audit_HUMAN_LAST.txt"
+        path_ts.write_text(text, encoding="utf-8")
+        path_last.write_text(text, encoding="utf-8")
+        print(f"📝 Đã ghi column audit (human): {path_last} và {path_ts}", flush=True)
+        logger.info(f"Column audit human TXT: {path_last}")
+    except Exception as e:
+        logger.warning(f"[write_column_audit_human_txt] Lỗi: {e}")
+
+
 def write_column_audit_json(
     symbol: str,
     pair: str,
@@ -248,6 +441,16 @@ def write_column_audit_json(
         path_last.write_text(text, encoding="utf-8")
         print(f"📝 Đã ghi column audit: {path_last} và {path_ts}", flush=True)
         logger.info(f"Column audit JSON: {path_last}")
+        write_column_audit_human_txt(
+            symbol,
+            pair,
+            row,
+            ticker,
+            ohlcv_1h=ohlcv_1h,
+            ohlcv_1d=ohlcv_1d,
+            ohlcv_4h=ohlcv_4h,
+            exchange_ms=exchange_ms,
+        )
     except Exception as e:
         logger.warning(f"[write_column_audit_json] Lỗi: {e}")
 

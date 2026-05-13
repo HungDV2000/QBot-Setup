@@ -93,8 +93,9 @@ Sau mỗi lần `get_row_result` **thành công** cho mã đó, bot ghi:
 
 - `logs/column_audit_LAST.json` (ghi đè, mở nhanh)
 - `logs/column_audit_<PAIR>_<YYYYMMDD_HHMMSS>.json` (bản theo thời điểm)
+- **`logs/column_audit_HUMAN_LAST.txt`** và **`logs/column_audit_<PAIR>_<YYYYMMDD_HHMMSS>_human.txt`** — log tiếng Việt: từng cột **A→BF** kèm **ý nghĩa**, **nguồn (CCXT / REST Binance)**, **gợi ý trường raw**; đầu file có snapshot `ticker_audit` (JSON) và đuôi nến rút gọn để đối chiếu nhanh (ví dụ cột **B** = `percentage` từ cùng snapshot `fetch_tickers`, thêm dòng `[raw ticker]` / `info_subset`).
 
-Nội dung gồm: **`columns_A_to_BF`** (tên cột + chữ cột + giá trị đã ghi sheet), **`ticker_audit`** (last, percentage, quoteVolume, …), **`ohlcv_tail`** (5 nến 1h + 3 nến 1d/4h cuối), **`exchange_milliseconds_after_build`** (mốc thời gian sau khi dựng xong dòng — đối chiếu ticker Binance).
+Nội dung JSON gồm: **`columns_A_to_BF`** (tên cột + chữ cột + giá trị đã ghi sheet), **`ticker_audit`** (last, percentage, quoteVolume, …), **`ohlcv_tail`** (5 nến 1h + 3 nến 1d/4h cuối), **`exchange_milliseconds_after_build`** (mốc thời gian sau khi dựng xong dòng — đối chiếu ticker Binance).
 
 ---
 
