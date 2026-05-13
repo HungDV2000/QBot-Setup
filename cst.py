@@ -41,6 +41,9 @@ delay_periodic_report = config.getint('global', 'delay_periodic_report')
 # Mặc định False: nếu config.ini chưa có run_tele_command thì không chạy (tránh bật nhầm)
 run_tele_command = config.getboolean('global', 'run_tele_command', fallback=False)
 
+# hd_update_all: ghi logs/column_audit_LAST.json (+ file theo timestamp) cho đúng 1 mã — để đối chiếu từng cột (để trống = tắt)
+debug_column_audit_symbol = config.get('global', 'debug_column_audit_symbol', fallback='').strip()
+
 # ─────────────────────────────────────────────────────────────────────────────
 # [TASK 1] Default values cho sheet "Chờ và khớp" (cột J-S)
 # Tất cả đều có fallback cứng — file config.ini cũ vẫn chạy được.

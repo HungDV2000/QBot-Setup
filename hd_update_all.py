@@ -128,6 +128,130 @@ _DEBUG_COL_NAMES = [
 SHEET_NUM_COLUMNS = len(_DEBUG_COL_NAMES)
 
 
+def _symbol_matches_column_audit(symbol: str, target: str) -> bool:
+    """Khớp mã audit: BTC/USDT:USDT, BTC/USDT, BTCUSDT đều có thể trùng nhau."""
+    if not (target and symbol):
+        return False
+
+    def norm(x: str) -> str:
+        s = str(x).strip().upper().replace(":USDT", "").replace("/", "")
+        return s
+
+    return norm(symbol) == norm(target)
+
+
+def _ohlcv_rows_tail_serializable(ohlcv, max_rows: int = 5):
+    """Đuôi OHLCV để đưa vào JSON (timestamp ms + OHLCV)."""
+    if not ohlcv:
+        return []
+    tail = ohlcv[-max_rows:]
+    out = []
+    for c in tail:
+        out.append(
+            {
+                "timestamp_ms": int(c[0]),
+                "open": float(c[1]),
+                "high": float(c[2]),
+                "low": float(c[3]),
+                "close": float(c[4]),
+                "volume": float(c[5]),
+            }
+        )
+    return out
+
+
+def _ticker_fields_for_audit(ticker: dict) -> dict:
+    """Các field ticker thường dùng đối chiếu Binance (B/C/T…)."""
+    if not ticker:
+        return {}
+    keys = [
+        "symbol",
+        "timestamp",
+        "datetime",
+        "last",
+        "bid",
+        "ask",
+        "high",
+        "low",
+        "open",
+        "close",
+        "percentage",
+        "change",
+        "average",
+        "baseVolume",
+        "quoteVolume",
+        "info",
+    ]
+    out = {}
+    for k in keys:
+        if k not in ticker:
+            continue
+        v = ticker.get(k)
+        if k == "info" and isinstance(v, dict):
+            # chỉ giữ vài key nhẹ nếu có (tránh JSON quá lớn)
+            out["info_subset"] = {
+                sk: v.get(sk)
+                for sk in ("lastPrice", "priceChangePercent", "quoteVolume", "closeTime", "count")
+                if sk in v
+            }
+            continue
+        out[k] = v
+    return out
+
+
+def write_column_audit_json(
+    symbol: str,
+    pair: str,
+    row: list,
+    ticker: dict,
+    *,
+    ohlcv_1h,
+    ohlcv_1d,
+    ohlcv_4h,
+    exchange_ms: int,
+):
+    """
+    Ghi một file JSON duy nhất cho 1 mã (cấu hình debug_column_audit_symbol).
+    Dùng đối chiếu từng cột với ticker + đuôi nến.
+    """
+    try:
+        audit_dir = Path("logs")
+        audit_dir.mkdir(exist_ok=True)
+
+        columns = []
+        for i, name in enumerate(_DEBUG_COL_NAMES):
+            col_letter = _col_letter(i)
+            val = row[i] if i < len(row) else None
+            columns.append({"col": col_letter, "name": name, "value": val})
+
+        payload = {
+            "generated_at_local": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "exchange_milliseconds_after_build": exchange_ms,
+            "symbol_ccxt": symbol,
+            "pair_sheet": pair,
+            "ticker_audit": _ticker_fields_for_audit(ticker or {}),
+            "ohlcv_tail": {
+                "1h_last_5": _ohlcv_rows_tail_serializable(ohlcv_1h, 5),
+                "1d_last_3": _ohlcv_rows_tail_serializable(ohlcv_1d, 3),
+                "4h_last_3": _ohlcv_rows_tail_serializable(ohlcv_4h, 3),
+            },
+            "columns_A_to_BF": columns,
+            "note": "B,C,T lấy từ ticker cùng snapshot đầu do_it; đối chiếu Binance nên ghi nhận exchange_milliseconds_after_build.",
+        }
+
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe = pair.replace("/", "_").replace(":", "_")
+        path_ts = audit_dir / f"column_audit_{safe}_{ts}.json"
+        path_last = audit_dir / "column_audit_LAST.json"
+        text = json.dumps(payload, ensure_ascii=False, indent=2, default=str)
+        path_ts.write_text(text, encoding="utf-8")
+        path_last.write_text(text, encoding="utf-8")
+        print(f"📝 Đã ghi column audit: {path_last} và {path_ts}", flush=True)
+        logger.info(f"Column audit JSON: {path_last}")
+    except Exception as e:
+        logger.warning(f"[write_column_audit_json] Lỗi: {e}")
+
+
 def _col_letter(idx: int) -> str:
     """Chuyển index 0-based → chữ cột (A, B, …, Z, AA, AB, …)."""
     if idx < 26:
@@ -1871,6 +1995,19 @@ def do_it():
             row.extend(["", ""])
 
         logger.info(f"get_row_result xong: {symbol}")
+        if getattr(cst, "debug_column_audit_symbol", "") and _symbol_matches_column_audit(
+            symbol, cst.debug_column_audit_symbol
+        ):
+            write_column_audit_json(
+                symbol,
+                pair,
+                row,
+                tickers.get(symbol) or {},
+                ohlcv_1h=ohlcv_1h,
+                ohlcv_1d=ohlcv_1d,
+                ohlcv_4h=ohlcv_4h,
+                exchange_ms=exchange.milliseconds(),
+            )
         if ENABLE_DEBUG_DATA:
             write_symbol_debug_log(symbol, row)
         return row
@@ -2136,6 +2273,11 @@ print(f"📄 Log file: {log_filename}", flush=True)
 print(f"⏱️  Delay: {cst.delay_update_all}s giữa các lần cập nhật", flush=True)
 print(f"🔢 Top count: {cst.top_count} mã giảm + {cst.top_count} mã tăng", flush=True)
 print(f"🧪 Test mode: {'BẬT' if is_test_mode else 'TẮT'}", flush=True)
+_audit_sym = getattr(cst, "debug_column_audit_symbol", "") or ""
+if _audit_sym:
+    print(f"📝 Column audit (1 mã): {_audit_sym} → logs/column_audit_LAST.json", flush=True)
+else:
+    print("📝 Column audit: TẮT (config debug_column_audit_symbol để trống)", flush=True)
 print("="*80 + "\n", flush=True)
 
 # Log thông tin khởi động
@@ -2146,6 +2288,7 @@ logger.info(f"Log file: {log_filename}")
 logger.info(f"Delay giữa các lần cập nhật: {cst.delay_update_all} giây")
 logger.info(f"Top count: {cst.top_count}")
 logger.info(f"Test mode: {is_test_mode}")
+logger.info(f"debug_column_audit_symbol: {_audit_sym or '(tắt)'}")
 logger.info("")
 
 
