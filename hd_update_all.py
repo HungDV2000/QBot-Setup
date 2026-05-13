@@ -124,6 +124,9 @@ _DEBUG_COL_NAMES = [
     "Stoch %D (1h)",                    # BF — Stochastic Oscillator %D = SMA(%K, 3)
 ]
 
+# Số cột dữ liệu một dòng mã (A→BF) — dùng cho padding sheet, tránh lệch cột
+SHEET_NUM_COLUMNS = len(_DEBUG_COL_NAMES)
+
 
 def _col_letter(idx: int) -> str:
     """Chuyển index 0-based → chữ cột (A, B, …, Z, AA, AB, …)."""
@@ -571,7 +574,7 @@ def _bb_upper_lower_from_closes(closing_prices, multiplier=2.0):
 
 
 def _rsi_simple_from_closes(closes, period=14):
-    """RSI SMA gain/loss — dùng cho cột S (1d RSI) / data_collector."""
+    """RSI kiểu SMA trên toàn chuỗi (không phải RSI 14 chuẩn). Giữ lại cho tương thích / debug."""
     if len(closes) < period + 1:
         return None
     gains, losses = [], []
@@ -1020,15 +1023,15 @@ def calculate_max_increase_decrease_4h(pair, timeframe='4h', days=cst.max_increa
 
 
 
-def calculate_price_thoi_gian_max(pair):
-
-    
-    
-    
-    
-
+def calculate_price_thoi_gian_max(pair, num_days=3):
+    """
+    Trong cửa sổ num_days ngày gần nhất: tìm ngày có high max / low min,
+    zoom 1m trong ngày đó để lấy mốc giá và thời gian.
+    Trả về 6 phần tử: giá cao, chuỗi thời gian cao, phút từ lúc đó,
+    giá thấp, chuỗi thời gian thấp, phút từ lúc đó.
+    """
     now = exchange.milliseconds()
-    start_time = now - (3 * 24 * 60 * 60 * 1000)
+    start_time = now - (num_days * 24 * 60 * 60 * 1000)
     end_time = now
 
     
@@ -1094,12 +1097,19 @@ def get_bien_do_theo_gio(pair):
 def get_thoi_gian_max_min(pair):
     print(f"max tthoi gian: {pair}")
     res = []
-    highest_price, time_delta_highest, lowest_price, time_delta_lowest = calculate_price_thoi_gian_max(pair, 3)
+    (
+        highest_price,
+        _ts_high,
+        time_delta_highest,
+        lowest_price,
+        _ts_low,
+        time_delta_lowest,
+    ) = calculate_price_thoi_gian_max(pair, num_days=3)
     res.append(time_delta_highest)
     res.append(highest_price)
     res.append(time_delta_lowest)
     res.append(lowest_price)
-    
+
     return res
 
 def calculate_price_range(pair, num_days, timeframe):
@@ -1377,18 +1387,21 @@ def is_valid_for_trading(symbol, tickers):
         if vol_24h < 100000:
             return False, f"Volume 24h quá thấp ({vol_24h:,.0f} USDT < 100k)"
         
-        # Check 2: BB 1h không được trùng nhau (phải có đủ 20 nến historical)
+        # Check 2: BB 1h — cùng logic bot cũ (get_bb: 20 nến gần nhất, gồm nến đang chạy)
         try:
-            bb_1h = get_bb(pair, timeframes=['1h'])
+            bb_1h = get_bb(pair, timeframes=["1h"])
+            bb_u, bb_l = bb_1h[0], bb_1h[1]
             # Nếu BB upper ≈ BB lower (sai số < 0.01%) → không có đủ data
-            if abs(bb_1h[0] - bb_1h[1]) < (bb_1h[0] * 0.0001):
+            if not math.isfinite(bb_u) or not math.isfinite(bb_l) or bb_u <= 0:
+                return False, "Không có đủ historical data (BB1h không hợp lệ)"
+            if abs(bb_u - bb_l) < (bb_u * 0.0001):
                 return False, "Không có đủ historical data (BB1h trùng nhau)"
-        except:
+        except Exception:
             return False, "Lỗi lấy BB (có thể mã mới listing)"
         
-        # Check 3: High/Low 40 ngày phải khác nhau (có biến động)
+        # Check 3: High/Low 40 ngày phải khác nhau (cùng bot cũ: fetch theo symbol futures)
         try:
-            high_40d, low_40d = calculate_high_low_30d(pair, timeframe='1d')  # ✅ FIX: dùng pair
+            high_40d, low_40d = calculate_high_low_30d(symbol, timeframe="1d")
             # Nếu High ≈ Low (sai số < 0.01%) → mới listing, chưa dao động
             if abs(high_40d - low_40d) < (high_40d * 0.0001):
                 return False, "Mã mới listing (High 40d ≈ Low 40d)"
@@ -1561,6 +1574,10 @@ def do_it():
         """
         Gộp fetch OHLCV để giảm ~15+ request/mã (rate limit Binance) xuống còn vài request,
         tránh “đơ” lâu giữa các dòng log.
+
+        Cột trùng bot cŧ (khách đối chiếu số): C = last ticker; D/E,H/I = BB20 như get_bb
+        (20 close gần nhất gồm nến đang chạy); L/M = calculate_high_low_30d(symbol);
+        N/O = calculate_max_increase_decrease_4h(symbol); P/Q = get_bb 1w.
         """
         price = float(tickers[symbol].get("last") or 0)
         pct   = float(tickers[symbol].get("percentage") or 0)
@@ -1588,10 +1605,10 @@ def do_it():
             logger.warning(f"[{pair}] fetch_ohlcv 1d: {e}")
 
         closes_1d = [x[4] for x in ohlcv_1d] if ohlcv_1d else []
-        # BB1d: dùng nến ĐÃ ĐÓNG (loại nến đang hình thành) để khớp TradingView.
-        # Với coin crash mạnh trong ngày (như STO -86%), nến đang hình thành kéo BB xuống sai.
-        closes_1d_closed = closes_1d[:-1] if len(closes_1d) > 20 else closes_1d
-        bb1d_u, bb1d_l = _bb_upper_lower_from_closes(closes_1d_closed) if len(closes_1d_closed) >= 20 else (float("nan"), float("nan"))
+        # BB1d H/I: giống bot cũ — get_bb = mean/std trên đúng 20 close gần nhất (kể cả nến ngày đang chạy)
+        bb1d_u, bb1d_l = (
+            _bb_upper_lower_from_closes(closes_1d[-20:]) if len(closes_1d) >= 20 else (float("nan"), float("nan"))
+        )
 
         # --- 2) Một lần 1h (150 nến): BB1h + Vol X + AG/AH + MA/MACD/StochRSI ---
         # Tăng limit 20 → 150 để đủ warmup cho MA99 + MACD(26,9) + Stoch RSI(14,14,3,3)
@@ -1602,16 +1619,13 @@ def do_it():
             logger.warning(f"[{pair}] fetch_ohlcv 1h: {e}")
 
         closes_1h = [x[4] for x in ohlcv_1h] if ohlcv_1h else []
-        # BB1h chỉ dùng 20 nến gần nhất (giữ nguyên logic cũ)
-        bb1h_u, bb1h_l = _bb_upper_lower_from_closes(closes_1h[-20:]) if len(closes_1h) >= 20 else (float("nan"), float("nan"))
-        result_bb_array = [bb1h_u, bb1h_l]  # dùng cho % đến BB1h (cột V/W)
+        # BB1h D/E: giống get_bb() bản cũ — 20 close cuối gồm nến 1h đang chạy
+        bb1h_u, bb1h_l = (
+            _bb_upper_lower_from_closes(closes_1h[-20:]) if len(closes_1h) >= 20 else (float("nan"), float("nan"))
+        )
+        result_bb_array = [bb1h_u, bb1h_l]  # dùng cho % đến BB1h (cột X/Y)
 
-        # Cập nhật giá tươi từ nến 1h gần nhất (nến đang hình thành = live price)
-        # Tránh giá bị trễ 10-15 phút khi tickers[] được fetch 1 lần ở đầu cho 100 mã
-        if ohlcv_1h:
-            price = float(ohlcv_1h[-1][4])
-            row[2] = price  # cập nhật col C với giá tươi hơn
-            logger.debug(f"[{pair}] Giá cập nhật từ 1h close: {price}")
+        # Cột C: giữ last từ fetch_tickers như bot cŧ (khách đối chiếu với Binance UI)
 
         # Zombie coin guard: BB1h upper ≈ BB1h lower → giá đóng băng (token đang delist)
         # Binance giữ các token này trong fetch_tickers() với last>0 và volume cũ còn cao,
@@ -1637,8 +1651,10 @@ def do_it():
             logger.warning(f"[{pair}] fetch_ohlcv 4h: {e}")
         closes_4h = [x[4] for x in ohlcv_4h] if ohlcv_4h else []
 
-        # D-E BB1h, F-G BB4h, H-I BB1d → tổng 36 cột A-AJ khớp header
-        bb4h_u, bb4h_l = _bb_upper_lower_from_closes(closes_4h) if len(closes_4h) >= 20 else (float("nan"), float("nan"))
+        # F-G BB4h: cùng công thức BB20 như get_bb (20 nến gần nhất, gồm nến đang chạy)
+        bb4h_u, bb4h_l = (
+            _bb_upper_lower_from_closes(closes_4h[-20:]) if len(closes_4h) >= 20 else (float("nan"), float("nan"))
+        )
         row.extend([bb1h_u, bb1h_l, bb4h_u, bb4h_l, bb1d_u, bb1d_l])
 
         # J-K: biên độ 1h tuần (vẫn cần fetch 7d 1h)
@@ -1652,19 +1668,17 @@ def do_it():
         row.append(max_price_increase_month1)
         row.append(max_price_decrease_month1)
 
-        # L-M: cao/thấp N ngày từ cache 1d (thay fetch riêng)
-        nhl = min(calculate_high_low_day_total, len(ohlcv_1d))
-        if nhl >= 1:
-            sl = ohlcv_1d[-nhl:]
-            high = max(c[2] for c in sl)
-            low = min(c[3] for c in sl)
-        else:
+        # L-M: Max/Min 40 ngày — bot cũ gọi calculate_high_low_30d(symbol) (fetch_ohlcv theo mã futures)
+        try:
+            high, low = calculate_high_low_30d(symbol, timeframe="1d")
+        except Exception as e:
+            logger.warning(f"[{symbol}] calculate_high_low_30d (legacy symbol): {e}")
             high, low = 0.0, 0.0
         row.append(high)
         row.append(low)
 
         try:
-            increase, decrease = calculate_max_increase_decrease_4h(pair)
+            increase, decrease = calculate_max_increase_decrease_4h(symbol)
         except Exception as e:
             logger.warning(f"[{pair}] calculate_max_increase_decrease_4h: {e}")
             increase, decrease = "", ""
@@ -1672,6 +1686,7 @@ def do_it():
         row.append(decrease)
 
         try:
+            # P/Q: cùng get_bb 1w như đoạn list_them bản cŧ (20 nến tuần)
             bb_1w = get_bb(pair, timeframes=["1w"])
         except Exception as e:
             logger.warning(f"[{pair}] get_bb 1w: {e}")
@@ -1693,7 +1708,9 @@ def do_it():
         try:
             volume_24h = tickers[symbol].get("quoteVolume", 0)
             row.append(volume_24h)
-            rsi_1d = _rsi_simple_from_closes(closes_1d, period=14) if len(closes_1d) >= 15 else None
+            # RSI 14 ngày: Wilder (cùng định nghĩa với cột AH), trên nến 1d đã đóng
+            closes_1d_rsi = closes_1d[:-1] if len(closes_1d) > 15 else closes_1d
+            rsi_1d = _rsi_wilder_from_closes(closes_1d_rsi, period=14) if len(closes_1d_rsi) >= 15 else None
             row.append(round(rsi_1d, 2) if rsi_1d is not None else "")
         except Exception:
             row.extend([0, 0])
@@ -1740,7 +1757,8 @@ def do_it():
         row.append(round(bw_3d * 100, 2) if bw_3d is not None else "")   # AF: BB Width 3d trước (%)
         row.append(round(bw_now * 100, 2) if bw_now is not None else "")  # AG: BB Width hiện tại (%)
 
-        rsi_4h = _rsi_wilder_from_closes(closes_4h, period=14)
+        closes_4h_rsi = closes_4h[:-1] if len(closes_4h) > 15 else closes_4h
+        rsi_4h = _rsi_wilder_from_closes(closes_4h_rsi, period=14)
         row.append(round(rsi_4h, 2) if rsi_4h is not None else "")
 
         if ohlcv_1h and len(ohlcv_1h) >= 20:
@@ -1863,7 +1881,7 @@ def do_it():
     tab_100_ma_2d_arr = []
     title1 = f"Top {cst.top_count} có % giảm giá nhiều nhất trong 24h"
     title2 = f"Top {cst.top_count} có % tăng giá nhiều nhất trong 24h"
-    empty_row = [""] * 37  # A-AK
+    empty_row = [""] * SHEET_NUM_COLUMNS  # A→BF, khớp get_row_result
 
     # ── Hàng 3 & 4: BTCDOM và BTC cố định (luôn hiển thị bất kể tăng/giảm) ──
     # Thứ tự: BTCDOM trước (hàng 3), BTC sau (hàng 4)
@@ -1921,7 +1939,7 @@ def do_it():
     print(f"📉 BẮT ĐẦU XỬ LÝ {len(list_giam_nhieu_nhat)} MÃ GIẢM GIÁ (hàng 6-55)", flush=True)
     print(f"{'='*60}\n", flush=True)
 
-    title_row_giam = [title1] + [""] * 36  # A + B..AK
+    title_row_giam = [title1] + [""] * (SHEET_NUM_COLUMNS - 1)
     tab_100_ma_2d_arr.append(title_row_giam)  # hàng 5
     logger.info(f"Đang lấy dữ liệu cho {len(list_giam_nhieu_nhat)} mã giảm...")
 
@@ -1952,7 +1970,7 @@ def do_it():
     print(f"📈 BẮT ĐẦU XỬ LÝ {len(list_tang_nhieu_nhat)} MÃ TĂNG GIÁ (hàng 57-106)", flush=True)
     print(f"{'='*60}\n", flush=True)
 
-    title_row_tang = [title2] + [""] * 36
+    title_row_tang = [title2] + [""] * (SHEET_NUM_COLUMNS - 1)
     tab_100_ma_2d_arr.append(title_row_tang)  # hàng 56
     logger.info(f"Đang lấy dữ liệu cho {len(list_tang_nhieu_nhat)} mã tăng...")
 
