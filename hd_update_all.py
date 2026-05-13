@@ -253,10 +253,15 @@ def write_column_audit_json(
 
 
 def _col_letter(idx: int) -> str:
-    """Chuyển index 0-based → chữ cột (A, B, …, Z, AA, AB, …)."""
-    if idx < 26:
-        return chr(ord("A") + idx)
-    return "A" + chr(ord("A") + idx - 26)
+    """Chuyển index 0-based → chữ cột Excel (A…Z, AA…AZ, BA…ZZ, …)."""
+    if idx < 0:
+        return "?"
+    n = idx + 1  # chuyển sang 1-based cho thuật toán cột Excel
+    letters = []
+    while n:
+        n, r = divmod(n - 1, 26)
+        letters.append(chr(ord("A") + r))
+    return "".join(reversed(letters))
 
 
 def write_symbol_debug_log(symbol: str, row: list) -> None:
