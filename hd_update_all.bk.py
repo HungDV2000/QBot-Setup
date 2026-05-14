@@ -756,18 +756,18 @@ def _build_upcoming_delist_by_pair() -> dict:
 def _delist_warn_lookup(dmap, pair):
     """
     Khớp cặp mã với map (không phân biệt hoa thường).
-    Trả về NỘI DUNG cảnh báo (ngày delist / venue), không phải tên mã.
+    Cột AK chỉ trả về mã cặp đúng như key trong dữ liệu delist (DB/API).
     """
     if not dmap or not pair:
         return ""
     if pair in dmap:
-        return dmap[pair]
+        return pair
     pu = pair.upper()
     if pu in dmap:
-        return dmap[pu]
+        return pu
     for k in dmap.keys():
         if str(k).upper() == pu:
-            return dmap[k]
+            return str(k)
     return ""
 
 
@@ -2056,10 +2056,8 @@ def do_it():
 
         distance_to_bb_up = round(((result_bb_array[0] - price) / price) * 100, 2) if price != 0 else 0
         distance_to_bb_down = round(((price - result_bb_array[1]) / price) * 100, 2) if price != 0 else 0
-        # Ghi dạng string "x.xx%" để Google Sheet KHÔNG tự nhân ×100
-        # (nếu cột X/Y được format là "Percentage", Sheet sẽ nhân float 1.42 thành 142%)
-        row.append(f"{distance_to_bb_up}%")
-        row.append(f"{distance_to_bb_down}%")
+        row.append(distance_to_bb_up)
+        row.append(distance_to_bb_down)
 
         # Z: vol nến 1h hiện tại (USDT); AA: vol 4h (USDT) — base × close price
         vol_1h_last = round(float(ohlcv_1h[-1][5]) * float(ohlcv_1h[-1][4]), 2) if ohlcv_1h else 0.0
@@ -2088,10 +2086,8 @@ def do_it():
             row.extend([0, "N/A"])
 
         bw_3d, bw_now = _bb_width_3d_and_now_from_ohlcv(ohlcv_1d)
-        # AF/AG: ghi dạng string "x.xx%" để Google Sheet KHÔNG tự convert thành Excel date
-        # (nếu ghi float 9.12, Sheet nhận là ngày thứ 9.12 từ 1900 → ra "1900-01-08")
-        row.append(f"{round(bw_3d * 100, 2)}%" if bw_3d is not None else "")   # AF: BB Width 3d trước
-        row.append(f"{round(bw_now * 100, 2)}%" if bw_now is not None else "")  # AG: BB Width hiện tại
+        row.append(round(bw_3d * 100, 2) if bw_3d is not None else "")   # AF: BB Width 3d trước (%)
+        row.append(round(bw_now * 100, 2) if bw_now is not None else "")  # AG: BB Width hiện tại (%)
 
         closes_4h_rsi = closes_4h[:-1] if len(closes_4h) > 15 else closes_4h
         rsi_4h = _rsi_wilder_from_closes(closes_4h_rsi, period=14)
@@ -2101,10 +2097,9 @@ def do_it():
             # Vol 1h tính bằng USDT: base_vol × close_price của từng nến
             # Chỉ lấy 20 nến gần nhất để MA20 giữ nguyên logic cũ
             vols_usdt_last20 = [float(x[5]) * float(x[4]) for x in ohlcv_1h[-20:]]
-            # AI: dùng lại vol_1h_last đã tính ở cột Z (cùng là ohlcv_1h[-1]) để tránh tính trùng
-            row.append(vol_1h_last)                                  # AI: Vol 1h hiện tại (USDT)
+            row.append(round(vols_usdt_last20[-1], 2))           # AI: Vol 1h hiện tại (USDT)
             vol_1h_ma20 = float(np.mean(vols_usdt_last20))
-            row.append(round(vol_1h_ma20, 2))                        # AJ: Vol 1h MA20 (USDT)
+            row.append(round(vol_1h_ma20, 2))                    # AJ: Vol 1h MA20 (USDT)
         else:
             vol_1h_ma20 = None
             row.extend(["", ""])
