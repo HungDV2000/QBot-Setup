@@ -44,6 +44,9 @@ run_tele_command = config.getboolean('global', 'run_tele_command', fallback=Fals
 # hd_update_all: ghi logs/column_audit_LAST.json (+ file theo timestamp) cho đúng 1 mã — để đối chiếu từng cột (để trống = tắt)
 debug_column_audit_symbol = config.get('global', 'debug_column_audit_symbol', fallback='').strip()
 
+# hd_update_all: ghi log [PROFILE] thời gian từng phase (fetch_tickers, batch get_row, sheet…). false = log gọn hơn
+profile_do_it = config.getboolean('global', 'profile_do_it', fallback=True)
+
 # ─────────────────────────────────────────────────────────────────────────────
 # [TASK 1] Default values cho sheet "Chờ và khớp" (cột J-S)
 # Tất cả đều có fallback cứng — file config.ini cũ vẫn chạy được.

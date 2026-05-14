@@ -46,6 +46,9 @@ delay_update_all = 120
 ; hd_update_all — audit 1 mã: đặt đúng symbol CCXT (vd BTC/USDT:USDT hoặc MLN/USDT:USDT). Để trống = không ghi file audit.
 debug_column_audit_symbol = MLN/USDT:USDT
 
+; hd_update_all — log [PROFILE] thời gian từng phase trong file log (true/false)
+profile_do_it = true
+
 # Phase 3: Data Collection & Phase 4: Notifications
 delay_track_30_prices = 60
 delay_periodic_report = 300

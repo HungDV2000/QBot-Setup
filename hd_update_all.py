@@ -12,22 +12,20 @@ import logging
 import pandas as pd
 import ctypes
 import utils
-import numpy as np
 import json
 import os
 import re
 import math
 import requests
-from data_collector import DataCollector, get_data_collector
 
 file_name = os.path.basename(os.path.abspath(__file__))  
 os.system(f"title {file_name} - {cst.key_name}")
 
-# Tạo thư mục logs/ và logs/data/ nếu chưa có
+# Tạo thư mục logs/ nếu chưa có
 logs_dir = Path('logs')
 logs_dir.mkdir(exist_ok=True)
-data_logs_dir = logs_dir / 'data'
-data_logs_dir.mkdir(exist_ok=True)
+# Giữ biến cũ để tương thích (không dùng ghi file debug riêng nữa)
+data_logs_dir = logs_dir
 
 # Tạo tên file log với timestamp: hd_update_all_dd_mm_yyyy_H_M_S.txt
 log_timestamp = datetime.now().strftime('%d_%m_%Y_%H_%M_%S')
@@ -48,15 +46,8 @@ file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(mes
 file_handler.setLevel(logging.INFO)
 logger.addHandler(file_handler)
 
-# Thêm file handler cho error.log (giữ lại cho tương thích)
-error_log_path = logs_dir / 'error.log'
-error_handler = logging.FileHandler(error_log_path, encoding='utf-8')
-error_handler.setLevel(logging.ERROR)
-error_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(name)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
-logger.addHandler(error_handler)
-
 is_test_mode = False
-ENABLE_DEBUG_DATA = True  # Ghi file logs/data/<SYMBOL>_dd_mm_yyyy.txt — tắt khi không cần debug
+ENABLE_DEBUG_DATA = False  # Không ghi file debug riêng, chỉ giữ 1 log chính
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DEBUG: Tên cột theo thứ tự A→AK (khớp với header_row trong do_it)
@@ -467,6 +458,30 @@ def _col_letter(idx: int) -> str:
     return "".join(reversed(letters))
 
 
+def log_symbol_column_audit_to_main_log(symbol: str, row: list) -> None:
+    """
+    Ghi A→BF cho 1 mã vào log chính (duy nhất), dùng sau khi chạy xong.
+    """
+    if not symbol or not row:
+        return
+    try:
+        logger.info("=" * 70)
+        logger.info(f"COLUMN AUDIT (mã động đầu tiên, bỏ BTC/BTCDOM): {symbol}")
+        for i, col_name in enumerate(_DEBUG_COL_NAMES):
+            value = row[i] if i < len(row) else ""
+            if isinstance(value, float):
+                if math.isfinite(value):
+                    rendered = f"{value:,.8f}".rstrip("0").rstrip(".")
+                else:
+                    rendered = str(value)
+            else:
+                rendered = str(value) if value != "" else "(trống)"
+            logger.info(f"{_col_letter(i):<3} | {col_name:<35} | {rendered}")
+        logger.info("=" * 70)
+    except Exception as e:
+        logger.error(f"Lỗi ghi column audit vào log chính cho {symbol}: {e}", exc_info=True)
+
+
 def write_symbol_debug_log(symbol: str, row: list) -> None:
     """
     Ghi file logs/data/<SYMBOL>_dd_mm_yyyy.txt chứa giá trị từng cột.
@@ -537,6 +552,10 @@ exchange.timeout = 30000
 
 # Một lần fetch 1d đủ cho BB1d + Min/Max 40d + RSI 1d + biên độ 30d + BB width AF-AG
 _OHLCV_1D_LIMIT = 450
+# Một lần fetch 1h đủ cho MA99/MACD/Stoch RSI và biên độ 7 ngày (168 nến)
+_OHLCV_1H_LIMIT = 200
+# 4h cần đủ cửa sổ max_increase_decrease_4h_day_count
+_OHLCV_4H_LIMIT = max(100, int(cst.max_increase_decrease_4h_day_count) * 6)
 
 
 def _listing_status_cell(market, max_len=200):
@@ -1302,6 +1321,26 @@ def _amplitude_range_from_ohlcv_slice(ohlcv_slice):
     return max_inc, max_dec
 
 
+def _max_change_percent_from_ohlcv_body(ohlcv, lookback_candles=None):
+    """Trả về (max_increase%, max_decrease%) theo (close-open)/open*100 trên phần đuôi ohlcv."""
+    if not ohlcv:
+        return "", ""
+    src = ohlcv[-lookback_candles:] if lookback_candles else ohlcv
+    if not src:
+        return "", ""
+    try:
+        df = pd.DataFrame(src, columns=["timestamp", "open", "high", "low", "close", "volume"])
+        valid_open = df["open"].replace(0, np.nan)
+        body_pct = (df["close"] - df["open"]) / valid_open * 100
+        if not np.isfinite(body_pct).any():
+            return "", ""
+        max_inc = round(float(np.nanmax(body_pct.values)), 2)
+        max_dec = round(float(np.nanmin(body_pct.values)), 2)
+        return max_inc, max_dec
+    except Exception:
+        return "", ""
+
+
 def _bb_width_3d_and_now_from_ohlcv(ohlcv_1d, period=20, std_dev=2):
     """(width 3 phiên trước, width hiện tại) — (U-L)/Mid khung 1d.
     Dùng nến đã đóng (bỏ nến đang hình thành) + population std (ddof=0) để khớp TradingView.
@@ -1764,6 +1803,24 @@ def merge_top_list_with_sheet_leaders(sorted_candidates, tickers, top_count, lea
     return front + rest[:need]
 
 
+def _profile_symbol_batch(batch_name, timings, top_n=8):
+    """Thống kê thời gian get_row_result theo từng symbol (perf_counter, giây)."""
+    if not timings:
+        logger.info(f"[PROFILE] {batch_name}: (rỗng)")
+        return
+    total = sum(t[0] for t in timings)
+    n = len(timings)
+    avg = total / n
+    mx = max(timings, key=lambda x: x[0])
+    mn = min(timings, key=lambda x: x[0])
+    slow = sorted(timings, key=lambda x: -x[0])[:top_n]
+    slow_s = ", ".join(f"{s}:{dt:.2f}s" for dt, s in slow)
+    logger.info(
+        f"[PROFILE] {batch_name}: n={n} total={total:.2f}s avg={avg:.2f}s "
+        f"min={mn[0]:.2f}s ({mn[1]}) max={mx[0]:.2f}s ({mx[1]}) | slow_top{top_n}: [{slow_s}]"
+    )
+
+
 def do_it():
     print(f"\n{'='*80}", flush=True)
     print(f"🚀 BẮT ĐẦU CẬP NHẬT SHEET 100 MÃ - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", flush=True)
@@ -1774,10 +1831,6 @@ def do_it():
     logger.info("========================================")
     start_time = time.time()
 
-    # Fix: Khởi tạo data_collector ngay đầu hàm
-    data_collector = get_data_collector(exchange)
-    logger.info("Đã khởi tạo data_collector")
-    
     logger.info("Đang lấy tickers từ Binance...")
     tickers = exchange.fetch_tickers()
     logger.info(f"Đã lấy {len(tickers)} tickers từ Binance")
@@ -1926,7 +1979,6 @@ def do_it():
             return empty
 
         print(f"🔄 {symbol} - %24h: {pct:.2f}%, giá: {price}", flush=True)
-        logger.info(f"get_row_result bắt đầu: {symbol}")
         row = [pair, pct, price]
 
         # --- 1) Một lần 1d: BB1d + Min/Max 40d + RSI 1d + P/Q 30d + AD-AE ---
@@ -1942,11 +1994,11 @@ def do_it():
             _bb_upper_lower_from_closes(closes_1d[-20:]) if len(closes_1d) >= 20 else (float("nan"), float("nan"))
         )
 
-        # --- 2) Một lần 1h (150 nến): BB1h + Vol X + AG/AH + MA/MACD/StochRSI ---
-        # Tăng limit 20 → 150 để đủ warmup cho MA99 + MACD(26,9) + Stoch RSI(14,14,3,3)
+        # --- 2) Một lần 1h (200 nến): BB1h + MA/MACD/StochRSI + biên độ 7d ---
+        # 200 >= 168 nến (7 ngày) nên có thể tái dùng cho J/K, tránh fetch trùng.
         ohlcv_1h = []
         try:
-            ohlcv_1h = exchange.fetch_ohlcv(pair, "1h", limit=150)
+            ohlcv_1h = exchange.fetch_ohlcv(pair, "1h", limit=_OHLCV_1H_LIMIT)
         except Exception as e:
             logger.warning(f"[{pair}] fetch_ohlcv 1h: {e}")
 
@@ -1974,11 +2026,10 @@ def do_it():
             empty[_DEBUG_COL_NAMES.index("Cảnh báo delist sắp tới")] = _delist_warn_lookup(delist_warn_by_pair, pair)
             return empty
 
-        # Một lần 4h (20 nến): tái dùng cho Vol Y / RSI AF
+        # Một lần 4h (đủ dài): tái dùng cho BB4h / RSI4h / max increase-decrease 4h
         ohlcv_4h = []
         try:
-            # 100 nến để Wilder's RSI (14) có đủ warmup (~50+ nến extra)
-            ohlcv_4h = exchange.fetch_ohlcv(pair, "4h", limit=100)
+            ohlcv_4h = exchange.fetch_ohlcv(pair, "4h", limit=_OHLCV_4H_LIMIT)
         except Exception as e:
             logger.warning(f"[{pair}] fetch_ohlcv 4h: {e}")
         closes_4h = [x[4] for x in ohlcv_4h] if ohlcv_4h else []
@@ -1989,30 +2040,40 @@ def do_it():
         )
         row.extend([bb1h_u, bb1h_l, bb4h_u, bb4h_l, bb1d_u, bb1d_l])
 
-        # J-K: biên độ 1h tuần (vẫn cần fetch 7d 1h)
+        # J-K: biên độ 1h tuần (tái dùng ohlcv_1h đã fetch)
         try:
-            max_price_increase_month1, max_price_decrease_month1 = calculate_price_range(pair, 7, "1h")
+            candles_7d_1h = 7 * 24
+            ohlcv_1h_7d = ohlcv_1h[-candles_7d_1h:] if len(ohlcv_1h) >= candles_7d_1h else ohlcv_1h
+            max_price_increase_month1, max_price_decrease_month1 = _amplitude_range_from_ohlcv_slice(ohlcv_1h_7d)
             max_price_increase_month1 = "" if pd.isna(max_price_increase_month1) else max_price_increase_month1
             max_price_decrease_month1 = "" if pd.isna(max_price_decrease_month1) else max_price_decrease_month1
         except Exception as e:
-            logger.warning(f"[{pair}] calculate_price_range 7d/1h: {e}")
+            logger.warning(f"[{pair}] amplitude 7d/1h from cached ohlcv: {e}")
             max_price_increase_month1, max_price_decrease_month1 = "", ""
         row.append(max_price_increase_month1)
         row.append(max_price_decrease_month1)
 
-        # L-M: Max/Min 40 ngày — bot cũ gọi calculate_high_low_30d(symbol) (fetch_ohlcv theo mã futures)
+        # L-M: Max/Min 40 ngày — tái dùng ohlcv_1d đã fetch
         try:
-            high, low = calculate_high_low_30d(symbol, timeframe="1d")
+            lookback_1d = int(calculate_high_low_day_total)
+            ohlcv_1d_lookback = ohlcv_1d[-lookback_1d:] if len(ohlcv_1d) >= lookback_1d else ohlcv_1d
+            if ohlcv_1d_lookback:
+                highs = [float(c[2]) for c in ohlcv_1d_lookback]
+                lows = [float(c[3]) for c in ohlcv_1d_lookback]
+                high, low = max(highs), min(lows)
+            else:
+                high, low = 0.0, 0.0
         except Exception as e:
-            logger.warning(f"[{symbol}] calculate_high_low_30d (legacy symbol): {e}")
+            logger.warning(f"[{symbol}] max/min 40d from cached ohlcv_1d: {e}")
             high, low = 0.0, 0.0
         row.append(high)
         row.append(low)
 
         try:
-            increase, decrease = calculate_max_increase_decrease_4h(symbol)
+            lookback_4h = int(cst.max_increase_decrease_4h_day_count) * 6
+            increase, decrease = _max_change_percent_from_ohlcv_body(ohlcv_4h, lookback_candles=lookback_4h)
         except Exception as e:
-            logger.warning(f"[{pair}] calculate_max_increase_decrease_4h: {e}")
+            logger.warning(f"[{pair}] max/min body 4h from cached ohlcv: {e}")
             increase, decrease = "", ""
         row.append(increase)
         row.append(decrease)
@@ -2078,7 +2139,6 @@ def do_it():
             cutoff_ms = exchange.milliseconds() - 365 * 24 * 60 * 60 * 1000
             ohlcv_ab = [c for c in ohlcv_1d if c[0] >= cutoff_ms] or ohlcv_1d
             max_vol, max_date = _max_daily_volatility_from_ohlcv(ohlcv_ab)
-            logger.info(f"✅ [{pair}] Biên độ lớn nhất: {max_vol}% vào {max_date}")
             print(f"   └─ AD={max_vol}%, AE={max_date}", flush=True)
             row.append(max_vol)
             row.append(max_date)
@@ -2207,26 +2267,11 @@ def do_it():
         else:
             row.extend(["", ""])
 
-        logger.info(f"get_row_result xong: {symbol}")
-        if getattr(cst, "debug_column_audit_symbol", "") and _symbol_matches_column_audit(
-            symbol, cst.debug_column_audit_symbol
-        ):
-            write_column_audit_json(
-                symbol,
-                pair,
-                row,
-                tickers.get(symbol) or {},
-                ohlcv_1h=ohlcv_1h,
-                ohlcv_1d=ohlcv_1d,
-                ohlcv_4h=ohlcv_4h,
-                exchange_ms=exchange.milliseconds(),
-            )
-        if ENABLE_DEBUG_DATA:
-            write_symbol_debug_log(symbol, row)
         return row
 
 
     logger.info("Bước 5: Tạo top lists...")
+    _pt = time.perf_counter()
 
     tab_100_ma_2d_arr = []
     title1 = f"Top {cst.top_count} có % giảm giá nhiều nhất trong 24h"
@@ -2294,10 +2339,15 @@ def do_it():
     logger.info(f"Đang lấy dữ liệu cho {len(list_giam_nhieu_nhat)} mã giảm...")
 
     giam_data = []
+    first_dynamic_symbol = None
+    first_dynamic_row = None
     for idx, symbol in enumerate(list_giam_nhieu_nhat, 1):
         print(f"📉 [{idx}/{len(list_giam_nhieu_nhat)}] Xử lý mã giảm: {symbol}", flush=True)
-        logger.info(f"Mã giảm [{idx}/{len(list_giam_nhieu_nhat)}]: {symbol}")
-        giam_data.append(get_row_result(symbol))
+        row_data = get_row_result(symbol)
+        giam_data.append(row_data)
+        if first_dynamic_symbol is None:
+            first_dynamic_symbol = symbol
+            first_dynamic_row = row_data
         if is_test_mode:
             break
 
@@ -2329,8 +2379,11 @@ def do_it():
         if is_test_mode:
             break
         print(f"📈 [{idx}/{len(list_tang_nhieu_nhat)}] Xử lý mã tăng: {symbol}", flush=True)
-        logger.info(f"Mã tăng [{idx}/{len(list_tang_nhieu_nhat)}]: {symbol}")
-        tang_data.append(get_row_result(symbol))
+        row_data = get_row_result(symbol)
+        tang_data.append(row_data)
+        if first_dynamic_symbol is None:
+            first_dynamic_symbol = symbol
+            first_dynamic_row = row_data
 
     tab_100_ma_2d_arr.extend(tang_data)
     print(f"✅ Đã lấy {len(tang_data)} mã tăng", flush=True)
@@ -2350,7 +2403,7 @@ def do_it():
     # Cấu trúc: 2 cố định + 1 title_giam + 50 giảm + 1 title_tang + 50 tăng = 104 dòng
     logger.info(f"Tổng số dòng sau khi padding: {len(tab_100_ma_2d_arr)} (mong đợi: 2 cố định + 2 title + 100 data = 104 dòng)")
 
-    # Lấy thông tin tài khoản (data_collector đã được khởi tạo ở đầu hàm)
+    # Lấy thông tin tài khoản
     logger.info("Đang lấy thông tin tài khoản...")
     balance = exchange.fetch_balance()
     totalMarginBalance= round(float(balance["info"]["totalMarginBalance"]),4)
@@ -2444,7 +2497,7 @@ def do_it():
 
     print(f"📊 Tổng số dòng dữ liệu: {len(tab_100_ma_2d_arr)}", flush=True)
     logger.info(f"Tổng số dòng dữ liệu: {len(tab_100_ma_2d_arr)}")
-    
+
     # Ghi tất cả dữ liệu từ hàng 1
     write_start = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"💾 [{write_start}] Đang ghi {len(tab_100_ma_2d_arr)} dòng vào Google Sheet...", flush=True)
@@ -2471,6 +2524,10 @@ def do_it():
     logger.info("========================================")
     logger.info(f"HOÀN TẤT CẬP NHẬT - Thời gian: {execution_time:.2f} giây")
     logger.info(f"Tổng số mã đã xử lý: {len(giam_data)} giảm + {len(tang_data)} tăng")
+    if first_dynamic_symbol and first_dynamic_row:
+        log_symbol_column_audit_to_main_log(first_dynamic_symbol, first_dynamic_row)
+    else:
+        logger.warning("Không tìm thấy mã động để ghi column audit vào log chính.")
     logger.info("========================================")
  
 
@@ -2486,11 +2543,7 @@ print(f"📄 Log file: {log_filename}", flush=True)
 print(f"⏱️  Delay: {cst.delay_update_all}s giữa các lần cập nhật", flush=True)
 print(f"🔢 Top count: {cst.top_count} mã giảm + {cst.top_count} mã tăng", flush=True)
 print(f"🧪 Test mode: {'BẬT' if is_test_mode else 'TẮT'}", flush=True)
-_audit_sym = getattr(cst, "debug_column_audit_symbol", "") or ""
-if _audit_sym:
-    print(f"📝 Column audit (1 mã): {_audit_sym} → logs/column_audit_LAST.json", flush=True)
-else:
-    print("📝 Column audit: TẮT (config debug_column_audit_symbol để trống)", flush=True)
+print("📝 Column audit: ghi trực tiếp vào log chính cho mã động đầu tiên", flush=True)
 print("="*80 + "\n", flush=True)
 
 # Log thông tin khởi động
@@ -2501,7 +2554,7 @@ logger.info(f"Log file: {log_filename}")
 logger.info(f"Delay giữa các lần cập nhật: {cst.delay_update_all} giây")
 logger.info(f"Top count: {cst.top_count}")
 logger.info(f"Test mode: {is_test_mode}")
-logger.info(f"debug_column_audit_symbol: {_audit_sym or '(tắt)'}")
+logger.info("Column audit mode: log chính, 1 mã động đầu tiên (không phải BTC/BTCDOM)")
 logger.info("")
 
 
