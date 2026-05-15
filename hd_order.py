@@ -20,6 +20,7 @@ import hashlib
 import urllib.parse
 import json
 from googleapiclient.errors import HttpError  # ✅ Thêm import HttpError để handle lỗi Google API
+from binance_futures_direct import fetch_algo_orders_for_symbol
 
 # Cấu hình stdout để output realtime (unbuffered)
 sys.stdout.reconfigure(line_buffering=True) if hasattr(sys.stdout, 'reconfigure') else None
@@ -169,90 +170,17 @@ def is_same_pair(sym1, sym2):
     sym2 = sym2.replace("/", "").replace(":USDT", "").upper().strip()
     return sym1 == sym2
 
-def call_binance_api_direct(method, endpoint, params=None, max_retries=3):
-    """
-    Gọi Binance API trực tiếp bằng requests.
-    Có retry với exponential backoff (2s, 4s, 8s).
-    Returns:
-        dict/list → Thành công
-        None      → Tất cả retry đều thất bại
-    """
-    base_url = 'https://fapi.binance.com'
-    url = f"{base_url}{endpoint}"
-    headers = {'X-MBX-APIKEY': cst.key_binance}
-
-    for attempt in range(max_retries):
-        try:
-            # Tạo fresh copy params mỗi lần (tránh timestamp bị trùng giữa các retry)
-            req_params = dict(params) if params else {}
-            req_params['timestamp'] = int(time.time() * 1000)
-
-            query_string = urllib.parse.urlencode(req_params)
-            signature = hmac.new(
-                cst.secret_binance.encode('utf-8'),
-                query_string.encode('utf-8'),
-                hashlib.sha256
-            ).hexdigest()
-            req_params['signature'] = signature
-
-            response = requests.get(url, params=req_params, headers=headers, timeout=10)
-            response.raise_for_status()
-            return response.json()
-
-        except requests.exceptions.Timeout:
-            wait = 2 ** (attempt + 1)
-            logger.warning(f"[API] Timeout lần {attempt+1}/{max_retries} ({endpoint}), chờ {wait}s...")
-            if attempt < max_retries - 1:
-                time.sleep(wait)
-
-        except requests.exceptions.HTTPError as e:
-            status_code = e.response.status_code if e.response is not None else 0
-            wait = 2 ** (attempt + 1)
-            logger.warning(f"[API] HTTP {status_code} lần {attempt+1}/{max_retries} ({endpoint}): {e}")
-            if attempt < max_retries - 1:
-                time.sleep(wait)
-
-        except Exception as e:
-            wait = 2 ** (attempt + 1)
-            logger.warning(f"[API] Lỗi lần {attempt+1}/{max_retries} ({endpoint}): {e}")
-            if attempt < max_retries - 1:
-                time.sleep(wait)
-
-    logger.error(f"[API] Tất cả {max_retries} lần retry đều thất bại cho {endpoint}")
-    return None
-
 def get_algo_orders_for_symbol(symbol):
     """
-    Lấy algo orders cho một symbol cụ thể từ Binance API.
+    Lấy algo orders (open + lịch sử 24h). openAlgoOrders trước để tránh 400 allAlgoOrders.
 
     Returns:
-        None  → API gặp lỗi (không thể xác định trạng thái)
-        []    → API thành công, không có orders nào
-        [..] → API thành công, có danh sách orders
+        None  → Lỗi mạng/API thật (không parse được)
+        []    → Không có order / symbol không có algo
+        [..]  → Có danh sách orders
     """
     try:
-        symbol_clean = symbol.replace('/', '').replace(':USDT', '')
-        params = {'symbol': symbol_clean}
-
-        response = call_binance_api_direct('GET', '/fapi/v1/allAlgoOrders', params)
-
-        # None = tất cả retry đều thất bại → trả None (khác với [] = thành công + không có order)
-        if response is None:
-            return None
-
-        if isinstance(response, list):
-            return response
-        elif isinstance(response, dict):
-            if 'data' in response:
-                return response['data']
-            if response.get('code') == 200:
-                return []  # Thành công nhưng không có data (không có order)
-            logger.warning(f"[API] Response code khác 200 cho {symbol}: {response}")
-            return None  # Không chắc chắn → trả None
-        else:
-            logger.warning(f"[API] Response format không đúng cho {symbol}: {type(response)}")
-            return None
-
+        return fetch_algo_orders_for_symbol(symbol, history_hours=24)
     except Exception as e:
         logger.error(f"Lỗi khi lấy algo orders cho {symbol}: {e}", exc_info=True)
         return None
@@ -372,14 +300,11 @@ def has_pending_trailing_stop_order(symbol):
     """
     Kiểm tra symbol đã có order TRAILING_STOP chưa.
 
-    Chiến lược FAIL-SAFE (không đặt lệnh khi không chắc chắn):
-    ┌─────────────────────────────────────────────────────────────┐
-    │  API thành công + có orders  → CHẶN (theo kết quả API)     │
-    │  API thành công + không có   → CHO PHÉP (xóa cache)        │
-    │  API lỗi (None) + có cache   → CHẶN (dùng cache làm backup)│
-    │  API lỗi (None) + không cache→ CHẶN (không chắc = chặn)    │
-    │  Exception bất kỳ            → CHẶN (fail-safe)            │
-    └─────────────────────────────────────────────────────────────┘
+    Fail-safe:
+    - API OK + có trailing stop → CHẶN
+    - API OK + không có → CHO PHÉP (xóa cache)
+    - API lỗi (None) + có cache → CHẶN
+    - API lỗi (None) + không cache → CHO PHÉP (tránh chặn oan do 400/timeout)
     """
     try:
         logger.info(f"[CHECK PENDING] {symbol}: Đang kiểm tra algo orders...")
@@ -391,10 +316,10 @@ def has_pending_trailing_stop_order(symbol):
             if in_cache:
                 logger.warning(f"[CHECK PENDING] {symbol}: API lỗi + có cache (algoId={cached_algo_id}) → CHẶN")
                 print(f"⛔ {symbol}: API lỗi nhưng có cache lệnh cũ → CHẶN để tránh lặp đơn", flush=True)
-            else:
-                logger.warning(f"[CHECK PENDING] {symbol}: API lỗi + không có cache → CHẶN phòng ngừa (fail-safe)")
-                print(f"⛔ {symbol}: API lỗi, không xác định được trạng thái → CHẶN phòng ngừa", flush=True)
-            return True  # Fail-safe: LUÔN chặn khi API lỗi
+                return True
+            logger.warning(f"[CHECK PENDING] {symbol}: API lỗi + không cache → cho phép đặt lệnh")
+            print(f"⚠️ {symbol}: API lỗi, không có cache → tiếp tục kiểm tra đặt lệnh", flush=True)
+            return False
 
         # ── TRƯỜNG HỢP API THÀNH CÔNG + KHÔNG CÓ ORDERS ────────────────
         if not algo_orders:
@@ -461,14 +386,13 @@ def has_pending_trailing_stop_order(symbol):
 
     except Exception as e:
         logger.error(f"Lỗi khi kiểm tra algo orders cho {symbol}: {e}", exc_info=True)
-        # Fail-safe: CHẶN khi có exception bất kỳ
         in_cache, cached_algo_id = is_in_order_cache(symbol)
         if in_cache:
             logger.warning(f"[CHECK PENDING] {symbol}: Exception + có cache → CHẶN")
-        else:
-            logger.warning(f"[CHECK PENDING] {symbol}: Exception không xác định → CHẶN phòng ngừa")
-        print(f"⛔ {symbol}: Lỗi kiểm tra → CHẶN phòng ngừa", flush=True)
-        return True
+            print(f"⛔ {symbol}: Lỗi kiểm tra + có cache → CHẶN", flush=True)
+            return True
+        logger.warning(f"[CHECK PENDING] {symbol}: Exception + không cache → cho phép")
+        return False
 
 def execute_command(commands):
     try:

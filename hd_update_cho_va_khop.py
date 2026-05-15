@@ -11,6 +11,11 @@ import hmac
 import hashlib
 import urllib.parse
 from googleapiclient.errors import HttpError
+from binance_futures_direct import (
+    fetch_algo_orders_for_symbol,
+    futures_signed_request,
+    normalize_algo_orders_response,
+)
 
 file_name = os.path.basename(os.path.abspath(__file__))  
 os.system(f"title {file_name} - {cst.key_name}")
@@ -71,92 +76,11 @@ except Exception as e:
     logger.warning(f"⚠️ Lỗi load markets: {e}")
 
 
-def call_binance_api_direct(method, endpoint, params=None):
-    """
-    Gọi Binance API trực tiếp bằng requests (để lấy algo orders)
-    """
-    base_url = 'https://fapi.binance.com'
-    url = f"{base_url}{endpoint}"
-    
-    if params is None:
-        params = {}
-    
-    # Thêm timestamp
-    params['timestamp'] = int(time.time() * 1000)
-    
-    # Tạo query string
-    query_string = urllib.parse.urlencode(params)
-    
-    # Tạo signature
-    signature = hmac.new(
-        cst.secret_binance.encode('utf-8'),
-        query_string.encode('utf-8'),
-        hashlib.sha256
-    ).hexdigest()
-    
-    params['signature'] = signature
-    
-    # Headers
-    headers = {
-        'X-MBX-APIKEY': cst.key_binance
-    }
-    
-    try:
-        if method.upper() == 'GET':
-            response = requests.get(url, params=params, headers=headers, timeout=10)
-        else:
-            return None
-            
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.HTTPError as e:
-        # Chỉ log 400 cho delivery futures ở debug level, không phải ERROR
-        if e.response.status_code == 400:
-            # Kiểm tra xem có phải delivery futures không
-            if '-26' in params.get('symbol', ''):  # Delivery futures có date code
-                logger.debug(f"Bỏ qua delivery futures: {params.get('symbol')}")
-            else:
-                logger.warning(f"Lỗi 400 cho symbol {params.get('symbol')}: {e}")
-        else:
-            logger.error(f"Lỗi HTTP khi gọi Binance API ({method} {endpoint}): {e}")
-        return None
-    except Exception as e:
-        logger.error(f"Lỗi khi gọi Binance API trực tiếp ({method} {endpoint}): {e}")
-        return None
-
 def get_algo_orders_for_symbol(symbol):
-    """
-    Lấy algo orders cho một symbol cụ thể từ Binance API
-    Dùng endpoint: /fapi/v1/allAlgoOrders (Query All Algo Orders)
-    """
+    """Lấy algo orders (open + 24h). HTTP 400 symbol không có algo → []."""
     try:
-        # Binance API yêu cầu symbol format: HOMEUSDT (không có / và :USDT)
-        symbol_clean = symbol.replace('/', '').replace(':USDT', '')
-        
-        params = {
-            'symbol': symbol_clean
-        }
-        
-        response = call_binance_api_direct('GET', '/fapi/v1/allAlgoOrders', params)
-        
-        if not response:
-            return []
-        
-        # Binance trả về có thể là array hoặc dict
-        if isinstance(response, list):
-            return response
-        elif isinstance(response, dict):
-            if 'data' in response:
-                return response['data']
-            elif response.get('code') == 200:
-                return response
-            else:
-                logger.warning(f"Response có code khác 200 cho {symbol}: {response}")
-                return []
-        else:
-            logger.warning(f"Response format không đúng cho {symbol}: {type(response)}")
-            return []
-        
+        result = fetch_algo_orders_for_symbol(symbol, history_hours=24)
+        return result if result is not None else []
     except Exception as e:
         logger.error(f"Lỗi khi lấy algo orders cho {symbol}: {e}", exc_info=True)
         return []
@@ -169,15 +93,10 @@ def get_all_open_algo_orders_batch():
     Returns: list orders đã được thêm symbol_ccxt, symbol_clean
     """
     try:
-        response = call_binance_api_direct('GET', '/fapi/v1/openAlgoOrders')
-        if response is None:
-            return None  # None = API thực sự lỗi; [] = thành công nhưng không có orders
-
-        orders_raw = []
-        if isinstance(response, list):
-            orders_raw = response
-        elif isinstance(response, dict):
-            orders_raw = response.get('orders', response.get('data', []))
+        response = futures_signed_request('GET', '/fapi/v1/openAlgoOrders', max_retries=3)
+        orders_raw = normalize_algo_orders_response(response, 'openAlgoOrders')
+        if orders_raw is None:
+            return None
 
         result = []
         for order in orders_raw:
@@ -212,7 +131,7 @@ def get_position_leverage_map():
     """
     leverage_map = {}
     try:
-        response = call_binance_api_direct('GET', '/fapi/v2/positionRisk')
+        response = futures_signed_request('GET', '/fapi/v2/positionRisk')
         if response is None:
             logger.warning("Không lấy được /fapi/v2/positionRisk để map leverage")
             return leverage_map

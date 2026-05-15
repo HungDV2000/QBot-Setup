@@ -19,6 +19,7 @@ import requests
 import hmac
 import hashlib
 import urllib.parse
+from binance_futures_direct import fetch_algo_orders_for_symbol, futures_signed_request
 
 # --- CẤU HÌNH HỆ THỐNG & LOGGING ---
 sys.stdout.reconfigure(line_buffering=True) if hasattr(sys.stdout, 'reconfigure') else None
@@ -63,7 +64,120 @@ order_logger.addHandler(order_handler)
 STATE_SHORT = "SHORT"
 STATE_LONG  = "LONG"
 
+# Sheet "Chờ và khớp" — hàng 1: cấu hình rate (số thập phân như config.ini: 0.3 = 30%)
+#   J1 = SL LONG   K1 = SL SHORT   L1 = TP LONG   M1 = TP SHORT   N1 = Callback %
+CHO_VAKHOP_RATE_ROW_RANGE = "J1:N1"
+_RATE_CELL_INDEX = {
+    "lenh2_rate_long": 0,
+    "lenh2_rate_short": 1,
+    "lenh3_rate_long": 2,
+    "lenh3_rate_short": 3,
+    "lenh3_callback_rate": 4,
+}
+
 # --- CÁC HÀM TIỆN ÍCH ---
+
+
+def _rate_defaults_from_cst():
+    return {
+        "lenh2_rate_long": float(getattr(cst, "lenh2_rate_long", 0.3)),
+        "lenh2_rate_short": float(getattr(cst, "lenh2_rate_short", 0.3)),
+        "lenh3_rate_long": float(getattr(cst, "lenh3_rate_long", 0.6)),
+        "lenh3_rate_short": float(getattr(cst, "lenh3_rate_short", 0.6)),
+        "lenh3_callback_rate": float(getattr(cst, "lenh3_callback_rate", 1.0)),
+    }
+
+
+def _parse_rate_cell(raw, default, name):
+    """Ô sheet: 0.3 hoặc 30 (hiểu là %). Giá trị <=0 hoặc lỗi → default."""
+    if raw is None:
+        return default
+    if isinstance(raw, (int, float)):
+        v = float(raw)
+    else:
+        s = str(raw).strip().replace(",", ".")
+        if not s or s.startswith("="):
+            return default
+        try:
+            v = float(s)
+        except (ValueError, TypeError):
+            logger.warning(f"Rate {name}: không parse được '{raw}' → dùng config {default}")
+            return default
+    if v <= 0:
+        return default
+    if v > 1.0:
+        if v <= 100.0:
+            v = v / 100.0
+        else:
+            logger.warning(f"Rate {name}: {v} ngoài khoảng → dùng config {default}")
+            return default
+    return v
+
+
+def load_cho_va_khop_rate_config():
+    """
+    Đọc rate từ hàng 1 sheet Chờ và khớp (J1–N1).
+    Ô trống / lỗi → fallback config.ini (cst).
+    """
+    out = _rate_defaults_from_cst()
+    try:
+        rows = gg_sheet_factory.get_cho_va_khop(
+            CHO_VAKHOP_RATE_ROW_RANGE, value_render_option="UNFORMATTED_VALUE"
+        )
+        if not rows or not rows[0]:
+            logger.info(f"Rate config: J1–N1 trống → dùng config.ini {out}")
+            return out
+        row = rows[0]
+        while len(row) < 5:
+            row.append("")
+        for key, idx in _RATE_CELL_INDEX.items():
+            out[key] = _parse_rate_cell(row[idx], out[key], key)
+        logger.info(
+            "Rate config từ sheet hàng 1 (J–N): "
+            f"SL_L={out['lenh2_rate_long']} SL_S={out['lenh2_rate_short']} "
+            f"TP_L={out['lenh3_rate_long']} TP_S={out['lenh3_rate_short']} "
+            f"callback={out['lenh3_callback_rate']}"
+        )
+    except Exception as e:
+        logger.warning(f"Không đọc được rate J1–N1 → dùng config.ini: {e}")
+    return out
+
+
+def ensure_cho_va_khop_rate_row_from_config_if_empty():
+    """
+    Lần đầu: nếu J1–N1 đều trống, ghi giá trị mặc định từ config.ini (không ghi A1).
+    Không ghi đè nếu user đã nhập số ở bất kỳ ô J–N.
+    """
+    try:
+        rows = gg_sheet_factory.get_cho_va_khop(CHO_VAKHOP_RATE_ROW_RANGE)
+        row = rows[0] if rows else []
+        while len(row) < 5:
+            row.append("")
+        has_any = any(str(row[i]).strip() for i in range(5))
+        if has_any:
+            return
+        d = _rate_defaults_from_cst()
+        gg_sheet_factory.update_multi(
+            gg_sheet_factory.tab_cho_va_khop,
+            -1,
+            [
+                [
+                    d["lenh2_rate_long"],
+                    d["lenh2_rate_short"],
+                    d["lenh3_rate_long"],
+                    d["lenh3_rate_short"],
+                    d["lenh3_callback_rate"],
+                ]
+            ],
+            "J",
+        )
+        logger.info("Đã ghi mặc định rate vào J1–N1 (từ config.ini)")
+        print(
+            "📝 Đã khởi tạo hàng 1: J=SL LONG, K=SL SHORT, L=TP LONG, M=TP SHORT, N=Callback",
+            flush=True,
+        )
+    except Exception as e:
+        logger.warning(f"Không ghi được J1–N1 rate mặc định: {e}")
 
 def is_same_pair(sym1, sym2):
     sym1 = sym1.replace("/", "").upper().strip()
@@ -72,16 +186,18 @@ def is_same_pair(sym1, sym2):
        return True
     return False
 
-def parse_pair_sl_tp_from_sheet(symbol, side, row_data, entry_price):
+def parse_pair_sl_tp_from_sheet(symbol, side, row_data, entry_price, rate_config=None):
     """
     Đọc 1 cặp lệnh 2 (STOP LIMIT) và 3 (TRAILING STOP) theo layout sheet mới:
       N (idx 13): ACTIVE PRICE — STOP LIMIT (giá SL)
       O (idx 14): ACTIVE PRICE — TRAILING STOP (giá kích hoạt TP)
 
-    Cell trống → tính từ cst.lenh2_rate_* / lenh3_rate_* và entry.
+    Cell trống → tính từ rate_config (hàng 1 sheet) hoặc config.ini.
 
     Return: dict {sl_price, tp_price, has_sl, has_tp}
     """
+    if rate_config is None:
+        rate_config = _rate_defaults_from_cst()
     is_long = (side == STATE_LONG)
 
     def _to_float(v):
@@ -102,17 +218,17 @@ def parse_pair_sl_tp_from_sheet(symbol, side, row_data, entry_price):
     sl_price = _to_float(row_data[13]) if len(row_data) > 13 else None
     tp_price = _to_float(row_data[14]) if len(row_data) > 14 else None
 
-    u = getattr(cst, 'lenh2_rate_long', 0.3)
-    v = getattr(cst, 'lenh2_rate_short', 0.3)
-    w = getattr(cst, 'lenh3_rate_long', 0.6)
-    x = getattr(cst, 'lenh3_rate_short', 0.6)
+    u = rate_config["lenh2_rate_long"]
+    v = rate_config["lenh2_rate_short"]
+    w = rate_config["lenh3_rate_long"]
+    x = rate_config["lenh3_rate_short"]
 
     if sl_price is None and entry_price > 0:
         sl_price = entry_price * (1 - u) if is_long else entry_price * (1 + v)
-        logger.info(f"{symbol}: N rỗng → compute SL từ config rate = {sl_price}")
+        logger.info(f"{symbol}: N rỗng → compute SL từ sheet/config rate = {sl_price}")
     if tp_price is None and entry_price > 0:
         tp_price = entry_price * (1 + w) if is_long else entry_price * (1 - x)
-        logger.info(f"{symbol}: O rỗng → compute TP activation từ config rate = {tp_price}")
+        logger.info(f"{symbol}: O rỗng → compute TP activation từ sheet/config rate = {tp_price}")
 
     # Validate logic giá so với entry
     if sl_price and entry_price > 0:
@@ -277,46 +393,25 @@ def call_binance_api_direct(method, endpoint, params=None, api_key=None, secret_
 def get_algo_orders_for_symbol(symbol):
     """
     Returns:
-        None  → API thực sự lỗi (không xác định được trạng thái)
-        []    → API thành công, không có orders
-        [..] → API thành công, có danh sách orders
+        None  → API thực sự lỗi
+        []    → Không có orders / HTTP 400 coi như rỗng
+        [..]  → Có danh sách orders
     """
     try:
         symbol_clean = symbol.replace('/', '').replace(':USDT', '').upper()
-
         if '-' in symbol_clean:
             logger.debug(f"Bỏ qua delivery futures symbol: {symbol_clean}")
             return []
-
-        params = {'symbol': symbol_clean}
-        logger.debug(f"Lấy algo orders cho {symbol} (cleaned: {symbol_clean})")
-        response = call_binance_api_direct('GET', '/fapi/v1/allAlgoOrders', params)
-
-        # [Bug 5 FIX] None = API thực sự lỗi (khác [] = thành công nhưng không có order)
-        if response is None:
-            return None
-
-        if isinstance(response, list): return response
-        elif isinstance(response, dict):
-            if 'data' in response: return response['data']
-            elif response.get('code') == 200: return []
-            else:
-                logger.warning(f"Response code khác 200 cho {symbol}: {response}")
-                return None  # Không chắc chắn → None để caller xử lý an toàn
-        else:
-            logger.warning(f"Response format không đúng cho {symbol}: {type(response)}")
-            return None
+        return fetch_algo_orders_for_symbol(symbol, history_hours=24)
     except Exception as e:
-        if '400' in str(e):
-            logger.debug(f"Lỗi 400 cho {symbol} - có thể là delivery futures, bỏ qua")
-            return []
-        else:
-            logger.error(f"Lỗi khi lấy algo orders: {e}", exc_info=True)
+        logger.error(f"Lỗi khi lấy algo orders cho {symbol}: {e}", exc_info=True)
         return None
 
 def cancel_all_algo_orders_direct(symbol):
     try:
         active_orders = get_algo_orders_for_symbol(symbol)
+        if not active_orders:
+            return True
         pending_orders = [o for o in active_orders if o.get('algoStatus') == 'NEW']
         
         if not pending_orders: return True
@@ -332,7 +427,7 @@ def cancel_all_algo_orders_direct(symbol):
                 # ✅ [FIX] Binance API yêu cầu symbol format: HOMEUSDT (không có / và :USDT)
                 symbol_clean = symbol.replace('/', '').replace(':USDT', '').upper()
                 params = {'symbol': symbol_clean, 'algoId': algo_id}
-                response = call_binance_api_direct('DELETE', '/fapi/v1/algoOrder', params)
+                response = futures_signed_request('DELETE', '/fapi/v1/algoOrder', params)
                 
                 is_success = False
                 if response:
@@ -358,10 +453,9 @@ def has_sl_tp_orders(symbol, exchange):
     try:
         algo_orders = get_algo_orders_for_symbol(symbol)
 
-        # [Bug 5 FIX] None = API lỗi → chặn tạo lệnh để tránh trùng (safety first)
         if algo_orders is None:
-            logger.warning(f"⚠️ {symbol}: API lỗi khi lấy algo orders → Chặn tạo lệnh (safety first)")
-            return True, True
+            logger.warning(f"⚠️ {symbol}: API lỗi khi lấy algo orders → coi như chưa có SL/TP (không chặn oan)")
+            return False, False
 
         try: open_orders = exchange.fetch_open_orders(symbol)
         except: open_orders = []
@@ -479,11 +573,17 @@ except Exception as e:
 order_helper = BinanceOrderHelper(exchange)
 cascade_mgr = get_cascade_manager(exchange, order_helper)
 
+try:
+    ensure_cho_va_khop_rate_row_from_config_if_empty()
+except Exception as _e:
+    logger.warning(f"Khởi tạo hàng 1 rate trên sheet: {_e}")
 
 # --- LOGIC CHÍNH MỚI: ĐỌC TỪ SHEET "CHỜ VÀ KHỚP" ---
 
 def do_it():
     logger.info(f"{datetime.now()}. Scan Lệnh 123 - Đọc từ Sheet 'Chờ và khớp' -------------------------")
+
+    rate_config = load_cho_va_khop_rate_config()
 
     # Layout A–P: N = STOP LIMIT (lệnh 2), O = TRAILING STOP (lệnh 3), P = ĐẶT LỆNH
     try:
@@ -623,7 +723,7 @@ def do_it():
             if entry_price_binance and abs(entry_price_binance - entry_price) / entry_price > 0.01:
                 logger.warning(f"⚠️ {symbol}: Entry price Sheet={entry_price} vs Binance={entry_price_binance} (chênh >1%)")
 
-            pair = parse_pair_sl_tp_from_sheet(symbol, side, row, entry_price)
+            pair = parse_pair_sl_tp_from_sheet(symbol, side, row, entry_price, rate_config)
             sl_price = pair['sl_price']
             tp_price = pair['tp_price']
 
@@ -645,7 +745,7 @@ def do_it():
                     sl_prices=[sl_price, None, None],
                     tp_prices=[tp_price, None, None],
                     ratios=[100.0, 0.0, 0.0],
-                    callback_rate=cst.lenh3_callback_rate,
+                    callback_rate=rate_config["lenh3_callback_rate"],
                     skip_sl=not need_sl,
                     skip_tp=not need_tp,
                 )
