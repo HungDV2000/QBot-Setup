@@ -234,13 +234,13 @@ def build_single_module(module_name):
         # Print output REAL-TIME
         for line in process.stdout:
             line = line.rstrip()
-                if 'ERROR' in line or 'Error' in line:
+            if "ERROR" in line or "Error" in line:
                 print(f"  ⚠️  {line}", flush=True)
-                elif 'WARNING' in line or 'Warning' in line:
+            elif "WARNING" in line or "Warning" in line:
                 print(f"  ⚠️  {line}", flush=True)
-                elif 'Successfully' in line or 'completed' in line:
+            elif "Successfully" in line or "completed" in line:
                 print(f"  ✓ {line}", flush=True)
-            elif line.strip():  # Print non-empty lines
+            elif line.strip():
                 print(f"  {line}", flush=True)
         
         # Wait for completion
