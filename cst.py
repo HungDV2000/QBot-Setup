@@ -30,6 +30,8 @@ lenh2_rate_short = config.getfloat('global', 'lenh2_rate_short')
 lenh3_rate_long = config.getfloat('global', 'lenh3_rate_long')
 lenh3_rate_short = config.getfloat('global', 'lenh3_rate_short')
 lenh3_callback_rate = config.getfloat('global', 'lenh3_callback_rate')
+# O trống / NGAY → TP trailing kích hoạt ngay tại giá mark/last (phương án A)
+lenh3_o_empty_immediate = config.getboolean('global', 'lenh3_o_empty_immediate', fallback=True)
 cancel_orders_minutes = config.getint('global', 'cancel_orders_minutes')
 max_increase_decrease_4h_day_count = config.getint('global', 'max_increase_decrease_4h_day_count')
 

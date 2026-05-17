@@ -66,6 +66,8 @@ STATE_LONG  = "LONG"
 
 # Sheet "Chờ và khớp" — hàng 1: cấu hình rate (số thập phân như config.ini: 0.3 = 30%)
 #   J1 = SL LONG   K1 = SL SHORT   L1 = TP LONG   M1 = TP SHORT   N1 = Callback %
+# Hàng data: N=giá SL | O=giá kích hoạt TP (trống/NGAY/NOW/0 → kích hoạt ngay tại mark/last)
+_TP_IMMEDIATE_TOKENS = frozenset({'NOW', 'NGAY', 'IMMEDIATE', 'MARK', '*'})
 CHO_VAKHOP_RATE_ROW_RANGE = "J1:N1"
 _RATE_CELL_INDEX = {
     "lenh2_rate_long": 0,
@@ -186,15 +188,64 @@ def is_same_pair(sym1, sym2):
        return True
     return False
 
+
+def resolve_entry_price(symbol, entry_sheet: float, entry_binance: float) -> float:
+    """
+    Giá vào để tính SL/TP (cột E hoặc fallback Binance).
+    - E <= 0 → dùng entryPrice từ position Binance
+    - E và Binance lệch >1% → ưu tiên Binance (giá khớp thực tế)
+    """
+    sheet = 0.0
+    try:
+        sheet = float(entry_sheet) if entry_sheet else 0.0
+    except (TypeError, ValueError):
+        sheet = 0.0
+
+    binance = 0.0
+    try:
+        binance = float(entry_binance) if entry_binance else 0.0
+    except (TypeError, ValueError):
+        binance = 0.0
+
+    if sheet <= 0:
+        if binance > 0:
+            logger.info(f"{symbol}: Cột E trống/0 → dùng entry Binance={binance}")
+            return binance
+        return 0.0
+
+    if binance > 0 and abs(binance - sheet) / sheet > 0.01:
+        logger.warning(
+            f"{symbol}: Entry sheet={sheet} vs Binance={binance} (>1%) → dùng Binance cho lệnh 2/3"
+        )
+        return binance
+
+    return sheet
+
+
+def _o_cell_requests_tp_immediate(raw) -> bool:
+    """O trống / 0 / NOW / NGAY → TP trailing kích hoạt ngay (phương án A)."""
+    if not getattr(cst, 'lenh3_o_empty_immediate', True):
+        return False
+    if raw is None:
+        return True
+    s = str(raw).strip().upper()
+    if not s or s.startswith('='):
+        return True
+    if s in _TP_IMMEDIATE_TOKENS or s in ('0', '0.0', '0,0'):
+        return True
+    return False
+
+
 def parse_pair_sl_tp_from_sheet(symbol, side, row_data, entry_price, rate_config=None):
     """
     Đọc 1 cặp lệnh 2 (STOP LIMIT) và 3 (TRAILING STOP) theo layout sheet mới:
       N (idx 13): ACTIVE PRICE — STOP LIMIT (giá SL)
       O (idx 14): ACTIVE PRICE — TRAILING STOP (giá kích hoạt TP)
 
-    Cell trống → tính từ rate_config (hàng 1 sheet) hoặc config.ini.
+    O trống / NGAY / NOW / 0 → tp_immediate (giá lấy mark/last lúc đặt lệnh).
+    O có số > 0 → chờ giá O. N trống → vẫn tính SL từ rate J/K.
 
-    Return: dict {sl_price, tp_price, has_sl, has_tp}
+    Return: dict {sl_price, tp_price, has_sl, has_tp, tp_immediate}
     """
     if rate_config is None:
         rate_config = _rate_defaults_from_cst()
@@ -214,9 +265,12 @@ def parse_pair_sl_tp_from_sheet(symbol, side, row_data, entry_price, rate_config
         except (ValueError, TypeError):
             return None
 
+    o_raw = row_data[14] if len(row_data) > 14 else None
+    tp_immediate = _o_cell_requests_tp_immediate(o_raw)
+
     # N (13) STOP LIMIT, O (14) TRAILING STOP — UNFORMATTED_VALUE từ sheet
     sl_price = _to_float(row_data[13]) if len(row_data) > 13 else None
-    tp_price = _to_float(row_data[14]) if len(row_data) > 14 else None
+    tp_price = None if tp_immediate else _to_float(o_raw)
 
     u = rate_config["lenh2_rate_long"]
     v = rate_config["lenh2_rate_short"]
@@ -226,11 +280,18 @@ def parse_pair_sl_tp_from_sheet(symbol, side, row_data, entry_price, rate_config
     if sl_price is None and entry_price > 0:
         sl_price = entry_price * (1 - u) if is_long else entry_price * (1 + v)
         logger.info(f"{symbol}: N rỗng → compute SL từ sheet/config rate = {sl_price}")
-    if tp_price is None and entry_price > 0:
-        tp_price = entry_price * (1 + w) if is_long else entry_price * (1 - x)
-        logger.info(f"{symbol}: O rỗng → compute TP activation từ sheet/config rate = {tp_price}")
 
-    # Validate logic giá so với entry
+    if tp_immediate:
+        logger.info(
+            f"{symbol}: O trống/NGAY → TP trailing kích hoạt ngay tại giá mark/last "
+            f"(callback N1={rate_config.get('lenh3_callback_rate')})"
+        )
+    elif tp_price is None and entry_price > 0 and not getattr(cst, 'lenh3_o_empty_immediate', True):
+        # Fallback cũ: chỉ khi tắt phương án A trong config
+        tp_price = entry_price * (1 + w) if is_long else entry_price * (1 - x)
+        logger.info(f"{symbol}: O rỗng (legacy) → TP từ rate L/M = {tp_price}")
+
+    # Validate logic giá so với entry (bỏ qua khi TP kích hoạt ngay)
     if sl_price and entry_price > 0:
         if is_long and sl_price >= entry_price:
             logger.warning(f"{symbol}: SL={sl_price} >= entry={entry_price} cho LONG — bỏ qua SL")
@@ -238,7 +299,7 @@ def parse_pair_sl_tp_from_sheet(symbol, side, row_data, entry_price, rate_config
         elif (not is_long) and sl_price <= entry_price:
             logger.warning(f"{symbol}: SL={sl_price} <= entry={entry_price} cho SHORT — bỏ qua SL")
             sl_price = None
-    if tp_price and entry_price > 0:
+    if tp_price and entry_price > 0 and not tp_immediate:
         if is_long and tp_price <= entry_price:
             logger.warning(f"{symbol}: TP={tp_price} <= entry={entry_price} cho LONG — bỏ qua TP")
             tp_price = None
@@ -246,11 +307,13 @@ def parse_pair_sl_tp_from_sheet(symbol, side, row_data, entry_price, rate_config
             logger.warning(f"{symbol}: TP={tp_price} >= entry={entry_price} cho SHORT — bỏ qua TP")
             tp_price = None
 
+    has_tp = tp_immediate or (tp_price is not None)
     return {
         'sl_price': sl_price,
         'tp_price': tp_price,
         'has_sl': sl_price is not None,
-        'has_tp': tp_price is not None,
+        'has_tp': has_tp,
+        'tp_immediate': tp_immediate and has_tp,
     }
 
 
@@ -454,8 +517,10 @@ def has_sl_tp_orders(symbol, exchange):
         algo_orders = get_algo_orders_for_symbol(symbol)
 
         if algo_orders is None:
-            logger.warning(f"⚠️ {symbol}: API lỗi khi lấy algo orders → coi như chưa có SL/TP (không chặn oan)")
-            return False, False
+            logger.warning(
+                f"⚠️ {symbol}: API lỗi khi lấy algo orders → chặn đặt lệnh 2/3 (tránh trùng)"
+            )
+            return True, True
 
         try: open_orders = exchange.fetch_open_orders(symbol)
         except: open_orders = []
@@ -641,16 +706,12 @@ def do_it():
             if da_khop != "Y":
                 continue
             
-            # Cột E: Giá vào
+            # Cột E: Giá vào (sheet) — có thể bổ sung từ Binance sau khi có position
             try:
-                entry_price = float(row[4]) if len(row) > 4 and row[4] else 0.0
-            except:
-                entry_price = 0.0
-            
-            if entry_price <= 0:
-                logger.warning(f"{symbol}: Entry price = {entry_price} (không hợp lệ), bỏ qua")
-                continue
-            
+                entry_sheet = float(row[4]) if len(row) > 4 and row[4] else 0.0
+            except (TypeError, ValueError):
+                entry_sheet = 0.0
+
             # Cột F: Đòn bẩy
             try:
                 leverage_raw = row[5] if len(row) > 5 and row[5] else "1"
@@ -712,29 +773,48 @@ def do_it():
 
             if not allow_order:
                 continue
-            
-            print(f"🔍 Xử lý: {symbol} | Side: {side} | Entry: {entry_price} | Need SL: {need_sl}, TP: {need_tp}", flush=True)
-            
-            # [BƯỚC 3] LẤY POSITION AMOUNT TỪ BINANCE (chung cho cả 2 mode)
+
             position_amt, entry_price_binance = get_position_amount_from_binance(symbol)
             if position_amt is None:
                 logger.warning(f"⚠️ {symbol}: Không tìm thấy position trên Binance")
                 continue
-            if entry_price_binance and abs(entry_price_binance - entry_price) / entry_price > 0.01:
-                logger.warning(f"⚠️ {symbol}: Entry price Sheet={entry_price} vs Binance={entry_price_binance} (chênh >1%)")
+
+            entry_price = resolve_entry_price(symbol, entry_sheet, entry_price_binance)
+            if entry_price <= 0:
+                logger.warning(f"{symbol}: Không có giá vào hợp lệ (E sheet / Binance), bỏ qua")
+                continue
+
+            print(
+                f"🔍 Xử lý: {symbol} | Side: {side} | Entry: {entry_price} | "
+                f"Need SL: {need_sl}, TP: {need_tp}",
+                flush=True,
+            )
 
             pair = parse_pair_sl_tp_from_sheet(symbol, side, row, entry_price, rate_config)
-            sl_price = pair['sl_price']
-            tp_price = pair['tp_price']
+            sl_price = pair['sl_price'] if need_sl else None
+            tp_price = pair['tp_price'] if need_tp else None
+            tp_immediate = bool(pair.get('tp_immediate')) if need_tp else False
 
-            if need_sl and not pair['has_sl']:
-                logger.warning(f"⚠️ {symbol}: Cần SL nhưng không có giá hợp lệ (N / config), bỏ qua")
-                continue
-            if need_tp and not pair['has_tp']:
-                logger.warning(f"⚠️ {symbol}: Cần TP nhưng không có giá hợp lệ (O / config), bỏ qua")
+            if need_sl and sl_price is None:
+                logger.warning(f"⚠️ {symbol}: Cần SL nhưng không có giá hợp lệ (N / rate) — chỉ đặt TP nếu có")
+            if need_tp and not tp_immediate and tp_price is None:
+                logger.warning(f"⚠️ {symbol}: Cần TP nhưng O không hợp lệ — chỉ đặt SL nếu có")
+
+            will_place_sl = need_sl and sl_price is not None
+            will_place_tp = need_tp and (tp_immediate or tp_price is not None)
+            if not will_place_sl and not will_place_tp:
+                logger.warning(f"⚠️ {symbol}: Không đặt được SL/TP nào — bỏ qua dòng")
                 continue
 
-            print(f"🎯 [1 cặp] {symbol} | N(SL)={sl_price} O(Trail)={tp_price} | need_sl={need_sl} need_tp={need_tp}", flush=True)
+            tp_label = 'NGAY@mark' if (will_place_tp and tp_immediate) else (
+                str(tp_price) if will_place_tp else 'skip'
+            )
+            print(
+                f"🎯 [1 cặp] {symbol} | SL={sl_price if will_place_sl else 'skip'} | "
+                f"Trail={tp_label}",
+                flush=True,
+            )
+            tp_act_logged = tp_price
             try:
                 result = cascade_mgr.on_entry_filled_multi_layer(
                     symbol=symbol,
@@ -742,12 +822,13 @@ def do_it():
                     leverage=leverage,
                     position_amt=position_amt,
                     side=side,
-                    sl_prices=[sl_price, None, None],
-                    tp_prices=[tp_price, None, None],
+                    sl_prices=[sl_price if will_place_sl else None, None, None],
+                    tp_prices=[tp_price if will_place_tp else None, None, None],
                     ratios=[100.0, 0.0, 0.0],
                     callback_rate=rate_config["lenh3_callback_rate"],
-                    skip_sl=not need_sl,
-                    skip_tp=not need_tp,
+                    skip_sl=not will_place_sl,
+                    skip_tp=not will_place_tp,
+                    tp_immediate_flags=[tp_immediate, False, False] if will_place_tp else None,
                 )
                 sl_orders = result['sl_orders']
                 tp_orders = result['tp_orders']
@@ -757,22 +838,29 @@ def do_it():
 
                 if created_sl:
                     order_logger.info(f"LỆNH 2 (STOP LIMIT) | {symbol} | {side} | Entry: {entry_price} | Price: {sl_price} | OrderID: {created_sl[0].get('id')}")
+                if result.get('tp_activation_prices'):
+                    tp_act_logged = result['tp_activation_prices'][0] or tp_act_logged
                 if created_tp:
-                    order_logger.info(f"LỆNH 3 (TRAILING) | {symbol} | {side} | Entry: {entry_price} | Activation: {tp_price} | OrderID: {created_tp[0].get('id')}")
+                    order_logger.info(
+                        f"LỆNH 3 (TRAILING) | {symbol} | {side} | Entry: {entry_price} | "
+                        f"Activation: {tp_act_logged} | immediate={tp_immediate} | "
+                        f"OrderID: {created_tp[0].get('id')}"
+                    )
 
                 if created_sl or created_tp:
                     parts = []
                     if created_sl:
                         parts.append(f"SL@{sl_price}")
                     if created_tp:
-                        parts.append(f"Trail@{tp_price}")
+                        parts.append(f"Trail@{tp_act_logged}")
                     print(f"✅ [1 cặp] {symbol}: {' + '.join(parts)}", flush=True)
                     msg = (
                         f"✅ <b>ĐÃ TẠO CẶP LỆNH 2–3</b>\n\n"
                         f"<b>Mã:</b> {symbol}\n"
                         f"<b>Side:</b> {side}  |  <b>Entry:</b> {entry_price}\n"
                         f"<b>N STOP LIMIT:</b> {sl_price if created_sl else '(skip)'}\n"
-                        f"<b>O TRAILING:</b> {tp_price if created_tp else '(skip)'}"
+                        f"<b>O TRAILING:</b> "
+                        f"{'NGAY @ ' + str(tp_act_logged) if (created_tp and tp_immediate) else (tp_price if created_tp else '(skip)')}"
                     )
                     try:
                         telegram_factory.send_tele(msg, cst.chat_id, True, True)

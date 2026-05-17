@@ -240,6 +240,58 @@ class CascadeManager:
         logger.info(f"   📊 Giá gốc: {price:.8f} → Giá sau làm tròn: {rounded:.8f} (Chênh lệch: {diff_percent:.4f}%)")
         
         return rounded
+
+    def get_mark_or_last_price(self, symbol: str) -> tuple:
+        """Ưu tiên markPrice (Futures), fallback last."""
+        ticker = self.exchange.fetch_ticker(symbol)
+        info = ticker.get('info') or {}
+        for key in ('markPrice', 'indexPrice', 'lastPrice'):
+            raw = info.get(key)
+            if raw is not None and str(raw).strip() not in ('', '0'):
+                try:
+                    p = float(raw)
+                    if p > 0:
+                        return p, key
+                except (TypeError, ValueError):
+                    pass
+        last = ticker.get('last')
+        if last is not None and float(last) > 0:
+            return float(last), 'last'
+        raise ValueError(f'Không lấy được mark/last cho {symbol}')
+
+    def clamp_binance_callback_rate(self, callback_rate: float) -> float:
+        """Binance TRAILING_STOP: callbackRate 0.1–10 (1 = 1%)."""
+        r = float(callback_rate)
+        if r <= 0:
+            r = 1.0
+        if r < 0.1:
+            logger.warning(f'callback_rate {r} < 0.1 → clamp 0.1')
+            r = 0.1
+        if r > 10:
+            logger.warning(f'callback_rate {r} > 10 → clamp 10')
+            r = 10.0
+        return r
+
+    def resolve_trailing_activation_immediate(self, symbol: str, side: str) -> float:
+        """
+        Giá kích hoạt TP trailing ngay (phương án A).
+        LONG (đóng SELL): activation <= mark → dùng mark - 1 tick.
+        SHORT (đóng BUY): activation >= mark → dùng mark + 1 tick.
+        """
+        mark, src = self.get_mark_or_last_price(symbol)
+        tick = self.get_tick_size_from_filter(symbol)
+        is_long = side == 'LONG'
+        if is_long:
+            raw = max(tick, mark - tick)
+        else:
+            raw = mark + tick
+        activation = self.smart_round_price(
+            price=raw, symbol=symbol, is_sl=False, is_long=is_long,
+        )
+        logger.info(
+            f'   [TP NGAY] {symbol} {side}: {src}={mark} → activatePrice={activation} (tick={tick})'
+        )
+        return activation
     
     def get_or_create_layer(self, symbol: str, layer_num: int) -> LayerInfo:
         """Lấy hoặc tạo mới LayerInfo"""
@@ -630,6 +682,7 @@ class CascadeManager:
         callback_rate: float = 1.0,
         skip_sl: bool = False,  # True nếu đã có SL, bỏ qua
         skip_tp: bool = False,  # True nếu đã có TP, bỏ qua
+        tp_immediate_flags: list = None,  # [True,False,False] = O trống → kích hoạt ngay
     ) -> Dict:
         """
         [TASK 1] Tạo 3 cặp lệnh SL/TP theo tỉ lệ qty (40/40/20).
@@ -647,7 +700,14 @@ class CascadeManager:
             'errors': [ ...chi tiết lỗi... ]
           }
         """
-        result = {'sl_orders': [None, None, None], 'tp_orders': [None, None, None], 'errors': []}
+        result = {
+            'sl_orders': [None, None, None],
+            'tp_orders': [None, None, None],
+            'tp_activation_prices': [None, None, None],
+            'errors': [],
+        }
+        tp_immediate_flags = tp_immediate_flags or [False, False, False]
+        callback_rate = self.clamp_binance_callback_rate(callback_rate)
 
         # Normalize ratios: cho phép [40, 40, 20] hoặc [0.4, 0.4, 0.2]
         rs = [float(r) if r is not None else 0.0 for r in ratios]
@@ -739,33 +799,55 @@ class CascadeManager:
         if not skip_tp:
             for i in range(3):
                 raw_price = tp_prices[i] if i < len(tp_prices) else None
+                immediate = tp_immediate_flags[i] if i < len(tp_immediate_flags) else False
                 qty_i = qty_per_layer[i] if i < len(qty_per_layer) else 0
-                if raw_price is None or qty_i <= 0:
-                    logger.info(f"   TP lớp {i+1}: bỏ qua (price={raw_price}, qty={qty_i})")
+                if qty_i <= 0:
+                    logger.info(f"   TP lớp {i+1}: bỏ qua (qty={qty_i})")
                     continue
+                if immediate:
+                    try:
+                        activation_price = self.resolve_trailing_activation_immediate(symbol, side)
+                    except Exception as e:
+                        err = f"TP{i+1} immediate: {e}"
+                        logger.error(f"   ❌ {err}", exc_info=True)
+                        result['errors'].append(err)
+                        continue
+                elif raw_price is None:
+                    logger.info(f"   TP lớp {i+1}: bỏ qua (price=None, qty={qty_i})")
+                    continue
+                else:
+                    try:
+                        activation_price = self.smart_round_price(
+                            price=float(raw_price),
+                            symbol=symbol,
+                            is_sl=False,
+                            is_long=(side == 'LONG'),
+                        )
+                    except Exception as e:
+                        err = f"TP{i+1} round price: {e}"
+                        logger.error(f"   ❌ {err}", exc_info=True)
+                        result['errors'].append(err)
+                        continue
                 try:
-                    activation_price = self.smart_round_price(
-                        price=float(raw_price),
-                        symbol=symbol,
-                        is_sl=False,
-                        is_long=(side == 'LONG'),
-                    )
                     if activation_price <= 0:
                         raise ValueError(f"activation_price={activation_price} ≤ 0")
                     order_side = 'sell' if side == 'LONG' else 'buy'
+                    result['tp_activation_prices'][i] = activation_price
 
-                    # Validate so với giá hiện tại
                     try:
-                        cur = self.exchange.fetch_ticker(symbol).get('last')
-                        if cur:
-                            if side == 'LONG' and activation_price <= cur:
-                                logger.warning(f"   ⚠️ TP{i+1} LONG: {activation_price} <= current {cur} → trigger ngay")
-                            elif side == 'SHORT' and activation_price >= cur:
-                                logger.warning(f"   ⚠️ TP{i+1} SHORT: {activation_price} >= current {cur} → trigger ngay")
+                        cur, _ = self.get_mark_or_last_price(symbol)
+                        if side == 'LONG' and activation_price <= cur:
+                            logger.info(f"   TP{i+1} LONG: activate {activation_price} <= mark {cur} → trailing active")
+                        elif side == 'SHORT' and activation_price >= cur:
+                            logger.info(f"   TP{i+1} SHORT: activate {activation_price} >= mark {cur} → trailing active")
                     except Exception:
                         pass
 
-                    logger.info(f"   📤 TP{i+1}: TRAILING_STOP {order_side} @ {activation_price}, qty={qty_i}, callback={callback_rate}%")
+                    mode = 'NGAY' if immediate else 'CHỜ GIÁ O'
+                    logger.info(
+                        f"   📤 TP{i+1} ({mode}): TRAILING_STOP {order_side} @ {activation_price}, "
+                        f"qty={qty_i}, callback={callback_rate}%"
+                    )
                     order = self.order_helper.create_trailing_stop_order(
                         symbol=symbol,
                         side=order_side,

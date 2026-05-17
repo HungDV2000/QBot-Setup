@@ -519,6 +519,7 @@ if exist ../config.ini (
         echo.
         echo ;thêm biến
         echo lenh3_callback_rate = 1
+        echo lenh3_o_empty_immediate = true
         echo cancel_orders_minutes = 1
         echo.
         echo ; === OPERATION MODE ===
