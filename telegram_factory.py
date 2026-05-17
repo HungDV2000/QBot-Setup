@@ -1,36 +1,44 @@
 import asyncio
+import concurrent.futures
 from telegram import Bot
 from telegram.constants import ParseMode
 import cst
 import time
 
 
-
-bot = Bot(token=cst.bot_token)
-
 async def send_telegram_message(chat_id, text, is_html, show_web_preview):
+    """
+    Mỗi lần gửi tạo Bot mới + async with — tránh 'Event loop is closed'
+    khi gọi send_tele nhiều lần trong cùng một scan (asyncio.run đóng loop cũ).
+    """
     try:
-        if is_html:
-            await bot.send_message(chat_id=chat_id, text=text, parse_mode=ParseMode.HTML, disable_web_page_preview = not show_web_preview)
-        else:
-            await bot.send_message(chat_id=chat_id, text=text)
-
+        async with Bot(token=cst.bot_token) as bot:
+            if is_html:
+                await bot.send_message(
+                    chat_id=chat_id,
+                    text=text,
+                    parse_mode=ParseMode.HTML,
+                    disable_web_page_preview=not show_web_preview,
+                )
+            else:
+                await bot.send_message(chat_id=chat_id, text=text)
         print("Message sent successfully")
     except Exception as e:
         print(f"Error sending message: {e}")
-        
+
+
 def send(chat_id, text, is_html, show_web_preview):
-    # Fix: Python 3.10+ yêu cầu dùng asyncio.run() thay vì get_event_loop()
-    # asyncio.run() tự động tạo và dọn dẹp event loop
     try:
+        asyncio.get_running_loop()
+    except RuntimeError:
         asyncio.run(send_telegram_message(chat_id, text, is_html, show_web_preview))
-    except RuntimeError as e:
-        # Fallback: Nếu đã có event loop đang chạy
-        if "asyncio.run() cannot be called from a running event loop" in str(e):
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(send_telegram_message(chat_id, text, is_html, show_web_preview))
-        else:
-            raise
+    else:
+        # Đã có event loop (vd. tele_command) → chạy asyncio.run trong thread riêng
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            pool.submit(
+                asyncio.run,
+                send_telegram_message(chat_id, text, is_html, show_web_preview),
+            ).result()
     
 
 
