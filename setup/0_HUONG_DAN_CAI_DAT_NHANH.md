@@ -213,11 +213,27 @@ Cách gỡ:
 
 ❓ VII. GẶP VẤN ĐỀ - TROUBLESHOOTING
 
-🔴 Lỗi: Nhiều dòng `'cho'`, `'TOÀN'`, `'ept-source-agreements'`… *is not recognized*
+🔴 Lỗi: Nhiều dòng `'cho'`, `'║'`, `'Đang'`, `'4h_day_count'`, `'e_price'`… *is not recognized*
 
-**Nguyên nhân:** File `.bat` dùng khối lệnh `if ... (` … `)` trong CMD; nếu trong khối có dòng `echo` chứa dấu `)` chưa escape, CMD hiểu nhầm là kết thúc khối → phần còn lại bị chạy như lệnh rời (trông giống lỗi encoding nhưng là lỗi cú pháp batch).
+**Nguyên nhân (hay gặp nhất):** File `.bat` bị lưu **xuống dòng kiểu Linux (LF)** thay vì **Windows (CRLF)**. CMD không tách dòng đúng → `echo` thành `cho`, chữ Unicode/menu bị chạy như lệnh, cả dòng `config.ini` bị vỡ thành lệnh lẻ.
 
-**Giải pháp:** Dùng bản `qbot_setup` đã cập nhật (script `setup/*.bat` đã escape `(` `)` trong các `echo` nằm trong khối). Hoặc copy lại folder `setup` từ repo mới nhất, chạy lại `1_setup_install.bat`.
+**Giải pháp:**
+
+1. Copy lại folder `setup` từ bản repo **đã sửa CRLF** (hoặc giải nén ZIP không qua công cụ đổi line ending).
+2. Trong `setup`, chạy **PowerShell (Admin không bắt buộc)**:
+
+```powershell
+cd C:\Users\Administrator\Desktop\150526Q2\150526Q2\150526_qbot\setup
+powershell -ExecutionPolicy Bypass -File fix_bat_crlf.ps1
+```
+
+3. Mở **CMD mới**, chạy lại:
+
+```bat
+1_setup_install.bat
+```
+
+**Nguyên nhân khác:** Khối `if (...)` có `echo` chứa `)` chưa escape — bản `setup/*.bat` hiện tại đã escape `^(` `^)` trong phần tạo `config.ini`.
 
 ---
 
