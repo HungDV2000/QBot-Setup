@@ -18,6 +18,12 @@ import re
 import math
 import requests
 
+from binance_symbol_row import (
+    build_symbol_data,
+    fetch_all_tickers_24h,
+    preload_exchange_caches,
+)
+
 file_name = os.path.basename(os.path.abspath(__file__))  
 os.system(f"title {file_name} - {cst.key_name}")
 
@@ -1831,10 +1837,10 @@ def do_it():
     logger.info("========================================")
     start_time = time.time()
 
-    logger.info("Đang lấy tickers từ Binance...")
-    tickers = exchange.fetch_tickers()
-    logger.info(f"Đã lấy {len(tickers)} tickers từ Binance")
-    print(f"✅ Đã lấy {len(tickers)} tickers — đang lọc USDT futures...", flush=True)
+    logger.info("Đang lấy tickers từ Binance REST /fapi/v1/ticker/24hr...")
+    tickers = fetch_all_tickers_24h()
+    logger.info(f"Đã lấy {len(tickers)} tickers từ Binance REST")
+    print(f"✅ Đã lấy {len(tickers)} tickers (REST) — đang lọc USDT futures...", flush=True)
 
     # Bước 1: Lấy tất cả futures USDT
     logger.info("Bước 1: Lọc symbols Futures USDT...")
@@ -1915,32 +1921,8 @@ def do_it():
         f"(đã loại {removed_by_filter} mã, khử trùng {deduped} mã theo BASE/USDT)"
     )
 
-    # Bước 4b: load markets một lần — AB (Futures) / AC (Spot) từ exchangeInfo qua CCXT
-    spot_markets_by_pair = {}
-    try:
-        spot_ex = exchange_class(
-            {
-                "enableRateLimit": True,
-                "options": {"defaultType": "spot"},
-            }
-        )
-        spot_ex.timeout = 30000
-        spot_ex.load_markets()
-        for sym, m in spot_ex.markets.items():
-            if not m or m.get("quote") != "USDT":
-                continue
-            if m.get("spot") and ":" not in sym and sym.endswith("/USDT"):
-                spot_markets_by_pair[sym] = m
-        print(f"📋 Spot USDT markets (cho cột AC): {len(spot_markets_by_pair)} cặp", flush=True)
-        logger.info(f"Đã tải spot markets: {len(spot_markets_by_pair)} cặp USDT")
-    except Exception as e:
-        logger.warning(f"Không tải được spot markets (cột AC): {e}")
-
-    try:
-        exchange.load_markets()
-        logger.info(f"Đã tải futures markets: {len(exchange.markets)} entries")
-    except Exception as e:
-        logger.warning(f"load_markets futures: {e}")
+    print("📋 Tải cache exchangeInfo Futures + Spot (REST, 1 lần)...", flush=True)
+    preload_exchange_caches()
 
     print("📣 Đang tải cảnh báo delist (n8n API + Binance Support catalog 161)...", flush=True)
     delist_from_api = _load_future_delist_by_pair_from_api()
@@ -1955,319 +1937,50 @@ def do_it():
         f"Delist AK: api_future={len(delist_from_api)} cms={len(delist_from_cms)} merged={len(delist_warn_by_pair)}"
     )
 
+    ak_col_idx = _DEBUG_COL_NAMES.index("Cảnh báo delist sắp tới")
+
     def get_row_result(symbol):
         """
-        Gộp fetch OHLCV để giảm ~15+ request/mã (rate limit Binance) xuống còn vài request,
-        tránh “đơ” lâu giữa các dòng log.
-
-        Cột trùng bot cŧ (khách đối chiếu số): C = last ticker; D/E,H/I = BB20 như get_bb
-        (20 close gần nhất gồm nến đang chạy); L/M = calculate_high_low_30d(symbol);
-        N/O = calculate_max_increase_decrease_4h(symbol); P/Q = get_bb 1w.
+        Một dòng A→BF: Binance Futures REST (binance_symbol_row.build_symbol_data).
+        Song song klines 1h/4h/1d/1w + OI/L-S; RSI/MACD/Stoch theo mẫu chatbot.
+        CCXT chỉ dùng fetch_balance (hàng số dư).
         """
-        price = float(tickers[symbol].get("last") or 0)
-        pct   = float(tickers[symbol].get("percentage") or 0)
-        pair  = symbol.replace(":USDT", "")
+        pair = symbol.replace(":USDT", "")
+        symbol_clean = pair.replace("/", "")
+        ti = tickers.get(symbol) or {}
+        price = float(ti.get("last") or 0)
+        pct = float(ti.get("percentage") or 0)
 
-        # Guard: symbol không có giá hợp lệ → trả về row trống, log cảnh báo
         if price <= 0:
             logger.warning(f"[{symbol}] last price = {price} — bỏ qua")
             empty = [""] * len(_DEBUG_COL_NAMES)
             empty[0] = pair
             empty[1] = pct
-            # Cột AK = "Cảnh báo delist sắp tới" (index 36)
-            empty[_DEBUG_COL_NAMES.index("Cảnh báo delist sắp tới")] = _delist_warn_lookup(delist_warn_by_pair, pair)
+            empty[ak_col_idx] = _delist_warn_lookup(delist_warn_by_pair, pair)
             return empty
 
-        print(f"🔄 {symbol} - %24h: {pct:.2f}%, giá: {price}", flush=True)
-        row = [pair, pct, price]
-
-        # --- 1) Một lần 1d: BB1d + Min/Max 40d + RSI 1d + P/Q 30d + AD-AE ---
-        ohlcv_1d = []
+        t0 = time.perf_counter()
+        print(f"🔄 [REST] {symbol} - %24h: {pct:.2f}%, giá: {price}", flush=True)
         try:
-            ohlcv_1d = exchange.fetch_ohlcv(pair, "1d", limit=_OHLCV_1D_LIMIT)
+            row = build_symbol_data(symbol_clean, pair, ticker_info=ti)
+            if len(row) < len(_DEBUG_COL_NAMES):
+                row = list(row) + [""] * (len(_DEBUG_COL_NAMES) - len(row))
+            elif len(row) > len(_DEBUG_COL_NAMES):
+                row = row[: len(_DEBUG_COL_NAMES)]
+            row[ak_col_idx] = _delist_warn_lookup(delist_warn_by_pair, pair)
+            elapsed = time.perf_counter() - t0
+            print(f"   └─ xong {elapsed:.1f}s", flush=True)
+            time.sleep(0.05)
+            return row
         except Exception as e:
-            logger.warning(f"[{pair}] fetch_ohlcv 1d: {e}")
-
-        closes_1d = [x[4] for x in ohlcv_1d] if ohlcv_1d else []
-        # BB1d H/I: giống bot cũ — get_bb = mean/std trên đúng 20 close gần nhất (kể cả nến ngày đang chạy)
-        bb1d_u, bb1d_l = (
-            _bb_upper_lower_from_closes(closes_1d[-20:]) if len(closes_1d) >= 20 else (float("nan"), float("nan"))
-        )
-
-        # --- 2) Một lần 1h (200 nến): BB1h + MA/MACD/StochRSI + biên độ 7d ---
-        # 200 >= 168 nến (7 ngày) nên có thể tái dùng cho J/K, tránh fetch trùng.
-        ohlcv_1h = []
-        try:
-            ohlcv_1h = exchange.fetch_ohlcv(pair, "1h", limit=_OHLCV_1H_LIMIT)
-        except Exception as e:
-            logger.warning(f"[{pair}] fetch_ohlcv 1h: {e}")
-
-        closes_1h = [x[4] for x in ohlcv_1h] if ohlcv_1h else []
-        # BB1h D/E: giống get_bb() bản cũ — 20 close cuối gồm nến 1h đang chạy
-        bb1h_u, bb1h_l = (
-            _bb_upper_lower_from_closes(closes_1h[-20:]) if len(closes_1h) >= 20 else (float("nan"), float("nan"))
-        )
-        result_bb_array = [bb1h_u, bb1h_l]  # dùng cho % đến BB1h (cột X/Y)
-
-        # Cột C: giữ last từ fetch_tickers như bot cŧ (khách đối chiếu với Binance UI)
-
-        # Zombie coin guard: BB1h upper ≈ BB1h lower → giá đóng băng (token đang delist)
-        # Binance giữ các token này trong fetch_tickers() với last>0 và volume cũ còn cao,
-        # nhưng ohlcv chỉ trả về nến có giá cố định → std=0 → upper=lower=last
-        # Không cần API call thêm vì ohlcv_1h đã có sẵn ở trên
-        if (math.isfinite(bb1h_u) and math.isfinite(bb1h_l)
-                and bb1h_u > 0
-                and abs(bb1h_u - bb1h_l) < bb1h_u * 0.0001):
-            logger.warning(f"[{symbol}] BB1h upper≈lower ({bb1h_u:.6f}) — zombie/delisted coin, bỏ qua")
-            print(f"⏭️  [{symbol}] BB1h trùng nhau → token đang delist, bỏ qua", flush=True)
+            elapsed = time.perf_counter() - t0
+            print(f"⚠️ {pair} lỗi sau {elapsed:.1f}s: {e}", flush=True)
+            logger.warning(f"[{symbol}] build_symbol_data: {e}", exc_info=True)
             empty = [""] * len(_DEBUG_COL_NAMES)
             empty[0] = pair
             empty[1] = pct
-            empty[_DEBUG_COL_NAMES.index("Cảnh báo delist sắp tới")] = _delist_warn_lookup(delist_warn_by_pair, pair)
+            empty[ak_col_idx] = _delist_warn_lookup(delist_warn_by_pair, pair)
             return empty
-
-        # Một lần 4h (đủ dài): tái dùng cho BB4h / RSI4h / max increase-decrease 4h
-        ohlcv_4h = []
-        try:
-            ohlcv_4h = exchange.fetch_ohlcv(pair, "4h", limit=_OHLCV_4H_LIMIT)
-        except Exception as e:
-            logger.warning(f"[{pair}] fetch_ohlcv 4h: {e}")
-        closes_4h = [x[4] for x in ohlcv_4h] if ohlcv_4h else []
-
-        # F-G BB4h: cùng công thức BB20 như get_bb (20 nến gần nhất, gồm nến đang chạy)
-        bb4h_u, bb4h_l = (
-            _bb_upper_lower_from_closes(closes_4h[-20:]) if len(closes_4h) >= 20 else (float("nan"), float("nan"))
-        )
-        row.extend([bb1h_u, bb1h_l, bb4h_u, bb4h_l, bb1d_u, bb1d_l])
-
-        # J-K: biên độ 1h tuần (tái dùng ohlcv_1h đã fetch)
-        try:
-            candles_7d_1h = 7 * 24
-            ohlcv_1h_7d = ohlcv_1h[-candles_7d_1h:] if len(ohlcv_1h) >= candles_7d_1h else ohlcv_1h
-            max_price_increase_month1, max_price_decrease_month1 = _amplitude_range_from_ohlcv_slice(ohlcv_1h_7d)
-            max_price_increase_month1 = "" if pd.isna(max_price_increase_month1) else max_price_increase_month1
-            max_price_decrease_month1 = "" if pd.isna(max_price_decrease_month1) else max_price_decrease_month1
-        except Exception as e:
-            logger.warning(f"[{pair}] amplitude 7d/1h from cached ohlcv: {e}")
-            max_price_increase_month1, max_price_decrease_month1 = "", ""
-        row.append(max_price_increase_month1)
-        row.append(max_price_decrease_month1)
-
-        # L-M: Max/Min 40 ngày — tái dùng ohlcv_1d đã fetch
-        try:
-            lookback_1d = int(calculate_high_low_day_total)
-            ohlcv_1d_lookback = ohlcv_1d[-lookback_1d:] if len(ohlcv_1d) >= lookback_1d else ohlcv_1d
-            if ohlcv_1d_lookback:
-                highs = [float(c[2]) for c in ohlcv_1d_lookback]
-                lows = [float(c[3]) for c in ohlcv_1d_lookback]
-                high, low = max(highs), min(lows)
-            else:
-                high, low = 0.0, 0.0
-        except Exception as e:
-            logger.warning(f"[{symbol}] max/min 40d from cached ohlcv_1d: {e}")
-            high, low = 0.0, 0.0
-        row.append(high)
-        row.append(low)
-
-        try:
-            lookback_4h = int(cst.max_increase_decrease_4h_day_count) * 6
-            increase, decrease = _max_change_percent_from_ohlcv_body(ohlcv_4h, lookback_candles=lookback_4h)
-        except Exception as e:
-            logger.warning(f"[{pair}] max/min body 4h from cached ohlcv: {e}")
-            increase, decrease = "", ""
-        row.append(increase)
-        row.append(decrease)
-
-        try:
-            # P/Q: cùng get_bb 1w như đoạn list_them bản cŧ (20 nến tuần)
-            bb_1w = get_bb(pair, timeframes=["1w"])
-        except Exception as e:
-            logger.warning(f"[{pair}] get_bb 1w: {e}")
-            bb_1w = [float("nan"), float("nan")]
-        row.extend(bb_1w)
-
-        # R-S: biên độ 30d từ 30 nến 1d cuối (không gọi get_bien_do_max cho 1d)
-        try:
-            if len(ohlcv_1d) >= 30:
-                p30, q30 = _amplitude_range_from_ohlcv_slice(ohlcv_1d[-30:])
-            else:
-                p30, q30 = calculate_price_range(pair, 30, "1d")
-        except Exception as e:
-            logger.warning(f"[{pair}] biên độ 30d: {e}")
-            p30, q30 = float("nan"), float("nan")
-        row.append("" if pd.isna(p30) else p30)
-        row.append("" if pd.isna(q30) else q30)
-
-        try:
-            volume_24h = tickers[symbol].get("quoteVolume", 0)
-            row.append(volume_24h)
-            # RSI 14 ngày: Wilder (cùng định nghĩa với cột AH), trên nến 1d đã đóng
-            closes_1d_rsi = closes_1d[:-1] if len(closes_1d) > 15 else closes_1d
-            rsi_1d = _rsi_wilder_from_closes(closes_1d_rsi, period=14) if len(closes_1d_rsi) >= 15 else None
-            row.append(round(rsi_1d, 2) if rsi_1d is not None else "")
-        except Exception:
-            row.extend([0, 0])
-
-        row.append("")
-
-        if low != 0:
-            row.append(round((bb_1w[1] / low), 4))
-        else:
-            row.append("")
-
-        distance_to_bb_up = round(((result_bb_array[0] - price) / price) * 100, 2) if price != 0 else 0
-        distance_to_bb_down = round(((price - result_bb_array[1]) / price) * 100, 2) if price != 0 else 0
-        # Ghi dạng string "x.xx%" để Google Sheet KHÔNG tự nhân ×100
-        # (nếu cột X/Y được format là "Percentage", Sheet sẽ nhân float 1.42 thành 142%)
-        row.append(f"{distance_to_bb_up}%")
-        row.append(f"{distance_to_bb_down}%")
-
-        # Z: vol nến 1h hiện tại (USDT); AA: vol 4h (USDT) — base × close price
-        vol_1h_last = round(float(ohlcv_1h[-1][5]) * float(ohlcv_1h[-1][4]), 2) if ohlcv_1h else 0.0
-        row.append(vol_1h_last)
-
-        vol_4h_last = round(float(ohlcv_4h[-1][5]) * float(ohlcv_4h[-1][4]), 2) if ohlcv_4h else 0.0
-        row.append(vol_4h_last)
-
-        # AB: Futures (symbol đúng dạng BTC/USDT:USDT) | AC: Spot cùng base (BTC/USDT)
-        fut_m = exchange.markets.get(symbol) if getattr(exchange, "markets", None) else None
-        row.append(_listing_status_cell(fut_m))
-        spot_m = spot_markets_by_pair.get(pair)
-        row.append(_listing_status_cell(spot_m) if spot_m else "Không có spot")
-
-        try:
-            cutoff_ms = exchange.milliseconds() - 365 * 24 * 60 * 60 * 1000
-            ohlcv_ab = [c for c in ohlcv_1d if c[0] >= cutoff_ms] or ohlcv_1d
-            max_vol, max_date = _max_daily_volatility_from_ohlcv(ohlcv_ab)
-            print(f"   └─ AD={max_vol}%, AE={max_date}", flush=True)
-            row.append(max_vol)
-            row.append(max_date)
-        except Exception as e:
-            logger.error(f"❌ [{pair}] Lỗi AD-AE (biên độ ngày): {e}", exc_info=True)
-            print(f"   └─ ❌ Lỗi AD-AE: {e}", flush=True)
-            row.extend([0, "N/A"])
-
-        bw_3d, bw_now = _bb_width_3d_and_now_from_ohlcv(ohlcv_1d)
-        # AF/AG: ghi dạng string "x.xx%" để Google Sheet KHÔNG tự convert thành Excel date
-        # (nếu ghi float 9.12, Sheet nhận là ngày thứ 9.12 từ 1900 → ra "1900-01-08")
-        row.append(f"{round(bw_3d * 100, 2)}%" if bw_3d is not None else "")   # AF: BB Width 3d trước
-        row.append(f"{round(bw_now * 100, 2)}%" if bw_now is not None else "")  # AG: BB Width hiện tại
-
-        closes_4h_rsi = closes_4h[:-1] if len(closes_4h) > 15 else closes_4h
-        rsi_4h = _rsi_wilder_from_closes(closes_4h_rsi, period=14)
-        row.append(round(rsi_4h, 2) if rsi_4h is not None else "")
-
-        if ohlcv_1h and len(ohlcv_1h) >= 20:
-            # Vol 1h tính bằng USDT: base_vol × close_price của từng nến
-            # Chỉ lấy 20 nến gần nhất để MA20 giữ nguyên logic cũ
-            vols_usdt_last20 = [float(x[5]) * float(x[4]) for x in ohlcv_1h[-20:]]
-            # AI: dùng lại vol_1h_last đã tính ở cột Z (cùng là ohlcv_1h[-1]) để tránh tính trùng
-            row.append(vol_1h_last)                                  # AI: Vol 1h hiện tại (USDT)
-            vol_1h_ma20 = float(np.mean(vols_usdt_last20))
-            row.append(round(vol_1h_ma20, 2))                        # AJ: Vol 1h MA20 (USDT)
-        else:
-            vol_1h_ma20 = None
-            row.extend(["", ""])
-
-        # AK: API delist-current-month (mốc tương lai, có ⚠️) + catalog Support (FUT/SPOT/MG + ngày)
-        row.append(_delist_warn_lookup(delist_warn_by_pair, pair))
-
-        # ── TASK 4: CHỈ BÁO KỸ THUẬT BỔ SUNG (AL → BA) ────────────────────────
-        # AL-AN: MA 7/25/99 từ closes_1h
-        ma7 = _sma_last(closes_1h, 7) if len(closes_1h) >= 7 else None
-        ma25 = _sma_last(closes_1h, 25) if len(closes_1h) >= 25 else None
-        ma99 = _sma_last(closes_1h, 99) if len(closes_1h) >= 99 else None
-        row.append(round(ma7, 8) if ma7 is not None else "")
-        row.append(round(ma25, 8) if ma25 is not None else "")
-        row.append(round(ma99, 8) if ma99 is not None else "")
-
-        # AO-AQ: MACD
-        macd_val, macd_sig, macd_hist = _compute_macd(closes_1h)
-        row.append(round(macd_val, 8) if macd_val is not None else "")
-        row.append(round(macd_sig, 8) if macd_sig is not None else "")
-        row.append(round(macd_hist, 8) if macd_hist is not None else "")
-
-        # AR-AS: Stoch RSI %K %D
-        stoch_k, stoch_d = _compute_stoch_rsi(closes_1h)
-        row.append(round(stoch_k, 2) if stoch_k is not None else "")
-        row.append(round(stoch_d, 2) if stoch_d is not None else "")
-
-        # AT-AU: Open Interest hiện tại (USDT) + Δ% 24h
-        symbol_clean = pair.replace("/", "")  # BTC/USDT → BTCUSDT
-        oi_now_usdt, oi_delta = _fetch_oi_hist_delta_pct(symbol_clean, period="1h", points=25)
-        row.append(round(oi_now_usdt, 2) if oi_now_usdt is not None else "")
-        row.append(round(oi_delta, 2) if oi_delta is not None else "")
-
-        # AV-AW: L/S ratio (account / top-trader-position)
-        lsr_acc = _fetch_long_short_ratio(symbol_clean, "account", "1h")
-        lsr_pos = _fetch_long_short_ratio(symbol_clean, "position", "1h")
-        row.append(round(lsr_acc, 3) if lsr_acc is not None else "")
-        row.append(round(lsr_pos, 3) if lsr_pos is not None else "")
-
-        # AX: tỷ lệ Vol 1h hiện tại / MA20 (>2 = đột biến)
-        if vol_1h_ma20 and vol_1h_ma20 > 0 and ohlcv_1h:
-            vol_now = float(ohlcv_1h[-1][5]) * float(ohlcv_1h[-1][4])
-            vol_ratio = vol_now / vol_1h_ma20
-            row.append(round(vol_ratio, 2))
-        else:
-            row.append("")
-
-        # AY-BA: Score + Gợi ý + Lý do
-        score, reasons = _compute_long_short_score(
-            price=price, ma7=ma7, ma25=ma25, ma99=ma99,
-            macd_val=macd_val, macd_signal=macd_sig, macd_hist=macd_hist,
-            stoch_k=stoch_k, stoch_d=stoch_d,
-            lsr_account=lsr_acc, lsr_position=lsr_pos,
-            oi_delta_pct=oi_delta,
-        )
-        row.append(score)
-        # Gợi ý theo thang score
-        if score >= 5:
-            suggest = "LONG mạnh"
-        elif score >= 2:
-            suggest = "LONG nhẹ"
-        elif score <= -5:
-            suggest = "SHORT mạnh"
-        elif score <= -2:
-            suggest = "SHORT nhẹ"
-        else:
-            suggest = "Trung tính"
-        row.append(suggest)
-        row.append(reasons)
-
-        # ── TASK A: Bổ sung giá tham chiếu + Stochastic Oscillator (BB → BF) ──
-        # BB: Open của nến 1h gần nhất (open price)
-        if ohlcv_1h:
-            row.append(round(float(ohlcv_1h[-1][1]), 8))
-        else:
-            row.append("")
-
-        # BC, BD: High & Low recent trong 24 nến 1h gần nhất (1 ngày)
-        if ohlcv_1h and len(ohlcv_1h) >= 24:
-            recent_highs_1h = [float(c[2]) for c in ohlcv_1h[-24:]]
-            recent_lows_1h = [float(c[3]) for c in ohlcv_1h[-24:]]
-            row.append(round(max(recent_highs_1h), 8))
-            row.append(round(min(recent_lows_1h), 8))
-        elif ohlcv_1h:
-            recent_highs_1h = [float(c[2]) for c in ohlcv_1h]
-            recent_lows_1h = [float(c[3]) for c in ohlcv_1h]
-            row.append(round(max(recent_highs_1h), 8))
-            row.append(round(min(recent_lows_1h), 8))
-        else:
-            row.extend(["", ""])
-
-        # BE, BF: Stochastic Oscillator %K/%D (dùng high/low/close trực tiếp, period 14/3)
-        if ohlcv_1h and len(ohlcv_1h) >= 17:  # cần >= k_period(14) + d_period(3)
-            highs_1h = [float(c[2]) for c in ohlcv_1h]
-            lows_1h = [float(c[3]) for c in ohlcv_1h]
-            closes_1h_for_stoch = [float(c[4]) for c in ohlcv_1h]
-            stoch_k_val, stoch_d_val = _compute_stochastic(highs_1h, lows_1h, closes_1h_for_stoch)
-            row.append(round(stoch_k_val, 2) if stoch_k_val is not None else "")
-            row.append(round(stoch_d_val, 2) if stoch_d_val is not None else "")
-        else:
-            row.extend(["", ""])
-
-        return row
 
 
     logger.info("Bước 5: Tạo top lists...")
