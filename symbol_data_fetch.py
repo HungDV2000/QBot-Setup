@@ -185,72 +185,55 @@ def bb_upper_lower(closes: List[float], period: int = 20, mult: float = 2.0) -> 
     return ma + mult * std, ma - mult * std
 
 
-def rsi_wilder(closes: List[float], period: int = 14) -> Optional[float]:
-    if len(closes) < period + 1:
-        return None
-    changes = [closes[i] - closes[i - 1] for i in range(1, len(closes))]
-    gains = [max(0.0, x) for x in changes]
-    losses = [max(0.0, -x) for x in changes]
-    avg_g = _mean(gains[:period])
-    avg_l = _mean(losses[:period])
-    for i in range(period, len(gains)):
-        avg_g = (avg_g * (period - 1) + gains[i]) / period
-        avg_l = (avg_l * (period - 1) + losses[i]) / period
-    if avg_l == 0:
-        return 100.0
-    rs = avg_g / avg_l
-    return 100.0 - (100.0 / (1.0 + rs))
+def rsi_series_sma(closes: List[float], period: int = 14) -> List[Optional[float]]:
+    n = len(closes)
+    out: List[Optional[float]] = [None] * n
+    if n < period + 1:
+        return out
+    for i in range(period, n):
+        chunk = [closes[j] - closes[j - 1] for j in range(i - period + 1, i + 1)]
+        gains = [max(0.0, x) for x in chunk]
+        losses = [max(0.0, -x) for x in chunk]
+        ag = _mean(gains)
+        al = _mean(losses)
+        out[i] = 100.0 if al == 0 else 100.0 - (100.0 / (1.0 + ag / al))
+    return out
 
 
-def ema_series(values: List[float], period: int) -> List[Optional[float]]:
-    if len(values) < period:
+def rsi_sma_last(closes: List[float], period: int = 14) -> Optional[float]:
+    series = rsi_series_sma(closes, period)
+    for v in reversed(series):
+        if v is not None:
+            return float(v)
+    return None
+
+
+def _ewm_pandas(values: List[float], span: int) -> List[float]:
+    if not values:
         return []
-    k = 2.0 / (period + 1)
-    out: List[Optional[float]] = [None] * len(values)
-    seed = _mean(values[:period])
-    out[period - 1] = seed
-    for i in range(period, len(values)):
-        out[i] = values[i] * k + out[i - 1] * (1 - k)
+    alpha = 2.0 / (span + 1)
+    out = [float(values[0])]
+    for i in range(1, len(values)):
+        out.append(float(values[i]) * alpha + out[-1] * (1.0 - alpha))
     return out
 
 
 def compute_macd(closes: List[float], fast: int = 12, slow: int = 26, signal: int = 9):
     if len(closes) < slow + signal:
         return None, None, None
-    ef = ema_series(closes, fast)
-    es = ema_series(closes, slow)
-    macd_line: List[Optional[float]] = []
-    for i in range(len(closes)):
-        if ef[i] is None or es[i] is None:
-            macd_line.append(None)
-        else:
-            macd_line.append(ef[i] - es[i])
-    valid = [x for x in macd_line if x is not None]
-    if len(valid) < signal:
-        return None, None, None
-    sig = ema_series(valid, signal)
-    m, s = valid[-1], sig[-1]
-    if s is None:
-        return m, None, None
+    ema_fast = _ewm_pandas(closes, fast)
+    ema_slow = _ewm_pandas(closes, slow)
+    macd_line = [ema_fast[i] - ema_slow[i] for i in range(len(closes))]
+    sig_line = _ewm_pandas(macd_line, signal)
+    m, s = macd_line[-1], sig_line[-1]
     return m, s, m - s
 
 
 def compute_stoch_rsi(closes: List[float], rsi_period: int = 14, stoch_period: int = 14, k_smooth: int = 3, d_smooth: int = 3):
-    min_len = rsi_period + stoch_period + k_smooth + d_smooth
-    if len(closes) < min_len:
+    rsi_arr = rsi_series_sma(closes, rsi_period)
+    rsi_clean = [float(x) for x in rsi_arr if x is not None]
+    if len(rsi_clean) < stoch_period + k_smooth + d_smooth - 2:
         return None, None
-    changes = [closes[i] - closes[i - 1] for i in range(1, len(closes))]
-    gains = [max(0.0, c) for c in changes]
-    losses = [max(0.0, -c) for c in changes]
-    rsi_series: List[Optional[float]] = [None] * len(closes)
-    avg_g = _mean(gains[:rsi_period])
-    avg_l = _mean(losses[:rsi_period])
-    for i in range(rsi_period, len(gains) + 1):
-        if i > rsi_period:
-            avg_g = (avg_g * (rsi_period - 1) + gains[i - 1]) / rsi_period
-            avg_l = (avg_l * (rsi_period - 1) + losses[i - 1]) / rsi_period
-        rsi_series[i] = 100.0 if avg_l == 0 else 100 - (100 / (1 + avg_g / avg_l))
-    rsi_clean = [x for x in rsi_series if x is not None]
     raw_k: List[Optional[float]] = []
     for i in range(len(rsi_clean)):
         if i < stoch_period - 1:
@@ -258,20 +241,18 @@ def compute_stoch_rsi(closes: List[float], rsi_period: int = 14, stoch_period: i
             continue
         window = rsi_clean[i - stoch_period + 1 : i + 1]
         w_min, w_max = min(window), max(window)
-        raw_k.append(0.0 if w_max == w_min else (rsi_clean[i] - w_min) / (w_max - w_min) * 100)
-    k_valid = [x for x in raw_k if x is not None]
-    if len(k_valid) < k_smooth + d_smooth:
-        return None, None
+        raw_k.append(0.0 if w_max == w_min else (rsi_clean[i] - w_min) / (w_max - w_min) * 100.0)
     k_smoothed: List[Optional[float]] = []
-    for i in range(len(k_valid)):
-        if i < k_smooth - 1:
+    for i in range(len(raw_k)):
+        if raw_k[i] is None or i < k_smooth - 1:
             k_smoothed.append(None)
         else:
-            k_smoothed.append(_mean(k_valid[i - k_smooth + 1 : i + 1]))
-    k_clean = [x for x in k_smoothed if x is not None]
-    if len(k_clean) < d_smooth:
+            win = [raw_k[j] for j in range(i - k_smooth + 1, i + 1) if raw_k[j] is not None]
+            k_smoothed.append(_mean(win) if len(win) == k_smooth else None)
+    k_vals = [x for x in k_smoothed if x is not None]
+    if len(k_vals) < d_smooth:
         return None, None
-    return k_clean[-1], _mean(k_clean[-d_smooth:])
+    return k_vals[-1], _mean(k_vals[-d_smooth:])
 
 
 def compute_stochastic(highs: List[float], lows: List[float], closes: List[float], k_period: int = 14, d_period: int = 3):
@@ -368,26 +349,28 @@ def fetch_ticker_24h(symbol_clean: str) -> dict:
 
 
 def fetch_oi_usdt_and_delta(symbol_clean: str, price: float) -> Tuple[Optional[float], Optional[float]]:
-    hist = _http_get(
-        BASE_FUTURES,
-        "/futures/data/openInterestHist",
-        {"symbol": symbol_clean, "period": "1h", "limit": 25},
-    )
-    if isinstance(hist, list) and len(hist) >= 2:
-        try:
-            oi_usdt = float(hist[-1].get("sumOpenInterestValue", 0))
-            oi_old = float(hist[0].get("sumOpenInterestValue", 0))
-            delta = ((oi_usdt - oi_old) / oi_old * 100) if oi_old > 0 else None
-            return oi_usdt, delta
-        except (TypeError, ValueError):
-            pass
+    oi_usdt = None
     oi_data = _http_get(BASE_FUTURES, "/fapi/v1/openInterest", {"symbol": symbol_clean})
     if oi_data and price:
         try:
-            return float(oi_data["openInterest"]) * price, None
+            oi_usdt = float(oi_data["openInterest"]) * price
         except (KeyError, TypeError, ValueError):
             pass
-    return None, None
+    hist = _http_get(
+        BASE_FUTURES,
+        "/futures/data/openInterestHist",
+        {"symbol": symbol_clean, "period": "1h", "limit": 24},
+    )
+    oi_delta = None
+    if isinstance(hist, list) and len(hist) >= 2:
+        try:
+            oi_now = float(hist[-1]["sumOpenInterest"])
+            oi_old = float(hist[0]["sumOpenInterest"])
+            if oi_old > 0:
+                oi_delta = (oi_now - oi_old) / oi_old * 100
+        except (KeyError, TypeError, ValueError):
+            pass
+    return oi_usdt, oi_delta
 
 
 def fetch_ls_ratio(symbol_clean: str, period: str = "5m") -> Tuple[Optional[float], Optional[float]]:
@@ -441,17 +424,16 @@ def build_symbol_data(symbol_clean: str, pair_display: str, use_closed_candle: b
     bb1d_u, bb1d_l = bb_upper_lower(o1d["close"])
     bb1w_u, bb1w_l = bb_upper_lower(o1w["close"])
 
-    # Vol: nến cuối (forming) vs đã đóng
-    idx_last = -2 if use_closed_candle and len(o1["quote_vol"]) >= 2 else -1
+    idx_last = -2 if use_closed_candle and len(o1["base_vol"]) >= 2 else -1
+    vol_1h = float(o1["base_vol"][idx_last]) * price
+    vol_4h = float(o4["base_vol"][idx_last]) * price if o4["base_vol"] else 0.0
+    vol_window = o1["base_vol"][max(0, len(o1["base_vol"]) - 20) :]
+    if use_closed_candle and len(vol_window) > 1:
+        vol_window = vol_window[:-1]
+    vol_ma20 = _mean(vol_window) * price if vol_window else None
+    vol_ratio = (vol_1h / vol_ma20) if vol_ma20 and vol_ma20 > 0 else None
     vol_1h_quote = o1["quote_vol"][idx_last]
-    vol_4h_quote = o4["quote_vol"][idx_last] if o4["quote_vol"] else 0
-    vol_1h_legacy = o1["base_vol"][idx_last] * o1["close"][idx_last]
-
-    vols_usdt_20 = [o1["quote_vol"][i] for i in range(max(0, len(o1["quote_vol"]) - 20), len(o1["quote_vol"]))]
-    if use_closed_candle and len(vols_usdt_20) > 1:
-        vols_usdt_20 = vols_usdt_20[:-1]
-    vol_ma20 = _mean(vols_usdt_20) if vols_usdt_20 else None
-    vol_ratio = (vol_1h_quote / vol_ma20) if vol_ma20 and vol_ma20 > 0 else None
+    vol_1h_legacy = vol_1h
 
     # Max/min 40 ngày
     d40 = o1d["high"][-40:]
@@ -461,11 +443,8 @@ def build_symbol_data(symbol_clean: str, pair_display: str, use_closed_candle: b
 
     max_up_4h, max_dn_4h = max_body_pct_4h(k4h, lookback=min(360, len(k4h)))
 
-    # RSI
-    closes_1d_rsi = o1d["close"][:-1] if len(o1d["close"]) > 15 else o1d["close"]
-    rsi_1d = rsi_wilder(closes_1d_rsi)
-    closes_4h_rsi = o4["close"][:-1] if len(o4["close"]) > 15 else o4["close"]
-    rsi_4h = rsi_wilder(closes_4h_rsi)
+    rsi_1d = rsi_sma_last(o1d["close"])
+    rsi_4h = rsi_sma_last(o4["close"])
 
     ma7 = sma_last(closes_1h, 7)
     ma25 = sma_last(closes_1h, 25)
@@ -506,14 +485,14 @@ def build_symbol_data(symbol_clean: str, pair_display: str, use_closed_candle: b
         round(bb1w_l / min40, 4) if bb1w_l and min40 else "",
         f"{dist_bb_up:.2f}%" if dist_bb_up is not None else "",
         f"{dist_bb_dn:.2f}%" if dist_bb_dn is not None else "",
-        round(vol_1h_quote, 2),
-        round(vol_4h_quote, 2),
+        round(vol_1h, 2),
+        round(vol_4h, 2),
         fut_status,
         spot_status,
         "", "",  # AD-AE
         "", "",  # AF-AG BB width
         round(rsi_4h, 2) if rsi_4h is not None else "",
-        round(vol_1h_quote, 2),
+        round(vol_1h, 2),
         round(vol_ma20, 2) if vol_ma20 else "",
         "",  # AK delist
         ma7, ma25, ma99,
