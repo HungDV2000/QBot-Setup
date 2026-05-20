@@ -19,9 +19,10 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import ccxt
 import cst
@@ -130,14 +131,66 @@ SHEET_NUM_COLUMNS = len(COL_NAMES)
 
 _EXCHANGE_FUT_CACHE: Optional[dict] = None
 _EXCHANGE_SPOT_CACHE: Optional[dict] = None
+_FUT_STATUS_MAP: Optional[Dict[str, str]] = None
+_SPOT_STATUS_MAP: Optional[Dict[str, str]] = None
+
+# Giới hạn nến đủ cho MA99/MACD/Stoch; giảm payload so với 200
+_KLINE_LIMITS = (("1h", 120), ("4h", 120), ("1d", 60), ("1w", 20))
 
 
-def _http_get(base: str, path: str, params: Optional[dict] = None, timeout: int = 20) -> Any:
+def _http_get(base: str, path: str, params: Optional[dict] = None, timeout: int = 12) -> Any:
     qs = urllib.parse.urlencode(params or {})
     url = f"{base}{path}" + (f"?{qs}" if qs else "")
-    req = urllib.request.Request(url, headers={"User-Agent": "symbol-data-fetch/1.0"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    req = urllib.request.Request(url, headers={"User-Agent": "hd-update-all-new/1.0"})
+    last_err: Optional[Exception] = None
+    for attempt in range(2):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except Exception as e:
+            last_err = e
+            if attempt == 0:
+                time.sleep(0.25)
+    raise last_err  # type: ignore[misc]
+
+
+def preload_exchange_caches() -> None:
+    """Tải exchangeInfo một lần trước vòng lặp 50 mã (tránh đơ ở mã đầu)."""
+    _load_futures_exchange_info()
+    _load_spot_exchange_info()
+    print(
+        f"✅ Cache exchangeInfo: Futures {len(_FUT_STATUS_MAP or {})} | "
+        f"Spot {len(_SPOT_STATUS_MAP or {})} mã",
+        flush=True,
+    )
+
+
+def _load_futures_exchange_info() -> None:
+    global _EXCHANGE_FUT_CACHE, _FUT_STATUS_MAP
+    if _FUT_STATUS_MAP is not None:
+        return
+    _EXCHANGE_FUT_CACHE = _http_get(BASE_FUTURES, "/fapi/v1/exchangeInfo", timeout=25)
+    _FUT_STATUS_MAP = {
+        item["symbol"]: item.get("status", "UNKNOWN")
+        for item in _EXCHANGE_FUT_CACHE.get("symbols", [])
+        if item.get("symbol")
+    }
+
+
+def _load_spot_exchange_info() -> None:
+    global _EXCHANGE_SPOT_CACHE, _SPOT_STATUS_MAP
+    if _SPOT_STATUS_MAP is not None:
+        return
+    try:
+        _EXCHANGE_SPOT_CACHE = _http_get(BASE_SPOT, "/api/v3/exchangeInfo", timeout=25)
+        _SPOT_STATUS_MAP = {
+            item["symbol"]: item.get("status", "UNKNOWN")
+            for item in _EXCHANGE_SPOT_CACHE.get("symbols", [])
+            if item.get("symbol")
+        }
+    except Exception as e:
+        logger.warning(f"Không tải spot exchangeInfo: {e}")
+        _SPOT_STATUS_MAP = {}
 
 
 def normalize_symbol(raw: str) -> Tuple[str, str]:
@@ -159,26 +212,42 @@ def normalize_symbol(raw: str) -> Tuple[str, str]:
 
 def validate_futures_symbol(symbol_clean: str) -> str:
     """Kiểm tra symbol có trên Binance USDT-M; trả về status hoặc raise."""
-    global _EXCHANGE_FUT_CACHE
-    if _EXCHANGE_FUT_CACHE is None:
-        _EXCHANGE_FUT_CACHE = _http_get(BASE_FUTURES, "/fapi/v1/exchangeInfo")
-    for item in _EXCHANGE_FUT_CACHE.get("symbols", []):
-        if item.get("symbol") == symbol_clean:
-            return item.get("status", "UNKNOWN")
-    raise ValueError(f"{symbol_clean} không tồn tại trên Binance Futures USDT-M")
+    _load_futures_exchange_info()
+    status = (_FUT_STATUS_MAP or {}).get(symbol_clean)
+    if status is None:
+        raise ValueError(f"{symbol_clean} không tồn tại trên Binance Futures USDT-M")
+    return status
 
 
 def get_spot_status(symbol_clean: str) -> str:
-    global _EXCHANGE_SPOT_CACHE
-    if _EXCHANGE_SPOT_CACHE is None:
-        try:
-            _EXCHANGE_SPOT_CACHE = _http_get(BASE_SPOT, "/api/v3/exchangeInfo")
-        except Exception:
-            return "Không lấy được spot exchangeInfo"
-    for item in _EXCHANGE_SPOT_CACHE.get("symbols", []):
-        if item.get("symbol") == symbol_clean:
-            return item.get("status", "UNKNOWN")
-    return "Không có spot"
+    _load_spot_exchange_info()
+    if not _SPOT_STATUS_MAP:
+        return "Không lấy được spot exchangeInfo"
+    return _SPOT_STATUS_MAP.get(symbol_clean, "Không có spot")
+
+
+def _fetch_klines_bundle(symbol_clean: str) -> Tuple[List[list], List[list], List[list], List[list]]:
+    """4 khung thời gian song song — giảm ~3× thời gian chờ so với tuần tự."""
+    out: Dict[str, List[list]] = {}
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = {
+            pool.submit(fetch_klines, symbol_clean, interval, limit): interval
+            for interval, limit in _KLINE_LIMITS
+        }
+        for fut in as_completed(futures):
+            interval = futures[fut]
+            out[interval] = fut.result()
+    return out["1h"], out["4h"], out["1d"], out["1w"]
+
+
+def _fetch_metrics_bundle(
+    symbol_clean: str, price: float
+) -> Tuple[Tuple[Optional[float], Optional[float]], Tuple[Optional[float], Optional[float]]]:
+    """OI + L/S 5m song song (bỏ thêm 2 request L/S 1h)."""
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        f_oi = pool.submit(fetch_oi_usdt_and_delta, symbol_clean, price)
+        f_ls = pool.submit(fetch_ls_ratio, symbol_clean, "5m")
+        return f_oi.result(), f_ls.result()
 
 
 def fetch_klines(symbol_clean: str, interval: str, limit: int) -> List[list]:
@@ -459,6 +528,7 @@ def fetch_ls_ratio(symbol_clean: str, period: str = "5m") -> Tuple[Optional[floa
 def build_symbol_data(
     symbol_clean: str,
     pair_display: str,
+    ticker_info: Optional[dict] = None,
     use_closed_candle: bool = False,
 ) -> List[Any]:
     """
@@ -468,15 +538,17 @@ def build_symbol_data(
     fut_status = validate_futures_symbol(symbol_clean)
     spot_status = get_spot_status(symbol_clean)
 
-    ticker = fetch_ticker_24h(symbol_clean)
-    price = float(ticker["lastPrice"])
-    pct24 = float(ticker["priceChangePercent"])
-    vol24 = float(ticker.get("quoteVolume", 0))
+    if ticker_info and ticker_info.get("last"):
+        price = float(ticker_info["last"])
+        pct24 = float(ticker_info.get("percentage", 0))
+        vol24 = float(ticker_info.get("quoteVolume", 0))
+    else:
+        ticker = fetch_ticker_24h(symbol_clean)
+        price = float(ticker["lastPrice"])
+        pct24 = float(ticker["priceChangePercent"])
+        vol24 = float(ticker.get("quoteVolume", 0))
 
-    k1h = fetch_klines(symbol_clean, "1h", 200)
-    k4h = fetch_klines(symbol_clean, "4h", 200)
-    k1d = fetch_klines(symbol_clean, "1d", 60)
-    k1w = fetch_klines(symbol_clean, "1w", 20)
+    k1h, k4h, k1d, k1w = _fetch_klines_bundle(symbol_clean)
 
     o1 = parse_ohlcv(k1h)
     o4 = parse_ohlcv(k4h)
@@ -527,17 +599,14 @@ def build_symbol_data(
     stoch_rsi_k, stoch_rsi_d = compute_stoch_rsi(closes_1h)
     stoch_k, stoch_d = compute_stochastic(highs_1h, lows_1h, closes_1h)
 
-    oi_usdt, oi_delta = fetch_oi_usdt_and_delta(symbol_clean, price)
-    # Sheet AV/AW: period 5m theo hướng dẫn khách (globalLongShortAccountRatio / topLongShortPositionRatio)
-    lsr_acc_sheet, lsr_pos_sheet = fetch_ls_ratio(symbol_clean, "5m")
-    lsr_acc_score, lsr_pos_score = fetch_ls_ratio(symbol_clean, "1h")
+    (oi_usdt, oi_delta), (lsr_acc_sheet, lsr_pos_sheet) = _fetch_metrics_bundle(symbol_clean, price)
 
     dist_bb_up = ((bb1_u - price) / price * 100) if bb1_u and price else None
     dist_bb_dn = ((price - bb1_l) / price * 100) if bb1_l and price else None
 
     score, suggest, reasons = compute_score(
         price, ma7, ma25, ma99, macd_v, macd_s, macd_h,
-        stoch_rsi_k, stoch_rsi_d, lsr_acc_score, lsr_pos_score, oi_delta,
+        stoch_rsi_k, stoch_rsi_d, lsr_acc_sheet, lsr_pos_sheet, oi_delta,
     )
 
     recent_h = max(o1["high"][-24:]) if len(o1["high"]) >= 24 else max(o1["high"])
@@ -614,23 +683,30 @@ def get_row_result(symbol: str, tickers: dict) -> List[Any]:
     """Một dòng A→BF — chỉ báo từ Binance REST (không CCXT)."""
     pair = symbol.replace(":USDT", "")
     symbol_clean = pair.replace("/", "")
-    if float(tickers.get(symbol, {}).get("last") or 0) <= 0:
+    ti = tickers.get(symbol) or {}
+    if float(ti.get("last") or 0) <= 0:
         empty = [""] * SHEET_NUM_COLUMNS
         empty[0] = pair
-        empty[1] = tickers.get(symbol, {}).get("percentage", "")
+        empty[1] = ti.get("percentage", "")
         return empty
+    t0 = time.time()
+    print(f"   ⏳ REST {pair}...", flush=True)
     try:
-        row = build_symbol_data(symbol_clean, pair)
+        row = build_symbol_data(symbol_clean, pair, ticker_info=ti)
+        elapsed = time.time() - t0
         print(
-            f"🔄 [NEW/REST] {pair} — %24h: {row[1]}, giá: {row[2]}",
+            f"🔄 [NEW/REST] {pair} — %24h: {row[1]}, giá: {row[2]} ({elapsed:.1f}s)",
             flush=True,
         )
-        time.sleep(0.12)  # tránh vượt rate limit REST khi quét ~100 mã
+        time.sleep(0.05)
         return row
     except Exception as e:
+        elapsed = time.time() - t0
+        print(f"⚠️ {pair} lỗi sau {elapsed:.1f}s: {e}", flush=True)
         logger.warning(f"[{symbol}] lỗi build_symbol_data: {e}", exc_info=True)
         empty = [""] * SHEET_NUM_COLUMNS
         empty[0] = pair
+        empty[1] = ti.get("percentage", "")
         return empty
 
 
@@ -650,6 +726,9 @@ def do_it():
     print("📡 Lấy ticker 24h toàn sàn (Binance REST /fapi/v1/ticker/24hr)...", flush=True)
     tickers = fetch_all_tickers_24h()
     print(f"✅ Đã lấy {len(tickers)} mã USDT futures từ REST", flush=True)
+
+    print("📋 Tải cache exchangeInfo (1 lần)...", flush=True)
+    preload_exchange_caches()
 
     all_futures_usdt = [
         s for s in tickers
