@@ -134,8 +134,8 @@ _EXCHANGE_SPOT_CACHE: Optional[dict] = None
 _FUT_STATUS_MAP: Optional[Dict[str, str]] = None
 _SPOT_STATUS_MAP: Optional[Dict[str, str]] = None
 
-# Giới hạn nến đủ cho MA99/MACD/Stoch; giảm payload so với 200
-_KLINE_LIMITS = (("1h", 120), ("4h", 120), ("1d", 60), ("1w", 20))
+# 1h≥168 (biên độ 7 ngày); 1d≥400 (AD biên độ ngày 365d + R-S 30d)
+_KLINE_LIMITS = (("1h", 168), ("4h", 120), ("1d", 400), ("1w", 20))
 
 
 def _http_get(base: str, path: str, params: Optional[dict] = None, timeout: int = 12) -> Any:
@@ -432,6 +432,85 @@ def max_body_pct_4h(rows: List[list], lookback: int) -> Tuple[Optional[float], O
     return max(pcts), min(pcts)
 
 
+def _amplitude_range_from_klines(rows: List[list]) -> Tuple[Optional[float], Optional[float]]:
+    """
+    Max biên độ % nến tăng / giảm trong slice (giống hd_update_all._amplitude_range_from_ohlcv_slice).
+    amplitude = (high - low) / ref * 100; ref = min(O,C) nến tăng, max(O,C) nến giảm.
+    """
+    if not rows:
+        return None, None
+    max_inc: Optional[float] = None
+    max_dec: Optional[float] = None
+    for row in rows:
+        o, h, l, c = float(row[1]), float(row[2]), float(row[3]), float(row[4])
+        change = c - o
+        if change > 0:
+            ref = min(c, o)
+            if ref <= 0:
+                continue
+            amp = (h - l) / ref * 100
+            max_inc = amp if max_inc is None else max(max_inc, amp)
+        elif change < 0:
+            ref = max(c, o)
+            if ref <= 0:
+                continue
+            amp = (h - l) / ref * 100
+            max_dec = amp if max_dec is None else max(max_dec, amp)
+    return (
+        round(max_inc, 2) if max_inc is not None else None,
+        round(max_dec, 2) if max_dec is not None else None,
+    )
+
+
+def _max_daily_volatility_from_klines(rows: List[list], lookback_days: int = 365) -> Tuple[float, str]:
+    """AD-AE: biên độ ngày lớn nhất (H-L)/Open % và ngày tương ứng."""
+    if not rows:
+        return 0.0, "N/A"
+    cutoff_ms = int(time.time() * 1000) - lookback_days * 24 * 60 * 60 * 1000
+    subset = [r for r in rows if int(r[0]) >= cutoff_ms] or rows
+    best_pct = 0.0
+    best_ts = 0
+    for row in subset:
+        ts, o, h, l = int(row[0]), float(row[1]), float(row[2]), float(row[3])
+        if o <= 0:
+            continue
+        vp = (h - l) / o * 100
+        if vp >= best_pct:
+            best_pct = vp
+            best_ts = ts
+    if best_ts == 0:
+        return 0.0, "N/A"
+    return round(best_pct, 2), datetime.fromtimestamp(best_ts / 1000).strftime("%Y-%m-%d")
+
+
+def _bb_width_3d_and_now(closes_1d: List[float], period: int = 20, std_dev: float = 2.0) -> Tuple[Optional[float], Optional[float]]:
+    """
+    AF-AG: (BB width 3 phiên trước, width hiện tại) = (U-L)/Mid trên nến 1d đã đóng.
+  population std (ddof=0) — khớp hd_update_all / TradingView.
+    """
+    closed = closes_1d[:-1] if closes_1d and len(closes_1d) > period + 3 else closes_1d
+    if not closed or len(closed) < period + 3:
+        return None, None
+    widths: List[Optional[float]] = []
+    for i in range(period - 1, len(closed)):
+        window = closed[i - period + 1 : i + 1]
+        ma = _mean(window)
+        if ma == 0:
+            widths.append(None)
+            continue
+        variance = sum((x - ma) ** 2 for x in window) / period
+        std = math.sqrt(variance)
+        upper = ma + std_dev * std
+        lower = ma - std_dev * std
+        widths.append((upper - lower) / ma)
+    if len(widths) < 4:
+        return None, None
+    ago, cur = widths[-4], widths[-1]
+    bw_3d = float(ago) if ago is not None and math.isfinite(ago) else None
+    bw_now = float(cur) if cur is not None and math.isfinite(cur) else None
+    return bw_3d, bw_now
+
+
 def compute_score(price, ma7, ma25, ma99, macd_val, macd_sig, macd_hist, stoch_k, stoch_d, lsr_acc, lsr_pos, oi_delta):
     score = 0.0
     reasons = []
@@ -588,6 +667,20 @@ def build_symbol_data(
 
     max_up_4h, max_dn_4h = max_body_pct_4h(k4h, lookback=min(360, len(k4h)))
 
+    # J-K: biên độ 1h max tăng/giảm trong 7 ngày (168 nến)
+    ohlcv_1h_7d = k1h[-168:] if len(k1h) >= 168 else k1h
+    amp_up_week, amp_dn_week = _amplitude_range_from_klines(ohlcv_1h_7d)
+
+    # R-S: biên độ 30d từ 30 nến 1d cuối
+    ohlcv_1d_30 = k1d[-30:] if len(k1d) >= 30 else k1d
+    amp_up_30d, amp_dn_30d = _amplitude_range_from_klines(ohlcv_1d_30)
+
+    # AD-AE: biên độ giá ngày lớn nhất trong 365 ngày
+    max_daily_vol, max_daily_date = _max_daily_volatility_from_klines(k1d, lookback_days=365)
+
+    # AF-AG: BB width 1d (3 ngày trước / hiện tại)
+    bw_3d, bw_now = _bb_width_3d_and_now(o1d["close"])
+
     # RSI mẫu chatbot (calc_rsi SMA rolling) — U: 1d, AH: 4h
     rsi_1d = rsi_sma_last(o1d["close"])
     rsi_4h = rsi_sma_last(o4["close"])
@@ -618,11 +711,13 @@ def build_symbol_data(
         round(pct24, 3),
         round(price, 8),
         bb1_u, bb1_l, bb4_u, bb4_l, bb1d_u, bb1d_l,
-        "", "",  # J-K biên độ tuần (cần logic riêng, để trống hoặc tính sau)
+        amp_up_week if amp_up_week is not None else "",
+        amp_dn_week if amp_dn_week is not None else "",
         max40, min40,
         max_up_4h, max_dn_4h,
         bb1w_u, bb1w_l,
-        "", "",  # R-S biên độ 30d
+        amp_up_30d if amp_up_30d is not None else "",
+        amp_dn_30d if amp_dn_30d is not None else "",
         vol24,
         rsi_1d,
         "",
@@ -633,8 +728,10 @@ def build_symbol_data(
         round(vol_4h, 2),
         fut_status,
         spot_status,
-        "", "",  # AD-AE
-        "", "",  # AF-AG BB width
+        max_daily_vol,
+        max_daily_date,
+        f"{round(bw_3d * 100, 2)}%" if bw_3d is not None else "",
+        f"{round(bw_now * 100, 2)}%" if bw_now is not None else "",
         round(rsi_4h, 2) if rsi_4h is not None else "",
         round(vol_1h, 2),
         round(vol_ma20, 2) if vol_ma20 else "",
