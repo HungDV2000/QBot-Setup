@@ -4,6 +4,8 @@ from enum import Enum
 spreadsheetId = cst.spreadsheet_id
 
 tab_list_all_ma = "100 mã (50 tăng và 50 giảm)"
+# Tab đối chiếu dữ liệu từ hd_update_all_new.py (logic chỉ báo mới)
+tab_list_all_ma_new = "New 100 mã (50 tăng và 50 giảm)"
 tab_cho_va_khop = "Chờ và khớp"
 tab_white_list = "list"
 

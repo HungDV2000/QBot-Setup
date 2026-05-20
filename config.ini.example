@@ -10,6 +10,8 @@ lenh3_rate_short = 0.6
 
 ;thêm biến
 lenh3_callback_rate =1
+; O trống / NGAY / NOW trên sheet Chờ và khớp → TP trailing kích hoạt ngay tại mark/last (mặc định true nếu không khai báo)
+lenh3_o_empty_immediate = true
 cancel_orders_minutes = 1
 
 is_print_mode = false

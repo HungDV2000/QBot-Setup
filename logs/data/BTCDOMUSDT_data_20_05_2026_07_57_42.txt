@@ -1,0 +1,75 @@
+======================================================================
+  BTCDOM/USDT (BTCDOMUSDT)  —  2026-05-20 07:57:42
+  Nến chỉ báo: gồm nến 1h đang chạy
+======================================================================
+
+--- Cột sheet A→BF (khớp hd_update_all) ---
+  A   | Mã                                  : BTCDOM/USDT
+  B   | % 24h                               : 1.099
+  C   | Giá trị hiện thời                   : 5,612.1
+  D   | BB1h trên                           : 5,629.21455694
+  E   | BB1h dưới                           : 5,555.63544306
+  F   | BB4h trên                           : 5,629.81829153
+  G   | BB4h dưới                           : 5,508.54170847
+  H   | BB1 ngày trên                       : 5,615.0427249
+  I   | BB1 ngày dưới                       : 5,428.3172751
+  J   | Biên độ 1h max tăng tuần            : (trống)
+  K   | Biên độ 1h max giảm tuần            : (trống)
+  L   | Max 40 ngày                         : 5,620
+  M   | Min 40 ngày                         : 5,160.5
+  N   | Max tăng 4h/60 ngày                 : 1.31214463
+  O   | Max giảm 4h/60 ngày                 : -1.10312277
+  P   | Giá Cao Nhất (BB1w trên)            : 5,718.20448728
+  Q   | Giá Thấp Nhất (BB1w dưới)           : 4,592.79551272
+  R   | Biên độ 30d tăng                    : (trống)
+  S   | Biên độ 30d giảm                    : (trống)
+  T   | Volume 24h                          : 4,562,109.8
+  U   | RSI 14                              : 68.72739257
+  V   | (trống V)                           : (trống)
+  W   | Min/Min40 (BB1w dưới / Min40)       : 0.89
+  X   | % đến BB1h trên                     : 0.30%
+  Y   | % đến BB1h dưới                     : 1.01%
+  Z   | Vol 1h                              : 163,178.56
+  AA  | Vol 4h                              : 163,178.56
+  AB  | Futures (trạng thái)                : TRADING
+  AC  | Spot (trạng thái)                   : Không có spot
+  AD  | Biên độ giá ngày lớn nhất (%)       : (trống)
+  AE  | Ngày biên độ lớn nhất               : (trống)
+  AF  | BB width 1d (3 ngày trước)          : (trống)
+  AG  | BB width 1d (hiện tại)              : (trống)
+  AH  | RSI 14 (4h)                         : 65.01
+  AI  | Vol 1h (hiện tại)                   : 163,178.56
+  AJ  | Vol 1h MA20                         : 189,509.54
+  AK  | Cảnh báo delist sắp tới             : (trống)
+  AL  | MA7 (1h)                            : 5,611
+  AM  | MA25 (1h)                           : 5,585.056
+  AN  | MA99 (1h)                           : 5,557.77070707
+  AO  | MACD (1h)                           : 10.87305477
+  AP  | MACD Signal (1h)                    : 8.85494762
+  AQ  | MACD Hist (1h)                      : 2.01810715
+  AR  | Stoch RSI %K (1h)                   : 74.26934963
+  AS  | Stoch RSI %D (1h)                   : 76.96473769
+  AT  | Open Interest (USDT)                : 20,416,371.9728689
+  AU  | OI Δ 24h (%)                        : 0.87621045
+  AV  | L/S Ratio (account)                 : 1.9214
+  AW  | L/S Ratio (top traders)             : 1.2658
+  AX  | Vol 1h / MA20 (ratio)               : 0.86
+  AY  | Score LONG/SHORT (-10..+10)         : 6
+  AZ  | Gợi ý                               : LONG mạnh
+  BA  | Lý do score                         : MA7>25>99(+3); P>MA25(+1); MACD>Sig(+2)
+  BB  | Open 1h                             : 5,609
+  BC  | High 1h gần đây                     : 5,620
+  BD  | Low 1h gần đây                      : 5,547
+  BE  | Stoch %K (1h)                       : 82.48337029
+  BF  | Stoch %D (1h)                       : 82.79158034
+
+--- Đối chiếu feedback (Volume & Stochastic) ---
+  Vol 1h quote (nến đang chạy)     : 163,178.5624 USDT
+  Vol 1h quote (nến vừa đóng)      : 59,778.5445 USDT
+  Vol 1h base×close (cách bot cũ)  : 163,166.1954 USDT
+  Stoch RSI %K / %D  (cột AR/AS)   : 74.26934963 / 76.96473769
+  Stochastic %K / %D (cột BE/BF)   : 82.48337029 / 82.79158034
+  L/S account 5m (hướng dẫn chatbot): 1.924
+  L/S top pos 5m                   : 1.2641
+  Ghi chú                          : Chart TradingView 'Stochastic' thường khớp BE/BF, không phải AR/AS (Stoch RSI).
+
