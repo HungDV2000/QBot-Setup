@@ -520,7 +520,7 @@ def build_symbol_data(symbol_clean: str, pair_display: str, use_closed_candle: b
         macd_v, macd_s, macd_h,
         stoch_rsi_k, stoch_rsi_d,
         oi_usdt, oi_delta,
-        lsr_acc_1h, lsr_pos_1h,
+        lsr_acc_5m, lsr_pos_5m,
         round(vol_ratio, 2) if vol_ratio else "",
         score, suggest, reasons,
         open_1h, recent_h, recent_l,

@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Cập nhật sheet "New 100 mã (50 tăng và 50 giảm)" — cùng cấu trúc hàng/cột với hd_update_all,
-logic chỉ báo mới (quote vol, Stoch RSI + Stochastic BE/BF, v.v.) để đối chiếu bot cũ.
+Cập nhật sheet "New 100 mã (50 tăng và 50 giảm)" — cùng cấu trúc hàng với hd_update_all.
+
+Logic lấy số liệu: Binance Futures public REST (giống symbol_data_fetch / feedback khách),
+KHÔNG dùng CCXT cho ticker/klines/chỉ báo. CCXT chỉ dùng fetch_balance (hàng số dư).
 
 Chạy: python hd_update_all_new.py
 """
@@ -189,15 +191,36 @@ def fetch_klines(symbol_clean: str, interval: str, limit: int) -> List[list]:
     return data
 
 
-def fetch_klines_ccxt(pair: str, interval: str, limit: int) -> List[list]:
-    rows = exchange.fetch_ohlcv(pair, interval, limit=limit)
-    if not rows:
-        return []
-    out = []
-    for row in rows:
-        ts, o, h, l, c, v = row[0], float(row[1]), float(row[2]), float(row[3]), float(row[4]), float(row[5])
-        qv = v * c
-        out.append([ts, o, h, l, c, v, ts, qv])
+def fetch_ticker_24h(symbol_clean: str) -> dict:
+    data = _http_get(BASE_FUTURES, "/fapi/v1/ticker/24hr", {"symbol": symbol_clean})
+    if not isinstance(data, dict):
+        raise RuntimeError("ticker/24hr không hợp lệ")
+    return data
+
+
+def fetch_all_tickers_24h() -> dict:
+    """
+    GET /fapi/v1/ticker/24hr (toàn bộ) — lọc top tăng/giảm.
+    Key giống CCXT: BTC/USDT:USDT → {last, percentage, quoteVolume}.
+    """
+    rows = _http_get(BASE_FUTURES, "/fapi/v1/ticker/24hr")
+    if not isinstance(rows, list):
+        raise RuntimeError("ticker/24hr all không hợp lệ")
+    out: dict = {}
+    for t in rows:
+        sym = t.get("symbol", "")
+        if not sym.endswith("USDT"):
+            continue
+        base = sym[:-4]
+        key = f"{base}/USDT:USDT"
+        try:
+            out[key] = {
+                "last": float(t["lastPrice"]),
+                "percentage": float(t["priceChangePercent"]),
+                "quoteVolume": float(t.get("quoteVolume", 0)),
+            }
+        except (KeyError, TypeError, ValueError):
+            continue
     return out
 
 
@@ -403,13 +426,6 @@ def compute_score(price, ma7, ma25, ma99, macd_val, macd_sig, macd_hist, stoch_k
     return score, suggest, "; ".join(reasons)
 
 
-def fetch_ticker_24h(symbol_clean: str) -> dict:
-    data = _http_get(BASE_FUTURES, "/fapi/v1/ticker/24hr", {"symbol": symbol_clean})
-    if not isinstance(data, dict):
-        raise RuntimeError("ticker/24hr không hợp lệ")
-    return data
-
-
 def fetch_oi_usdt_and_delta(symbol_clean: str, price: float) -> Tuple[Optional[float], Optional[float]]:
     hist = _http_get(
         BASE_FUTURES,
@@ -452,34 +468,24 @@ def fetch_ls_ratio(symbol_clean: str, period: str = "5m") -> Tuple[Optional[floa
 def build_symbol_data(
     symbol_clean: str,
     pair_display: str,
-    *,
     use_closed_candle: bool = False,
-    price: Optional[float] = None,
-    pct24: Optional[float] = None,
-    vol24: Optional[float] = None,
-    use_ccxt_klines: bool = True,
 ) -> List[Any]:
-    """Thu thập chỉ số một mã — trả về list cột A→BF."""
+    """
+    Thu thập chỉ số một mã qua Binance REST (symbol_data_fetch / feedback khách).
+    Trả về list cột A→BF.
+    """
     fut_status = validate_futures_symbol(symbol_clean)
     spot_status = get_spot_status(symbol_clean)
 
-    if price is None or pct24 is None:
-        ticker = fetch_ticker_24h(symbol_clean)
-        price = float(ticker["lastPrice"])
-        pct24 = float(ticker["priceChangePercent"])
-        vol24 = float(ticker.get("quoteVolume", 0))
-    else:
-        vol24 = float(vol24 or 0)
+    ticker = fetch_ticker_24h(symbol_clean)
+    price = float(ticker["lastPrice"])
+    pct24 = float(ticker["priceChangePercent"])
+    vol24 = float(ticker.get("quoteVolume", 0))
 
-    def _kl(interval: str, limit: int) -> List[list]:
-        if use_ccxt_klines:
-            return fetch_klines_ccxt(pair_display, interval, limit)
-        return fetch_klines(symbol_clean, interval, limit)
-
-    k1h = _kl("1h", 200)
-    k4h = _kl("4h", 200)
-    k1d = _kl("1d", 60)
-    k1w = _kl("1w", 20)
+    k1h = fetch_klines(symbol_clean, "1h", 200)
+    k4h = fetch_klines(symbol_clean, "4h", 200)
+    k1d = fetch_klines(symbol_clean, "1d", 60)
+    k1w = fetch_klines(symbol_clean, "1w", 20)
 
     o1 = parse_ohlcv(k1h)
     o4 = parse_ohlcv(k4h)
@@ -535,15 +541,16 @@ def build_symbol_data(
     stoch_k, stoch_d = compute_stochastic(highs_1h, lows_1h, closes_1h)
 
     oi_usdt, oi_delta = fetch_oi_usdt_and_delta(symbol_clean, price)
-    lsr_acc_5m, lsr_pos_5m = fetch_ls_ratio(symbol_clean, "5m")
-    lsr_acc_1h, lsr_pos_1h = fetch_ls_ratio(symbol_clean, "1h")
+    # Sheet AV/AW: period 5m theo hướng dẫn khách (globalLongShortAccountRatio / topLongShortPositionRatio)
+    lsr_acc_sheet, lsr_pos_sheet = fetch_ls_ratio(symbol_clean, "5m")
+    lsr_acc_score, lsr_pos_score = fetch_ls_ratio(symbol_clean, "1h")
 
     dist_bb_up = ((bb1_u - price) / price * 100) if bb1_u and price else None
     dist_bb_dn = ((price - bb1_l) / price * 100) if bb1_l and price else None
 
     score, suggest, reasons = compute_score(
         price, ma7, ma25, ma99, macd_v, macd_s, macd_h,
-        stoch_rsi_k, stoch_rsi_d, lsr_acc_1h, lsr_pos_1h, oi_delta,
+        stoch_rsi_k, stoch_rsi_d, lsr_acc_score, lsr_pos_score, oi_delta,
     )
 
     recent_h = max(o1["high"][-24:]) if len(o1["high"]) >= 24 else max(o1["high"])
@@ -580,7 +587,7 @@ def build_symbol_data(
         macd_v, macd_s, macd_h,
         stoch_rsi_k, stoch_rsi_d,
         oi_usdt, oi_delta,
-        lsr_acc_1h, lsr_pos_1h,
+        lsr_acc_sheet, lsr_pos_sheet,
         round(vol_ratio, 2) if vol_ratio else "",
         score, suggest, reasons,
         open_1h, recent_h, recent_l,
@@ -617,25 +624,27 @@ def _dedupe_symbols_by_normalized_pair(symbols, tickers):
 
 
 def get_row_result(symbol: str, tickers: dict) -> List[Any]:
-    """Một dòng A→BF cho symbol CCXT (vd BTC/USDT:USDT)."""
+    """Một dòng A→BF — chỉ báo từ Binance REST (không CCXT)."""
     pair = symbol.replace(":USDT", "")
     symbol_clean = pair.replace("/", "")
-    price = float(tickers[symbol].get("last") or 0)
-    pct = float(tickers[symbol].get("percentage") or 0)
-    if price <= 0:
+    if float(tickers.get(symbol, {}).get("last") or 0) <= 0:
         empty = [""] * SHEET_NUM_COLUMNS
         empty[0] = pair
-        empty[1] = pct
+        empty[1] = tickers.get(symbol, {}).get("percentage", "")
         return empty
-    print(f"🔄 [NEW] {symbol} - %24h: {pct:.2f}%, giá: {price}", flush=True)
-    return build_symbol_data(
-        symbol_clean,
-        pair,
-        price=price,
-        pct24=pct,
-        vol24=float(tickers[symbol].get("quoteVolume") or 0),
-        use_ccxt_klines=True,
-    )
+    try:
+        row = build_symbol_data(symbol_clean, pair)
+        print(
+            f"🔄 [NEW/REST] {pair} — %24h: {row[1]}, giá: {row[2]}",
+            flush=True,
+        )
+        time.sleep(0.12)  # tránh vượt rate limit REST khi quét ~100 mã
+        return row
+    except Exception as e:
+        logger.warning(f"[{symbol}] lỗi build_symbol_data: {e}", exc_info=True)
+        empty = [""] * SHEET_NUM_COLUMNS
+        empty[0] = pair
+        return empty
 
 
 def _header_row() -> List[str]:
@@ -651,8 +660,9 @@ def do_it():
     logger.info(f"Bắt đầu cập nhật tab: {tab_name}")
     start_time = time.time()
 
-    tickers = exchange.fetch_tickers()
-    print(f"✅ Đã lấy {len(tickers)} tickers", flush=True)
+    print("📡 Lấy ticker 24h toàn sàn (Binance REST /fapi/v1/ticker/24hr)...", flush=True)
+    tickers = fetch_all_tickers_24h()
+    print(f"✅ Đã lấy {len(tickers)} mã USDT futures từ REST", flush=True)
 
     all_futures_usdt = [
         s for s in tickers
@@ -742,9 +752,9 @@ def do_it():
 gg_sheet_factory.init_sheet_api()
 
 print("\n" + "=" * 80, flush=True)
-print("  HD_UPDATE_ALL_NEW — Sheet đối chiếu (logic chỉ báo mới)", flush=True)
-print(f"  Tab: {gg_sheet_factory.tab_list_all_ma_new}", flush=True)
-print(f"  Bot cũ: {gg_sheet_factory.tab_list_all_ma}", flush=True)
+print("  HD_UPDATE_ALL_NEW — Sheet đối chiếu (Binance REST, symbol_data_fetch)", flush=True)
+print(f"  Tab mới: {gg_sheet_factory.tab_list_all_ma_new}", flush=True)
+print(f"  Bot cũ: {gg_sheet_factory.tab_list_all_ma} (hd_update_all.py)", flush=True)
 print(f"  Log: {log_filename}", flush=True)
 print("=" * 80 + "\n", flush=True)
 
