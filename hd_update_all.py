@@ -4,7 +4,7 @@
 Cập nhật sheet 100 mã (50 tăng + 50 giảm) — tab production.
 
 Logic số liệu: binance_symbol_row (Binance REST).
-CCXT chỉ dùng fetch_balance. Cột AK: cảnh báo delist (n8n API + Binance Support).
+Số dư: REST /fapi/v2/account (không dùng CCXT). Cột AK: delist (n8n + Support).
 
 Chạy: python hd_update_all.py
 """
@@ -20,11 +20,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, List
 
-import ccxt
 import cst
 import gg_sheet_factory
 import requests
 
+from binance_futures_direct import futures_signed_request
 from binance_symbol_row import (
     build_symbol_data,
     fetch_all_tickers_24h,
@@ -118,16 +118,29 @@ AK_COL_IDX = HEADER_ROW.index("Cảnh báo delist sắp tới")
 
 SHEET_LEADER_SYMBOLS = ("BTCDOM/USDT:USDT", "BTC/USDT:USDT")
 
-exchange_id = "binance"
-exchange_class = getattr(ccxt, exchange_id)
-exchange = exchange_class({
-    "enableRateLimit": True,
-    "apiKey": cst.key_binance,
-    "secret": cst.secret_binance,
-    "options": {"defaultType": "future"},
-})
-exchange.setSandboxMode(False)
-exchange.timeout = 30000
+
+def _fetch_account_balances() -> tuple:
+    """
+    Số dư margin / ví / PnL qua REST (timeout 15s).
+    Tránh CCXT fetch_balance() — hay treo sau khi xử lý xong ~100 mã.
+    """
+    print("💰 Đang lấy số dư tài khoản (REST /fapi/v2/account)...", flush=True)
+    try:
+        acc = futures_signed_request("GET", "/fapi/v2/account", timeout=15)
+        if not isinstance(acc, dict):
+            raise RuntimeError("API account không trả JSON object")
+        margin = round(float(acc.get("totalMarginBalance") or 0), 4)
+        wallet = round(float(acc.get("totalWalletBalance") or 0), 4)
+        pnl_raw = acc.get("totalCrossUnPnl")
+        if pnl_raw is None:
+            pnl_raw = acc.get("totalUnrealizedProfit", 0)
+        pnl = round(float(pnl_raw or 0), 4)
+        print(f"   └─ margin={margin} | ví={wallet} | pnl={pnl}", flush=True)
+        return margin, wallet, pnl
+    except Exception as e:
+        logger.warning(f"fetch account REST: {e}", exc_info=True)
+        print(f"⚠️ Không lấy được số dư (bỏ qua): {e}", flush=True)
+        return "", "", ""
 
 
 def _col_letter(idx: int) -> str:
@@ -434,6 +447,8 @@ def do_it():
     logger.info("BẮT ĐẦU CẬP NHẬT DỮ LIỆU SHEET 100 MÃ")
     start_time = time.time()
 
+    total_margin, total_wallet, total_pnl = _fetch_account_balances()
+
     tickers = fetch_all_tickers_24h()
     print(f"✅ Đã lấy {len(tickers)} tickers (REST)", flush=True)
 
@@ -560,10 +575,11 @@ def do_it():
     for _ in range(max(0, cst.top_count - len(tang_data))):
         tab_rows.append(empty_row)
 
-    balance = exchange.fetch_balance()
-    total_margin = round(float(balance["info"]["totalMarginBalance"]), 4)
-    total_wallet = round(float(balance["info"]["totalWalletBalance"]), 4)
-    total_pnl = round(float(balance["info"]["totalCrossUnPnl"]), 4)
+    print(
+        f"✅ Đã xử lý xong {len(giam_data)} giảm + {len(tang_data)} tăng "
+        f"(tổng {len(tab_rows)} dòng nội dung)",
+        flush=True,
+    )
 
     sheet_data = (
         [HEADER_ROW]
@@ -571,8 +587,12 @@ def do_it():
         + tab_rows
     )
 
-    print(f"💾 Ghi {len(sheet_data)} dòng → sheet...", flush=True)
+    print(f"💾 Đang ghi {len(sheet_data)} dòng → Google Sheet (có thể mất 1–3 phút)...", flush=True)
+    t_write = time.perf_counter()
     gg_sheet_factory.update_multi(gg_sheet_factory.tab_list_all_ma, -1, sheet_data, "A")
+    print(f"   └─ ghi sheet xong {time.perf_counter() - t_write:.1f}s", flush=True)
+
+    print("🕐 Cập nhật timestamp A1...", flush=True)
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     gg_sheet_factory.update_single_value(gg_sheet_factory.tab_list_all_ma, "A1", ts)
 
@@ -580,6 +600,7 @@ def do_it():
     print(f"✅ Hoàn tất {elapsed:.1f}s | {len(giam_data)} giảm + {len(tang_data)} tăng | A1={ts}", flush=True)
     logger.info(f"Hoàn tất — {elapsed:.1f}s")
     if first_dynamic_symbol and first_dynamic_row:
+        print(f"📝 Ghi column audit vào log: {first_dynamic_symbol}...", flush=True)
         log_symbol_column_audit_to_main_log(first_dynamic_symbol, first_dynamic_row)
 
 
