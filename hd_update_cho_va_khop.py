@@ -16,6 +16,7 @@ from binance_futures_direct import (
     futures_signed_request,
     normalize_algo_orders_response,
 )
+from binance_symbol_row import fetch_all_tickers_24h
 
 file_name = os.path.basename(os.path.abspath(__file__))  
 os.system(f"title {file_name} - {cst.key_name}")
@@ -425,6 +426,33 @@ def detect_closed_positions_with_residual_orders(opened_positions_symbols):
     return closed_list
 
 
+def _symbol_to_ticker_key(symbol_formatted: str) -> str:
+    """HOME/USDT hoặc HOMEUSDT → HOME/USDT:USDT (key trong fetch_all_tickers_24h)."""
+    s = str(symbol_formatted or "").strip().upper()
+    if ":USDT" in s:
+        return s
+    if s.endswith("/USDT"):
+        return f"{s}:USDT"
+    if s.endswith("USDT") and "/" not in s:
+        return f"{s[:-4]}/USDT:USDT"
+    return f"{s}/USDT:USDT"
+
+
+def _current_price_for_sheet(tickers: dict, symbol_formatted: str, entry_price=0):
+    """Giá last từ ticker 24h REST, làm tròn theo scale entry (nếu có)."""
+    ti = tickers.get(_symbol_to_ticker_key(symbol_formatted)) or {}
+    last = float(ti.get("last") or 0)
+    if last <= 0:
+        return ""
+    try:
+        ep = float(entry_price)
+        if ep <= 0:
+            ep = last
+    except (TypeError, ValueError):
+        ep = last
+    return _round_price_for_sheet(last, ep)
+
+
 def _round_price_for_sheet(price, entry_price):
     """Làm tròn giá hiển thị trên sheet theo scale của entry price (khớp hiển thị UI)."""
     if price is None or entry_price is None or entry_price <= 0:
@@ -483,11 +511,11 @@ def build_cho_va_khop_row(
     """
     Dựng row 9 cột A–I cho sheet "Chờ và khớp".
 
-    Bot chỉ ghi A–I (trạng thái tự động). Cột J–P do người dùng điền (xoá lệnh,
-    ACTIVE PRICE STOP LIMIT / TRAILING STOP, ĐẶT LỆNH) — không ghi đè.
+    Bot ghi A–I (trạng thái tự động) và Q (giá hiện tại). Cột J–P do người dùng
+    điền — không ghi đè.
 
     A=Symbol, B=Side, C=Chờ khớp, D=Trạng thái (Y/N/ĐÓNG),
-    E=Giá vào, F=Đòn bẩy, G=Có SL, H=Có TP, I=Số orders.
+    E=Giá vào, F=Đòn bẩy, G=Có SL, H=Có TP, I=Số orders, Q=Giá hiện tại.
     """
     lenh_ls = "Y" if has_sl else "N"
     lenh_tp = "Y" if has_tp else "N"
@@ -730,7 +758,21 @@ def do_it():
     logger.info(f"Bắt đầu scan 'Chờ và khớp'")
 
     tab_100_ma_2d_arr = []
-    
+    tab_q_prices: list = []
+
+    print("📡 Lấy giá hiện tại toàn sàn (REST ticker 24h)...", flush=True)
+    try:
+        tickers_24h = fetch_all_tickers_24h()
+        print(f"✅ Đã cache {len(tickers_24h)} ticker futures", flush=True)
+    except Exception as e:
+        logger.warning(f"Không lấy được ticker 24h: {e}")
+        tickers_24h = {}
+        print(f"⚠️ Không lấy được ticker 24h — cột Q sẽ trống: {e}", flush=True)
+
+    def _append_row(row_ai, symbol_fmt, entry_px=0):
+        tab_100_ma_2d_arr.append(row_ai)
+        tab_q_prices.append([_current_price_for_sheet(tickers_24h, symbol_fmt, entry_px)])
+
     # BƯỚC 1: Lấy positions đang mở
     print("📊 BƯỚC 1: Lấy positions đang mở từ Binance...", flush=True)
     res = get_opened_possition()
@@ -828,7 +870,7 @@ def do_it():
                 has_tp=has_tp,
                 order_count=order_count,
             )
-            tab_100_ma_2d_arr.append(row)
+            _append_row(row, symbol_formatted, gia_vao)
             
         except Exception as e:
             print(f"    ❌ Lỗi xử lý position {cac_ma}: {e}", flush=True)
@@ -941,7 +983,7 @@ def do_it():
                 has_tp=False,
                 order_count=lenh_nguoc,
             )
-            tab_100_ma_2d_arr.append(row)
+            _append_row(row, symbol_formatted, gia_vao)
             
         except Exception as e:
             print(f"    ❌ Lỗi xử lý order: {e}", flush=True)
@@ -969,7 +1011,7 @@ def do_it():
                 has_tp=closed['has_tp'],
                 order_count=closed['order_count'],
             )
-            tab_100_ma_2d_arr.append(row)
+            _append_row(row, symbol_formatted, 0)
             print(f"  📎 Thêm ĐÓNG: {symbol_formatted} (side={side_str}, orders={closed['order_count']})", flush=True)
         except Exception as e:
             logger.error(f"Lỗi tạo row ĐÓNG cho {closed.get('symbol')}: {e}", exc_info=True)
@@ -980,19 +1022,24 @@ def do_it():
     logger.info(f"Tổng dòng dữ liệu: {len(tab_100_ma_2d_arr)} (ĐÓNG: {len(closed_list)})")
     
     try:
-        # Chỉ clear & ghi A–I; cột J–P (user: xoá, ACTIVE PRICE, ĐẶT LỆNH) không đụng tới
-        print("  🗑️  Xóa vùng A4:I1000 trước khi ghi dữ liệu auto mới...", flush=True)
+        # Clear A–I + Q; cột J–P (user) không đụng tới
+        print("  🗑️  Xóa vùng A4:I1000 và Q4:Q1000 trước khi ghi...", flush=True)
         gg_sheet_factory.clear_multi(gg_sheet_factory.tab_cho_va_khop, 2, "a", end_row=1000, end_column="I")
+        gg_sheet_factory.clear_multi(gg_sheet_factory.tab_cho_va_khop, 2, "Q", end_row=1000, end_column="Q")
 
         timestamp_str = current_time.strftime("%Y-%m-%d %H:%M:%S")
         print(f"  📅 Cập nhật timestamp vào A2: {timestamp_str}", flush=True)
         gg_sheet_factory.update_single_value(gg_sheet_factory.tab_cho_va_khop, "A2", timestamp_str)
 
-        print("  ✍️  Ghi dữ liệu mới 9 cột (A–I)...", flush=True)
+        print("  ✍️  Ghi dữ liệu A–I...", flush=True)
         gg_sheet_factory.update_multi(gg_sheet_factory.tab_cho_va_khop, 2, tab_100_ma_2d_arr, "a")
 
-        print(f"✅ Hoàn thành! Đã cập nhật {len(tab_100_ma_2d_arr)} dòng (A–I)", flush=True)
-        logger.info(f"✅ Hoàn thành cập nhật sheet: {len(tab_100_ma_2d_arr)} dòng (chỉ A–I)")
+        if tab_q_prices:
+            print(f"  ✍️  Ghi cột Q (giá hiện tại) — {len(tab_q_prices)} dòng...", flush=True)
+            gg_sheet_factory.update_multi(gg_sheet_factory.tab_cho_va_khop, 2, tab_q_prices, "Q")
+
+        print(f"✅ Hoàn thành! Đã cập nhật {len(tab_100_ma_2d_arr)} dòng (A–I + cột Q)", flush=True)
+        logger.info(f"✅ Hoàn thành cập nhật sheet: {len(tab_100_ma_2d_arr)} dòng (A–I + Q)")
         
     except HttpError as e:
         # ✅ Xử lý đặc biệt cho lỗi 403 (Permission denied)
