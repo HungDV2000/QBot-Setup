@@ -183,6 +183,49 @@ def fetch_all_tickers_24h() -> dict:
     return out
 
 
+def ticker_key_from_pair_display(pair_display: str) -> str:
+    """HOME/USDT hoặc HOMEUSDT → HOME/USDT:USDT (key trong fetch_all_tickers_24h)."""
+    try:
+        _, pair = normalize_symbol(pair_display)
+    except ValueError:
+        p = str(pair_display or "").strip().upper().replace(":USDT", "")
+        if p.endswith("/USDT"):
+            pair = p
+        elif p.endswith("USDT"):
+            pair = f"{p[:-4]}/USDT"
+        else:
+            pair = f"{p}/USDT"
+    if ":USDT" in pair:
+        return pair
+    return f"{pair}:USDT"
+
+
+def get_sheet_col_c_price(tickers: dict, pair_display: str) -> Any:
+    """
+    Giá trị hiện thời — cột C sheet 100 mã (hd_update_all / build_symbol_data):
+    last từ ticker 24h REST, round(..., 8). Fallback fetch_ticker_24h từng mã.
+    """
+    key = ticker_key_from_pair_display(pair_display)
+    ti = tickers.get(key) or {}
+    last = ti.get("last")
+    if last is not None:
+        try:
+            px = float(last)
+            if px > 0:
+                return round(px, 8)
+        except (TypeError, ValueError):
+            pass
+    try:
+        symbol_clean = key.replace("/", "").replace(":USDT", "")
+        t = fetch_ticker_24h(symbol_clean)
+        px = float(t["lastPrice"])
+        if px > 0:
+            return round(px, 8)
+    except Exception as e:
+        logger.warning(f"get_sheet_col_c_price({pair_display}): {e}")
+    return ""
+
+
 def parse_ohlcv(rows: List[list]) -> dict:
     """CCXT/Binance kline: 0 time, 1 O, 2 H, 3 L, 4 C, 5 base vol, 7 quote vol."""
     o, h, l, c, bv, qv = [], [], [], [], [], []

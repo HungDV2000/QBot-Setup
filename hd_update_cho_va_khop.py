@@ -16,7 +16,7 @@ from binance_futures_direct import (
     futures_signed_request,
     normalize_algo_orders_response,
 )
-from binance_symbol_row import fetch_all_tickers_24h
+from binance_symbol_row import fetch_all_tickers_24h, get_sheet_col_c_price
 
 file_name = os.path.basename(os.path.abspath(__file__))  
 os.system(f"title {file_name} - {cst.key_name}")
@@ -426,33 +426,6 @@ def detect_closed_positions_with_residual_orders(opened_positions_symbols):
     return closed_list
 
 
-def _symbol_to_ticker_key(symbol_formatted: str) -> str:
-    """HOME/USDT hoặc HOMEUSDT → HOME/USDT:USDT (key trong fetch_all_tickers_24h)."""
-    s = str(symbol_formatted or "").strip().upper()
-    if ":USDT" in s:
-        return s
-    if s.endswith("/USDT"):
-        return f"{s}:USDT"
-    if s.endswith("USDT") and "/" not in s:
-        return f"{s[:-4]}/USDT:USDT"
-    return f"{s}/USDT:USDT"
-
-
-def _current_price_for_sheet(tickers: dict, symbol_formatted: str, entry_price=0):
-    """Giá last từ ticker 24h REST, làm tròn theo scale entry (nếu có)."""
-    ti = tickers.get(_symbol_to_ticker_key(symbol_formatted)) or {}
-    last = float(ti.get("last") or 0)
-    if last <= 0:
-        return ""
-    try:
-        ep = float(entry_price)
-        if ep <= 0:
-            ep = last
-    except (TypeError, ValueError):
-        ep = last
-    return _round_price_for_sheet(last, ep)
-
-
 def _round_price_for_sheet(price, entry_price):
     """Làm tròn giá hiển thị trên sheet theo scale của entry price (khớp hiển thị UI)."""
     if price is None or entry_price is None or entry_price <= 0:
@@ -769,9 +742,9 @@ def do_it():
         tickers_24h = {}
         print(f"⚠️ Không lấy được ticker 24h — cột Q sẽ trống: {e}", flush=True)
 
-    def _append_row(row_ai, symbol_fmt, entry_px=0):
+    def _append_row(row_ai, symbol_fmt):
         tab_100_ma_2d_arr.append(row_ai)
-        tab_q_prices.append([_current_price_for_sheet(tickers_24h, symbol_fmt, entry_px)])
+        tab_q_prices.append([get_sheet_col_c_price(tickers_24h, symbol_fmt)])
 
     # BƯỚC 1: Lấy positions đang mở
     print("📊 BƯỚC 1: Lấy positions đang mở từ Binance...", flush=True)
@@ -870,7 +843,7 @@ def do_it():
                 has_tp=has_tp,
                 order_count=order_count,
             )
-            _append_row(row, symbol_formatted, gia_vao)
+            _append_row(row, symbol_formatted)
             
         except Exception as e:
             print(f"    ❌ Lỗi xử lý position {cac_ma}: {e}", flush=True)
@@ -983,7 +956,7 @@ def do_it():
                 has_tp=False,
                 order_count=lenh_nguoc,
             )
-            _append_row(row, symbol_formatted, gia_vao)
+            _append_row(row, symbol_formatted)
             
         except Exception as e:
             print(f"    ❌ Lỗi xử lý order: {e}", flush=True)
@@ -1011,7 +984,7 @@ def do_it():
                 has_tp=closed['has_tp'],
                 order_count=closed['order_count'],
             )
-            _append_row(row, symbol_formatted, 0)
+            _append_row(row, symbol_formatted)
             print(f"  📎 Thêm ĐÓNG: {symbol_formatted} (side={side_str}, orders={closed['order_count']})", flush=True)
         except Exception as e:
             logger.error(f"Lỗi tạo row ĐÓNG cho {closed.get('symbol')}: {e}", exc_info=True)
@@ -1035,7 +1008,7 @@ def do_it():
         gg_sheet_factory.update_multi(gg_sheet_factory.tab_cho_va_khop, 2, tab_100_ma_2d_arr, "a")
 
         if tab_q_prices:
-            print(f"  ✍️  Ghi cột Q (giá hiện tại) — {len(tab_q_prices)} dòng...", flush=True)
+            print(f"  ✍️  Ghi cột Q (giá hiện tại = cột C bot 100 mã) — {len(tab_q_prices)} dòng...", flush=True)
             gg_sheet_factory.update_multi(gg_sheet_factory.tab_cho_va_khop, 2, tab_q_prices, "Q")
 
         print(f"✅ Hoàn thành! Đã cập nhật {len(tab_100_ma_2d_arr)} dòng (A–I + cột Q)", flush=True)
