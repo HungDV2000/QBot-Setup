@@ -348,6 +348,29 @@ def split_reduce_only_open_orders(open_orders):
     return sl_orders, tp_orders, unknown_orders
 
 
+def build_ghi_status_from_binance(symbol_ccxt):
+    """
+    Re-check trạng thái lệnh bảo vệ trên Binance để cập nhật lại G/H/I:
+      G = Có SL (Y/N)
+      H = Có TP (Y/N)
+      I = Số orders đang active (open + algo NEW)
+    """
+    try:
+        open_orders = get_open_orders(symbol_ccxt)
+        sl_open_orders, tp_open_orders, _ = split_reduce_only_open_orders(open_orders)
+        active_algo_orders = get_active_algo_orders(symbol_ccxt)  # NEW
+        classified_algo = classify_algo_orders(active_algo_orders)
+
+        has_sl = bool(sl_open_orders or classified_algo.get('SL'))
+        has_tp = bool(tp_open_orders or classified_algo.get('TP'))
+        order_count = len(open_orders) + len(active_algo_orders)
+
+        return ("Y" if has_sl else "N", "Y" if has_tp else "N", order_count)
+    except Exception as e:
+        logger.error(f"Lỗi build G/H/I cho {symbol_ccxt}: {e}", exc_info=True)
+        return None
+
+
 def process_cancellation():
     """
     Đọc sheet, kiểm tra tick cột J–M, xóa lệnh tương ứng.
@@ -368,6 +391,7 @@ def process_cancellation():
             return
 
         symbols_to_clear_ticks = []
+        rows_need_refresh_ghi = {}
 
         # Đếm tổng
         total_delete_1 = 0
@@ -437,6 +461,7 @@ def process_cancellation():
                 if delete_all_closed:
                     selected_tick_cols.append("M")
                 symbols_to_clear_ticks.append((row_idx, selected_tick_cols))
+                rows_need_refresh_ghi[row_idx] = symbol_ccxt
 
                 row_report = {
                     'symbol': symbol_raw,
@@ -797,6 +822,22 @@ def process_cancellation():
                             time.sleep(1)  # Tránh 429 khi fallback
                         except Exception as e2:
                             logger.error(f"Lỗi fallback update {col}{row_num}: {e2}")
+
+        # Sau khi xóa xong: cập nhật lại G/H/I theo trạng thái thực tế trên Binance
+        if rows_need_refresh_ghi:
+            print(f"\n🔄 Đồng bộ lại cột G/H/I cho {len(rows_need_refresh_ghi)} dòng...", flush=True)
+            for row_num, symbol_ccxt in rows_need_refresh_ghi.items():
+                ghi = build_ghi_status_from_binance(symbol_ccxt)
+                if ghi is None:
+                    continue
+                g_val, h_val, i_val = ghi
+                try:
+                    gg_sheet_factory.update_single_value(gg_sheet_factory.tab_cho_va_khop, f"G{row_num}", g_val)
+                    gg_sheet_factory.update_single_value(gg_sheet_factory.tab_cho_va_khop, f"H{row_num}", h_val)
+                    gg_sheet_factory.update_single_value(gg_sheet_factory.tab_cho_va_khop, f"I{row_num}", i_val)
+                    logger.info(f"[SYNC GHI] row={row_num} {symbol_ccxt}: G={g_val}, H={h_val}, I={i_val}")
+                except Exception as e:
+                    logger.error(f"Lỗi cập nhật G/H/I row {row_num} ({symbol_ccxt}): {e}", exc_info=True)
 
         # === GỬI THÔNG BÁO TELEGRAM ===
         if symbols_processed > 0:
