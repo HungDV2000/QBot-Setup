@@ -22,24 +22,44 @@ _EXCHANGE_FUT_CACHE: Optional[dict] = None
 _EXCHANGE_SPOT_CACHE: Optional[dict] = None
 _FUT_STATUS_MAP: Optional[Dict[str, str]] = None
 _SPOT_STATUS_MAP: Optional[Dict[str, str]] = None
+_FUT_STATUS_MAP_LOADED_AT: float = 0.0
+_SPOT_STATUS_MAP_LOADED_AT: float = 0.0
+_EXCHANGE_INFO_TTL_SEC: float = 6 * 3600  # Refresh mỗi 6 giờ
 
 # 1h≥168 (biên độ 7 ngày); 1d≥400 (AD biên độ ngày 365d + R-S 30d)
 _KLINE_LIMITS = (("1h", 168), ("4h", 120), ("1d", 400), ("1w", 20))
 
 
 def _http_get(base: str, path: str, params: Optional[dict] = None, timeout: int = 12) -> Any:
+    import urllib.error
     qs = urllib.parse.urlencode(params or {})
     url = f"{base}{path}" + (f"?{qs}" if qs else "")
     req = urllib.request.Request(url, headers={"User-Agent": "hd-update-all-new/1.0"})
     last_err: Optional[Exception] = None
-    for attempt in range(2):
+    max_attempts = 3
+    for attempt in range(max_attempts):
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            last_err = e
+            status = e.code
+            if status == 429:
+                # Rate limit — backoff dài hơn
+                wait = 30 * (attempt + 1)
+                logger.warning(f"Binance 429 rate limit {url}: chờ {wait}s (lần {attempt + 1})")
+                time.sleep(wait)
+            elif status in (500, 502, 503, 504):
+                # Server error tạm thời — backoff ngắn
+                wait = 2 ** attempt
+                logger.warning(f"Binance HTTP {status} {path}: chờ {wait}s (lần {attempt + 1})")
+                time.sleep(wait)
+            else:
+                raise  # Lỗi client (400, 401, 404...) — không retry
         except Exception as e:
             last_err = e
-            if attempt == 0:
-                time.sleep(0.25)
+            if attempt < max_attempts - 1:
+                time.sleep(0.5 * (attempt + 1))
     raise last_err  # type: ignore[misc]
 
 
@@ -55,8 +75,9 @@ def preload_exchange_caches() -> None:
 
 
 def _load_futures_exchange_info() -> None:
-    global _EXCHANGE_FUT_CACHE, _FUT_STATUS_MAP
-    if _FUT_STATUS_MAP is not None:
+    global _EXCHANGE_FUT_CACHE, _FUT_STATUS_MAP, _FUT_STATUS_MAP_LOADED_AT
+    now = time.time()
+    if _FUT_STATUS_MAP is not None and (now - _FUT_STATUS_MAP_LOADED_AT) < _EXCHANGE_INFO_TTL_SEC:
         return
     _EXCHANGE_FUT_CACHE = _http_get(BASE_FUTURES, "/fapi/v1/exchangeInfo", timeout=25)
     _FUT_STATUS_MAP = {
@@ -64,11 +85,14 @@ def _load_futures_exchange_info() -> None:
         for item in _EXCHANGE_FUT_CACHE.get("symbols", [])
         if item.get("symbol")
     }
+    _FUT_STATUS_MAP_LOADED_AT = now
+    logger.info(f"Đã refresh FUT exchangeInfo: {len(_FUT_STATUS_MAP)} symbol")
 
 
 def _load_spot_exchange_info() -> None:
-    global _EXCHANGE_SPOT_CACHE, _SPOT_STATUS_MAP
-    if _SPOT_STATUS_MAP is not None:
+    global _EXCHANGE_SPOT_CACHE, _SPOT_STATUS_MAP, _SPOT_STATUS_MAP_LOADED_AT
+    now = time.time()
+    if _SPOT_STATUS_MAP is not None and (now - _SPOT_STATUS_MAP_LOADED_AT) < _EXCHANGE_INFO_TTL_SEC:
         return
     try:
         _EXCHANGE_SPOT_CACHE = _http_get(BASE_SPOT, "/api/v3/exchangeInfo", timeout=25)
@@ -77,9 +101,12 @@ def _load_spot_exchange_info() -> None:
             for item in _EXCHANGE_SPOT_CACHE.get("symbols", [])
             if item.get("symbol")
         }
+        _SPOT_STATUS_MAP_LOADED_AT = now
+        logger.info(f"Đã refresh SPOT exchangeInfo: {len(_SPOT_STATUS_MAP)} symbol")
     except Exception as e:
         logger.warning(f"Không tải spot exchangeInfo: {e}")
-        _SPOT_STATUS_MAP = {}
+        if _SPOT_STATUS_MAP is None:
+            _SPOT_STATUS_MAP = {}
 
 
 def normalize_symbol(raw: str) -> Tuple[str, str]:

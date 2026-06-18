@@ -1,4 +1,5 @@
 import cst
+import time
 from enum import Enum
 
 spreadsheetId = cst.spreadsheet_id
@@ -349,6 +350,30 @@ def execute_with_retry(func, *args, max_retries=2, **kwargs):
         raise
         
     except HttpError as e:
+      # Retry 500/503 (lỗi tạm thời phía Google server) với exponential backoff
+      if e.resp.status in (500, 503):
+        if attempt < max_retries:
+          wait_sec = 2 ** attempt  # 1s, 2s, ...
+          logger.warning(f"HttpError {e.resp.status} (lần {attempt + 1}/{max_retries + 1}), chờ {wait_sec}s rồi retry: {e}")
+          print(f"⚠️ Google Sheets lỗi {e.resp.status}, chờ {wait_sec}s rồi thử lại (lần {attempt + 1})...", flush=True)
+          time.sleep(wait_sec)
+          continue
+        else:
+          logger.error(f"HttpError {e.resp.status} sau {max_retries + 1} lần thử: {e}")
+          print(f"❌ Lỗi Google Sheets API: {e}", flush=True)
+          raise
+
+      # Xử lý lỗi 429 (Rate limit) với backoff dài hơn
+      if e.resp.status == 429:
+        if attempt < max_retries:
+          wait_sec = 10 * (attempt + 1)
+          logger.warning(f"HttpError 429 Rate Limit (lần {attempt + 1}/{max_retries + 1}), chờ {wait_sec}s: {e}")
+          print(f"⚠️ Google Sheets rate limit 429, chờ {wait_sec}s (lần {attempt + 1})...", flush=True)
+          time.sleep(wait_sec)
+          continue
+        else:
+          raise
+
       # ✅ Xử lý lỗi 403 (Permission denied) - có thể do token hết hạn
       if e.resp.status == 403:
         logger.error(f"❌ HttpError 403 - Permission denied (lần thử {attempt + 1}/{max_retries + 1}): {e}")
@@ -384,7 +409,8 @@ def execute_with_retry(func, *args, max_retries=2, **kwargs):
 
 def get_dat_lenh(range):
   RANGE_NAME = f"'{tab_dat_lenh}'!{range}"
-  init_sheet_api()
+  if not _service_initialized or service is None or spreadsheets_service is None:
+    init_sheet_api()
   
   def _execute():
     result = (
@@ -407,7 +433,8 @@ def get_cho_va_khop(range, value_render_option=None):
         vs cell user nhập giá trị cứng.
   """
   RANGE_NAME = f"'{tab_cho_va_khop}'!{range}"
-  init_sheet_api()
+  if not _service_initialized or service is None or spreadsheets_service is None:
+    init_sheet_api()
   
   def _execute():
     kwargs = {"spreadsheetId": spreadsheetId, "range": RANGE_NAME}
@@ -425,7 +452,8 @@ def get_cho_va_khop(range, value_render_option=None):
   
 def get_100_ma(range):
   RANGE_NAME = f"'{tab_list_all_ma}'!{range}"
-  init_sheet_api()
+  if not _service_initialized or service is None or spreadsheets_service is None:
+    init_sheet_api()
   
   def _execute():
     result = (
@@ -442,7 +470,8 @@ def get_white_list():
     RANGE_NAME = f"'{tab_white_list}'!A1:A1000"
     print("📡 Đang đọc whitelist từ Google Sheet (tab 'list')...", flush=True)
     logger.info("Đang đọc whitelist từ Google Sheet (tab 'list')...")
-    init_sheet_api()
+    if not _service_initialized or service is None or spreadsheets_service is None:
+      init_sheet_api()
     
     def _execute():
         result = (

@@ -48,12 +48,16 @@ logger.addHandler(file_handler)
 
 exchange_id = "binance"
 exchange_class = getattr(ccxt, exchange_id)
+# Chỉ lấy giá public (fetch_tickers) — không cần apiKey/secret.
+# Nếu truyền apiKey, CCXT gọi /sapi/v1/capital/config/getall khi load_markets()
+# và sẽ lỗi -2008 khi key trong config.ini sai/hết hạn.
 exchange = exchange_class(
     {
         "enableRateLimit": True,
-        "apiKey": cst.key_binance,
-        "secret": cst.secret_binance,
-        "options": {"defaultType": "future"},
+        "options": {
+            "defaultType": "future",
+            "fetchCurrencies": False,
+        },
     }
 )
 exchange.setSandboxMode(False)

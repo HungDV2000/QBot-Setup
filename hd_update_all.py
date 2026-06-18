@@ -16,6 +16,7 @@ import math
 import os
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 from typing import Any, List
@@ -545,32 +546,50 @@ def do_it():
     with open("list_all.json", "w", encoding="utf-8") as f:
         json.dump(list_all, f)
 
+    def _fetch_symbols_parallel(symbols: list, label: str) -> list:
+        """Fetch nhiều symbol song song, giữ đúng thứ tự."""
+        if not symbols:
+            return []
+        # max_workers=5: đủ nhanh mà không bị Binance rate limit (mỗi symbol ~6 requests)
+        results: dict = {}
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            future_map = {pool.submit(get_row_result, sym): (i, sym) for i, sym in enumerate(symbols)}
+            done_count = 0
+            for fut in as_completed(future_map):
+                i, sym = future_map[fut]
+                done_count += 1
+                try:
+                    results[i] = fut.result()
+                    print(f"{label} [{done_count}/{len(symbols)}] ✅ {sym}", flush=True)
+                except Exception as e:
+                    logger.warning(f"{label} {sym} lỗi trong parallel fetch: {e}", exc_info=True)
+                    results[i] = empty_row
+        return [results[i] for i in range(len(symbols))]
+
     tab_rows.append([title1] + [""] * (SHEET_NUM_COLUMNS - 1))
-    giam_data = []
     first_dynamic_symbol = None
     first_dynamic_row = None
-    for idx, symbol in enumerate(list_giam, 1):
-        print(f"📉 [{idx}/{len(list_giam)}] {symbol}", flush=True)
-        row_data = get_row_result(symbol)
-        giam_data.append(row_data)
-        if first_dynamic_symbol is None:
-            first_dynamic_symbol, first_dynamic_row = symbol, row_data
-        if is_test_mode:
-            break
+
+    _list_giam = list_giam[:1] if is_test_mode else list_giam
+    giam_data = _fetch_symbols_parallel(_list_giam, "📉")
+    if giam_data:
+        first_dynamic_symbol, first_dynamic_row = _list_giam[0], giam_data[0]
     tab_rows.extend(giam_data)
     for _ in range(max(0, cst.top_count - len(giam_data))):
         tab_rows.append(empty_row)
 
+    # Refresh tickers trước khi xử lý danh sách tăng (giảm ~50% độ cũ của giá)
+    try:
+        tickers = fetch_all_tickers_24h()
+        print(f"🔄 Đã refresh tickers ({len(tickers)} symbols) trước danh sách tăng", flush=True)
+    except Exception as e:
+        logger.warning(f"Không refresh được tickers giữa chừng: {e}")
+
     tab_rows.append([title2] + [""] * (SHEET_NUM_COLUMNS - 1))
-    tang_data = []
-    for idx, symbol in enumerate(list_tang, 1):
-        if is_test_mode:
-            break
-        print(f"📈 [{idx}/{len(list_tang)}] {symbol}", flush=True)
-        row_data = get_row_result(symbol)
-        tang_data.append(row_data)
-        if first_dynamic_symbol is None:
-            first_dynamic_symbol, first_dynamic_row = symbol, row_data
+    _list_tang = [] if is_test_mode else list_tang
+    tang_data = _fetch_symbols_parallel(_list_tang, "📈")
+    if tang_data and first_dynamic_symbol is None:
+        first_dynamic_symbol, first_dynamic_row = _list_tang[0], tang_data[0]
     tab_rows.extend(tang_data)
     for _ in range(max(0, cst.top_count - len(tang_data))):
         tab_rows.append(empty_row)
