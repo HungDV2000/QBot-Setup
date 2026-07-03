@@ -11,6 +11,7 @@ Logic:
 """
 
 import ccxt
+from binance_futures_direct import resync_exchange_time  # [Fix1] chống clock drift -1021
 import logging
 import time
 from datetime import datetime
@@ -54,7 +55,10 @@ exchange = exchange_class({
     'apiKey': cst.key_binance,
     'secret': cst.secret_binance,
     'options': {
-        'defaultType': 'future' 
+        'defaultType': 'future',
+        'fetchCurrencies': False,          # [A2] tránh gọi /sapi getall (signed) khi load_markets
+        'adjustForTimeDifference': True,   # [A2] tự đồng bộ clock -> hết lỗi -1021
+        'recvWindow': 60000,               # [A2+Fix2] nới cửa sổ timestamp lên max 60s
     }
 })
 exchange.setSandboxMode(False)
@@ -94,13 +98,12 @@ class PriceTracker:
                             lev_value = float(leverage)
                             if lev_value > 0:
                                 activation = row[3] if len(row) > 3 else 0.0  # Cột D: Activation Price
-                        
-                        result.append({
-                            'symbol': symbol,
+                                result.append({
+                                    'symbol': symbol,
                                     'leverage': lev_value,
                                     'activation_price': float(activation) if activation else 0.0,
-                            'row_num': 55 + idx
-                        })
+                                    'row_num': 55 + idx
+                                })
                         except (ValueError, TypeError):
                             # Nếu leverage không phải số, bỏ qua
                             pass
@@ -117,13 +120,12 @@ class PriceTracker:
                             lev_value = float(leverage)
                             if lev_value > 0:
                                 activation = row[3] if len(row) > 3 else 0.0
-                        
-                        result.append({
-                            'symbol': symbol,
+                                result.append({
+                                    'symbol': symbol,
                                     'leverage': lev_value,
                                     'activation_price': float(activation) if activation else 0.0,
-                            'row_num': 4 + idx
-                        })
+                                    'row_num': 4 + idx
+                                })
                         except (ValueError, TypeError):
                             pass
             
@@ -205,8 +207,11 @@ if __name__ == "__main__":
     
     while True:
         try:
+            resync_exchange_time(exchange)  # [Fix1] chống clock drift -> hết -1021
             do_it()
         except Exception as e:
+            if '-1021' in str(e) or 'recvWindow' in str(e):
+                resync_exchange_time(exchange, min_interval=0)  # [Fix4] ép resync ccxt ngay
             print(f"❌ Tổng lỗi: {e}", flush=True)
             logger.error(f"Tổng lỗi: {e}")
             import traceback

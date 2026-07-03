@@ -1,2 +1,73 @@
+# ============================================
+# Cấu hình nhạy cảm (TUYỆT ĐỐI KHÔNG COMMIT!)
+# ============================================
+config.ini
+config.*.ini
+config.ini.bak
+.env
+
+# Google API credentials / token (NHẠY CẢM!)
 credentials.json
-credentials.json.example
+token.json
+data/order_cache.json
+
+# Cho phép giữ lại các file mẫu
+!config.ini.example
+!credentials.json.example
+
+# ============================================
+# Logs (có thể chứa thông tin giao dịch)
+# ============================================
+*.log
+*.log.*
+logs/
+order.log
+error.log
+
+# ============================================
+# Python
+# ============================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+dist_windows/
+*.egg-info/
+*.egg
+*.spec
+*.exe
+
+# Virtual env
+venv/
+env/
+ENV/
+.venv
+
+# ============================================
+# Dữ liệu cục bộ của bot
+# ============================================
+order/
+data/
+
+# ============================================
+# Backup / biến thể
+# ============================================
+*.bak
+*.backup
+*.old
+*.bk.py
+
+# ============================================
+# OS / IDE
+# ============================================
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

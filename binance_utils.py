@@ -10,6 +10,9 @@ def get_price_precision(sym):
             'secret': cst.secret_binance,
             'options': {
                 'defaultType': 'future',
+                'fetchCurrencies': False,          # [A2] tránh gọi /sapi getall (signed) khi load_markets
+                'adjustForTimeDifference': True,   # [A2] tự đồng bộ clock -> hết lỗi -1021
+                'recvWindow': 60000,               # [A2+Fix2] nới cửa sổ timestamp lên max 60s
             }
         })
 

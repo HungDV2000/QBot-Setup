@@ -159,10 +159,21 @@ def _fetch_klines_bundle(symbol_clean: str) -> Tuple[List[list], List[list], Lis
 def _fetch_metrics_bundle(
     symbol_clean: str, price: float
 ) -> Tuple[Tuple[Optional[float], Optional[float]], Tuple[Optional[float], Optional[float]]]:
-    """OI + L/S 5m song song (bỏ thêm 2 request L/S 1h)."""
+    """OI + L/S 5m song song (bỏ thêm 2 request L/S 1h).
+
+    [Fix A] Lỗi 1 nhánh (vd symbol đã delist → HTTP 400 openInterest) chỉ để TRỐNG
+    cột đó, KHÔNG làm hỏng cả dòng và KHÔNG spam traceback. Các cột khác vẫn có data.
+    """
+    def _safe(name, fn):
+        try:
+            return fn()
+        except Exception as e:
+            logger.warning(f"[{symbol_clean}] metric {name} bỏ qua (để trống): {e}")
+            return (None, None)
+
     with ThreadPoolExecutor(max_workers=2) as pool:
-        f_oi = pool.submit(fetch_oi_usdt_and_delta, symbol_clean, price)
-        f_ls = pool.submit(fetch_ls_ratio, symbol_clean, "5m")
+        f_oi = pool.submit(_safe, "OI", lambda: fetch_oi_usdt_and_delta(symbol_clean, price))
+        f_ls = pool.submit(_safe, "L/S", lambda: fetch_ls_ratio(symbol_clean, "5m"))
         return f_oi.result(), f_ls.result()
 
 

@@ -17,6 +17,35 @@ logger = logging.getLogger(__name__)
 
 FAPI_BASE = 'https://fapi.binance.com'
 
+# [Fix3] Đường REST trực tiếp (futures_signed_request) trước đây dùng time.time() local
+# thẳng -> clock VPS trôi là lỗi -1021. Ta lấy giờ server Binance, cache offset và refresh
+# định kỳ, để timestamp = giờ server bất kể clock local.
+_server_time_offset_ms = 0        # = serverTime - localTime (ms)
+_last_server_time_sync = 0.0      # thời điểm sync gần nhất (epoch giây)
+
+
+def _sync_server_time_offset(force: bool = False, min_interval: int = 300):
+    """Đồng bộ offset với /fapi/v1/time (public). Throttle mỗi min_interval giây."""
+    global _server_time_offset_ms, _last_server_time_sync
+    now = time.time()
+    if not force and (now - _last_server_time_sync) < min_interval:
+        return
+    try:
+        resp = requests.get(f'{FAPI_BASE}/fapi/v1/time', timeout=5)
+        resp.raise_for_status()
+        server_ms = int(resp.json()['serverTime'])
+        local_ms = int(time.time() * 1000)
+        _server_time_offset_ms = server_ms - local_ms
+        _last_server_time_sync = now
+        logger.info(f'[TIME/REST] Đồng bộ giờ server Binance, offset={_server_time_offset_ms}ms')
+    except Exception as e:
+        logger.warning(f'[TIME/REST] Không lấy được giờ server (giữ offset cũ={_server_time_offset_ms}ms): {e}')
+
+
+def _now_timestamp_ms() -> int:
+    """Timestamp (ms) đã hiệu chỉnh theo giờ server Binance."""
+    return int(time.time() * 1000) + _server_time_offset_ms
+
 # 400 + các mã này = không có lịch sử algo / symbol không hỗ trợ query → coi như []
 ALGO_QUERY_EMPTY_BINANCE_CODES = frozenset({
     -1121,   # Invalid symbol
@@ -25,6 +54,31 @@ ALGO_QUERY_EMPTY_BINANCE_CODES = frozenset({
     -4140,   # Invalid symbol status
     -4108,   # Symbol is on delivering/settling/closed
 })
+
+
+# [Fix1] Chống clock-drift cho các bot ccxt chạy dài ngày.
+# adjustForTimeDifference chỉ tính offset 1 lần lúc load_markets; đồng hồ VPS trôi dần
+# -> offset cũ sai -> lỗi -1021. Gọi resync_exchange_time() ở đầu mỗi vòng lặp để làm mới.
+_last_ccxt_time_resync = 0.0
+
+
+def resync_exchange_time(exchange, min_interval: int = 300):
+    """
+    Làm mới offset thời gian của ccxt (load_time_difference) để tránh -1021.
+
+    - Gọi ở đầu mỗi vòng lặp bot; throttle: chỉ sync thật mỗi `min_interval` giây (mặc định 5 phút).
+    - Bọc try/except: lỗi mạng khi sync không được làm gãy vòng lặp chính.
+    """
+    global _last_ccxt_time_resync
+    now = time.time()
+    if now - _last_ccxt_time_resync < min_interval:
+        return
+    try:
+        exchange.load_time_difference()
+        _last_ccxt_time_resync = now
+        logger.info('[TIME] Đã resync timeDifference (chống clock drift -1021)')
+    except Exception as e:
+        logger.warning(f'[TIME] resync timeDifference lỗi (bỏ qua): {e}')
 
 
 def clean_futures_symbol(symbol: str) -> str:
@@ -96,9 +150,11 @@ def futures_signed_request(
     headers = {'X-MBX-APIKEY': api_key}
     method = method.upper()
 
+    _sync_server_time_offset()  # [Fix3] đảm bảo offset giờ server còn tươi (throttle 5 phút)
+
     for attempt in range(max_retries):
         req_params = dict(params)
-        req_params['timestamp'] = int(time.time() * 1000)
+        req_params['timestamp'] = _now_timestamp_ms()  # [Fix3] giờ server, không phụ thuộc clock local
         if 'recvWindow' not in req_params:
             req_params['recvWindow'] = 60000
 
@@ -144,6 +200,10 @@ def futures_signed_request(
                 f'[FAPI] HTTP {status} {attempt + 1}/{max_retries} {endpoint} '
                 f'code={code} msg={msg[:120] if msg else ""}'
             )
+            # [Fix3] -1021 timestamp lệch -> ép đồng bộ lại giờ server trước khi retry
+            if code == -1021:
+                logger.warning('[TIME/REST] Gặp -1021 -> force resync giờ server rồi thử lại')
+                _sync_server_time_offset(force=True)
             if attempt < max_retries - 1:
                 time.sleep(wait)
 

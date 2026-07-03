@@ -458,26 +458,23 @@ class CascadeManager:
         except ccxt.NetworkError as e:
             logger.warning(f"   ⚠️ Không lấy được giá hiện tại: {e} - Bỏ qua validation")
         
-        limit_price = stop_price
-        
-        logger.info(f"   -> Đang gửi lệnh STOP_LIMIT {order_side} giá {stop_price}")
-        
+        # [A1] STOP_MARKET đảm bảo cắt lỗ LUÔN khớp khi giá gap/biến động mạnh
+        logger.info(f"   -> Đang gửi lệnh STOP_MARKET {order_side} giá trigger {stop_price}")
+
         # [LOG DATA GỬI LÊN BINANCE]
         logger.info(f"📤 [DATA GỬI - STOP LOSS]")
         logger.info(f"   Symbol: {symbol}")
         logger.info(f"   Side: {order_side}")
         logger.info(f"   Amount: {abs(position_amt)}")
-        logger.info(f"   Stop Price: {stop_price}")
-        logger.info(f"   Limit Price: {limit_price}")
+        logger.info(f"   Stop Price (trigger): {stop_price}")
         logger.info(f"   Reduce Only: True")
-        logger.info(f"   Type: STOP_LIMIT")
-        
-        order = self.order_helper.create_stop_limit_order(
+        logger.info(f"   Type: STOP_MARKET")
+
+        order = self.order_helper.create_stop_market_order(
             symbol=symbol,
             side=order_side,
             amount=abs(position_amt),
             stop_price=stop_price,
-            limit_price=limit_price,
             reduce_only=True
         )
         
@@ -779,13 +776,14 @@ class CascadeManager:
                     except Exception:
                         pass
 
-                    logger.info(f"   📤 SL{i+1}: STOP_LIMIT {order_side} @ {stop_price}, qty={qty_i}")
-                    order = self.order_helper.create_stop_limit_order(
+                    # [A1] STOP_MARKET đảm bảo cắt lỗ LUÔN khớp khi giá gap/biến động mạnh
+                    # (STOP_LIMIT với limit=stop có thể không khớp nếu giá nhảy qua limit)
+                    logger.info(f"   📤 SL{i+1}: STOP_MARKET {order_side} @ {stop_price}, qty={qty_i}")
+                    order = self.order_helper.create_stop_market_order(
                         symbol=symbol,
                         side=order_side,
                         amount=qty_i,
                         stop_price=stop_price,
-                        limit_price=stop_price,
                         reduce_only=True,
                     )
                     result['sl_orders'][i] = order

@@ -15,6 +15,7 @@ from binance_futures_direct import (
     fetch_algo_orders_for_symbol,
     futures_signed_request,
     normalize_algo_orders_response,
+    resync_exchange_time,
 )
 from binance_symbol_row import fetch_all_tickers_24h, get_sheet_col_c_price
 
@@ -62,7 +63,10 @@ exchange = exchange_class({
     'secret': cst.secret_binance,
     'options': {
         'defaultType': 'future',
-        'warnOnFetchOpenOrdersWithoutSymbol': False  # Suppress warning
+        'warnOnFetchOpenOrdersWithoutSymbol': False,  # Suppress warning
+        'fetchCurrencies': False,          # [A2] tránh gọi /sapi getall (signed) khi load_markets
+        'adjustForTimeDifference': True,   # [A2] tự đồng bộ clock -> hết lỗi -1021
+        'recvWindow': 60000,               # [A2+Fix2] nới cửa sổ timestamp lên max 60s
     }
 })
 exchange.setSandboxMode(False)
@@ -1040,6 +1044,7 @@ scan_count = 0
 
 while True:
     try:
+        resync_exchange_time(exchange)  # [Fix1] chống clock drift -> hết -1021
         scan_count += 1
         print(f"\n🔄 Scan lần {scan_count}", flush=True)
         logger.info(f"{'='*80}")
@@ -1055,6 +1060,8 @@ while True:
         break
         
     except Exception as e:
+        if '-1021' in str(e) or 'recvWindow' in str(e):
+            resync_exchange_time(exchange, min_interval=0)  # [Fix4] ép resync ccxt ngay
         print(f"\n❌ Tổng Lỗi: {e}", flush=True)
         logger.error(f"Tổng lỗi: {e}", exc_info=True)
         import traceback

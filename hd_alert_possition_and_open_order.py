@@ -1,4 +1,5 @@
 import ccxt
+from binance_futures_direct import resync_exchange_time  # [Fix1] chống clock drift -1021
 import cst
 import gg_sheet_factory
 import logging
@@ -45,7 +46,10 @@ exchange = exchange_class({
     'apiKey': cst.key_binance,
     'secret': cst.secret_binance,
     'options': {
-        'defaultType': 'future' 
+        'defaultType': 'future',
+        'fetchCurrencies': False,          # [A2] tránh gọi /sapi getall (signed) khi load_markets
+        'adjustForTimeDifference': True,   # [A2] tự đồng bộ clock -> hết lỗi -1021
+        'recvWindow': 60000,               # [A2+Fix2] nới cửa sổ timestamp lên max 60s
     }
 })
 exchange.setSandboxMode(False)
@@ -345,8 +349,11 @@ def do_it():
 
 while True:
     try:
+        resync_exchange_time(exchange)  # [Fix1] chống clock drift -> hết -1021
         do_it()
     except Exception as e:
+        if '-1021' in str(e) or 'recvWindow' in str(e):
+            resync_exchange_time(exchange, min_interval=0)  # [Fix4] ép resync ccxt ngay
         print(f"Tổng Lỗi: {e}", flush=True)
         logger.error(f"Tổng lỗi: {e}", exc_info=True)
         import traceback

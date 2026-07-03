@@ -19,7 +19,7 @@ import requests
 import hmac
 import hashlib
 import urllib.parse
-from binance_futures_direct import fetch_algo_orders_for_symbol, futures_signed_request
+from binance_futures_direct import fetch_algo_orders_for_symbol, futures_signed_request, resync_exchange_time
 
 # --- CẤU HÌNH HỆ THỐNG & LOGGING ---
 sys.stdout.reconfigure(line_buffering=True) if hasattr(sys.stdout, 'reconfigure') else None
@@ -623,7 +623,12 @@ exchange = exchange_class({
     'enableRateLimit': True,  
     'apiKey': cst.key_binance,
     'secret': cst.secret_binance,
-    'options': {'defaultType': 'future'}
+    'options': {
+        'defaultType': 'future',
+        'fetchCurrencies': False,          # [A2] tránh gọi /sapi getall (signed) khi load_markets
+        'adjustForTimeDifference': True,   # [A2] tự đồng bộ clock -> hết lỗi -1021
+        'recvWindow': 60000,               # [A2+Fix2] nới cửa sổ timestamp lên max 60s
+    }
 })
 exchange.setSandboxMode(False)
 
@@ -884,9 +889,12 @@ def do_it():
 
 while True:
     try:
+        resync_exchange_time(exchange)  # [Fix1] chống clock drift -> hết -1021
         do_it()
         sys.stdout.flush()
     except Exception as e:
+        if '-1021' in str(e) or 'recvWindow' in str(e):
+            resync_exchange_time(exchange, min_interval=0)  # [Fix4] ép resync ccxt ngay
         print(f"Tổng Lỗi: {e}", flush=True)
         logger.error(f"Tổng lỗi: {e}", exc_info=True)
     time.sleep(cst.delay_vao_lenh_123)
