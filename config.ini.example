@@ -35,8 +35,10 @@ test_mode = false
 tab_dat_lenh = ĐẶT LỆNH (100 MÃ)
 ; tab_dat_lenh = test
 
-; Cấu trúc cột FIXED: A=Symbol, B=Leverage, C=Callback, D=Activation, H=Capital
-; Chỉ hỗ trợ TRAILING_STOP (theo quy trình thực tế)
+; Cấu trúc cột FIXED trên tab đặt lệnh:
+;   - Bot LIMIT (hd_order_limit.py): A=Symbol, B=Leverage, D=Giá vào, F=SL, G=TP, H=Capital
+;   - Bot cũ TRAILING (hd_order.py): A=Symbol, B=Leverage, C=Callback, D=Activation, H=Capital
+; Chọn bot chạy bằng ORDER_BOT_MODE trong start_all_bots (limit / trailing).
 
 delay_vao_lenh = 60
 delay_vao_lenh_123 = 300

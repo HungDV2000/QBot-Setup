@@ -335,6 +335,26 @@ def has_pending_reverse_limit_order(symbol, reverse_side):
             return True
     return False
 
+def has_pending_stop_market_order(symbol, sl_side):
+    """
+    Kiểm tra đã có LỆNH CẮT LỖ (STOP_MARKET reduce_only) cùng side chưa.
+    sl_side: side của lệnh cắt lỗ (LONG->'sell', SHORT->'buy').
+    Raise nếu API lỗi → caller bỏ qua để tránh đặt trùng lệnh SL.
+    """
+    open_orders = exchange.fetch_open_orders(symbol)
+    if not open_orders:
+        return False
+    for order in open_orders:
+        o_type = str(order.get('type', '')).upper()
+        o_side = str(order.get('side', '')).lower()
+        info = order.get('info', {}) if isinstance(order.get('info'), dict) else {}
+        reduce_only = order.get('reduceOnly', False) or info.get('reduceOnly', False) \
+            or str(info.get('reduceOnly', 'false')).lower() == 'true'
+        # STOP_MARKET (CCXT có thể trả 'STOP_MARKET' hoặc 'STOP')
+        if 'STOP' in o_type and o_side == sl_side.lower() and reduce_only:
+            return True
+    return False
+
 def has_pending_limit_order(symbol, side):
     """
     Kiểm tra symbol đã có OPEN LIMIT ORDER (lệnh vào) cùng chiều chưa.
@@ -724,12 +744,14 @@ def do_it():
         row_count += 1
         print(f"📝 Đang xử lý dòng {row_count}/{len(don_bay)}", flush=True)
         sys.stdout.flush()  # Đảm bảo flush ngay lập tức
-        # Cấu trúc CỐ ĐỊNH: A=Symbol, B=Leverage, D=Giá entry LIMIT, G=Giá TP (lệnh ngược), H=Capital
-        # Loại lệnh: LIMIT. Lệnh 1 (entry) giá cột D; Lệnh ngược (reduce_only) giá cột G = TP.
-        # Cột C=Callback và F=SL KHÔNG dùng trong bot LIMIT.
+        # Cấu trúc CỐ ĐỊNH: A=Symbol, B=Leverage, D=Giá entry, F=Giá SL, G=Giá TP, H=Capital
+        # Lệnh 1 (entry LIMIT) giá cột D.
+        # Khi có vị thế: TP (LIMIT reduce_only) giá cột G; SL (STOP_MARKET reduce_only) giá cột F.
+        # Cột C=Callback KHÔNG dùng trong bot LIMIT.
         leverage_idx = 1    # Cột B
         activation_idx = 3  # Cột D (giá entry limit)
-        reverse_idx = 6     # Cột G (giá TP - lệnh ngược reduce only)
+        sl_idx = 5          # Cột F (giá SL - cắt lỗ STOP_MARKET reduce only)
+        reverse_idx = 6     # Cột G (giá TP - chốt lời LIMIT reduce only)
         capital_idx = 7     # Cột H
         
         # Validation: B ≠ "N" và B ≠ 0 và B là số hợp lệ
@@ -811,69 +833,102 @@ def do_it():
                 continue
 
             # ══════════════════════════════════════════════════════════════
-            # NHÁNH A: ĐÃ CÓ VỊ THẾ → Đặt LỆNH NGƯỢC (LIMIT reduce_only) nếu chưa có
+            # NHÁNH A: ĐÃ CÓ VỊ THẾ → Đặt TP (LIMIT) và SL (STOP_MARKET), đều reduce_only
+            #   - TP: giá cột G (LIMIT)          → cột G trống thì bỏ qua TP
+            #   - SL: giá cột F (STOP_MARKET)    → cột F trống thì bỏ qua SL
+            #   Hai lệnh độc lập, cột nào có giá thì đặt cột đó (nếu chưa có sẵn).
             # ══════════════════════════════════════════════════════════════
             if pos_amt != 0:
-                # side lệnh ngược suy từ dấu vị thế THỰC TẾ (an toàn hơn theo trạng thái)
-                rv_side = "sell" if pos_amt > 0 else "buy"
-                print(f"🔍 [{row_count}] {symbol} đã có vị thế ({pos_amt}) → kiểm tra lệnh ngược (side={rv_side})...", flush=True)
-
-                # Đã có lệnh ngược reduce_only cùng side chưa?
+                # side đóng vị thế (LONG->sell, SHORT->buy). Dùng chung cho cả TP và SL.
+                close_side = "sell" if pos_amt > 0 else "buy"
+                # Khối lượng đóng = toàn bộ vị thế (làm tròn theo precision)
                 try:
-                    if has_pending_reverse_limit_order(symbol, rv_side):
-                        print(f"⏭️  {symbol} đã có lệnh ngược LIMIT, bỏ qua", flush=True)
-                        logger.info(f"{symbol} đã có lệnh ngược (reduce_only) → bỏ qua")
-                        continue
-                except Exception as e:
-                    print(f"⚠️  Lỗi kiểm tra lệnh ngược {symbol}: {e}", flush=True)
-                    logger.error(f"Lỗi kiểm tra lệnh ngược {symbol}: {e}", exc_info=True)
-                    continue
-
-                # Đọc giá lệnh ngược (TP) từ cột G. Trống → chỉ đặt lệnh 1, không đặt lệnh ngược
-                if len(d) <= reverse_idx or not d[reverse_idx] \
-                        or not is_number(str(d[reverse_idx]).replace('%', '')):
-                    print(f"⏭️  {symbol}: Cột G (TP) trống → chỉ giữ lệnh 1, không đặt lệnh ngược", flush=True)
-                    logger.info(f"{symbol}: cột G (TP) rỗng/không hợp lệ → không đặt lệnh ngược")
-                    continue
-
-                rv_price_raw = float(str(d[reverse_idx]).replace('%', ''))
-                if rv_price_raw <= 0:
-                    print(f"⚠️  {symbol}: Giá lệnh ngược = {rv_price_raw} (phải > 0), bỏ qua", flush=True)
-                    logger.warning(f"{symbol}: Giá lệnh ngược {rv_price_raw} <= 0, bỏ qua")
-                    continue
-
-                # Làm tròn giá & khối lượng theo precision Binance
-                try:
-                    rv_price = float(exchange.price_to_precision(symbol, rv_price_raw))
+                    close_amount = float(exchange.amount_to_precision(symbol, abs(pos_amt)))
                 except Exception:
-                    rv_price = rv_price_raw
-                try:
-                    rv_amount = float(exchange.amount_to_precision(symbol, abs(pos_amt)))
-                except Exception:
-                    rv_amount = abs(pos_amt)
+                    close_amount = abs(pos_amt)
 
-                if rv_price <= 0 or rv_amount <= 0:
-                    print(f"⚠️  {symbol}: Lệnh ngược không hợp lệ (price={rv_price}, amount={rv_amount}), bỏ qua", flush=True)
-                    logger.warning(f"{symbol}: Lệnh ngược price={rv_price}, amount={rv_amount} không hợp lệ")
+                print(f"🔍 [{row_count}] {symbol} đã có vị thế ({pos_amt}) → kiểm tra TP/SL (side đóng={close_side})...", flush=True)
+
+                if close_amount <= 0:
+                    print(f"⚠️  {symbol}: Khối lượng đóng không hợp lệ ({close_amount}), bỏ qua", flush=True)
                     continue
 
-                print(f"📤 Tạo LỆNH NGƯỢC (reduce_only): {symbol} {rv_side} {rv_amount} @ {rv_price}", flush=True)
-                logger.info(f"Tạo lệnh ngược: {symbol} {rv_side} {rv_amount} @ {rv_price} (reduceOnly)")
+                # ---------- TP: LỆNH NGƯỢC CHỐT LỜI (LIMIT reduce_only) - cột G ----------
+                if len(d) > reverse_idx and d[reverse_idx] and is_number(str(d[reverse_idx]).replace('%', '')):
+                    try:
+                        tp_exists = has_pending_reverse_limit_order(symbol, close_side)
+                    except Exception as e:
+                        print(f"⚠️  Lỗi kiểm tra TP {symbol}: {e}", flush=True)
+                        logger.error(f"Lỗi kiểm tra TP {symbol}: {e}", exc_info=True)
+                        tp_exists = True  # lỗi API → coi như đã có, không đặt để tránh trùng
 
-                rv_order = order_helper.create_limit_order(
-                    symbol=symbol,
-                    side=rv_side,
-                    amount=rv_amount,
-                    limit_price=rv_price,
-                    reduce_only=True          # LỆNH NGƯỢC luôn reduce only
-                )
+                    if tp_exists:
+                        print(f"⏭️  {symbol} đã có lệnh TP, bỏ qua TP", flush=True)
+                    else:
+                        tp_price_raw = float(str(d[reverse_idx]).replace('%', ''))
+                        if tp_price_raw <= 0:
+                            print(f"⚠️  {symbol}: Giá TP = {tp_price_raw} (phải > 0), bỏ qua TP", flush=True)
+                        else:
+                            try:
+                                tp_price = float(exchange.price_to_precision(symbol, tp_price_raw))
+                            except Exception:
+                                tp_price = tp_price_raw
+                            if tp_price > 0:
+                                try:
+                                    print(f"📤 Tạo TP (LIMIT reduce_only): {symbol} {close_side} {close_amount} @ {tp_price}", flush=True)
+                                    tp_order = order_helper.create_limit_order(
+                                        symbol=symbol, side=close_side, amount=close_amount,
+                                        limit_price=tp_price, reduce_only=True
+                                    )
+                                    order_logger.info(f"LỆNH NGƯỢC (TP, reduceOnly) | {symbol} | {close_side} | Limit: {tp_price} | Amount: {close_amount} | Order ID: {tp_order.get('id', 'N/A')}")
+                                    printf(symbol, tp_order)
+                                    msg = f"🔁 <b>LỆNH TP (LIMIT reduce_only)</b>\n\n<b>Mã:</b> {symbol}\n<b>Side:</b> {close_side.upper()}\n<b>Giá TP:</b> {tp_price}\n<b>Khối lượng:</b> {close_amount}"
+                                    telegram_factory.send_tele(msg, cst.chat_id, True, True)
+                                    print(f"✅ Đã tạo TP cho {symbol}", flush=True)
+                                except Exception as e:
+                                    print(f"❌ Lỗi tạo TP {symbol}: {e}", flush=True)
+                                    logger.error(f"Lỗi tạo TP {symbol}: {e}", exc_info=True)
+                else:
+                    logger.info(f"{symbol}: cột G (TP) rỗng → không đặt TP")
 
-                order_logger.info(f"LỆNH NGƯỢC (TP, reduceOnly) | {symbol} | {rv_side} | Limit: {rv_price} | Amount: {rv_amount} | Order ID: {rv_order.get('id', 'N/A')}")
-                printf(symbol, rv_order)
-                msg = f"🔁 <b>LỆNH NGƯỢC (TP - LIMIT reduce_only)</b>\n\n<b>Mã:</b> {symbol}\n<b>Side:</b> {rv_side.upper()}\n<b>Giá TP:</b> {rv_price}\n<b>Khối lượng:</b> {rv_amount}"
-                telegram_factory.send_tele(msg, cst.chat_id, True, True)
-                print(f"✅ Đã tạo lệnh ngược cho {symbol}", flush=True)
-                logger.info(f"✅ Lệnh ngược đã tạo cho {symbol} (Order ID: {rv_order.get('id', 'N/A')})")
+                # ---------- SL: CẮT LỖ (STOP_MARKET reduce_only) - cột F ----------
+                if len(d) > sl_idx and d[sl_idx] and is_number(str(d[sl_idx]).replace('%', '')):
+                    try:
+                        sl_exists = has_pending_stop_market_order(symbol, close_side)
+                    except Exception as e:
+                        print(f"⚠️  Lỗi kiểm tra SL {symbol}: {e}", flush=True)
+                        logger.error(f"Lỗi kiểm tra SL {symbol}: {e}", exc_info=True)
+                        sl_exists = True  # lỗi API → coi như đã có, không đặt để tránh trùng
+
+                    if sl_exists:
+                        print(f"⏭️  {symbol} đã có lệnh SL, bỏ qua SL", flush=True)
+                    else:
+                        sl_price_raw = float(str(d[sl_idx]).replace('%', ''))
+                        if sl_price_raw <= 0:
+                            print(f"⚠️  {symbol}: Giá SL = {sl_price_raw} (phải > 0), bỏ qua SL", flush=True)
+                        else:
+                            try:
+                                sl_price = float(exchange.price_to_precision(symbol, sl_price_raw))
+                            except Exception:
+                                sl_price = sl_price_raw
+                            if sl_price > 0:
+                                try:
+                                    print(f"📤 Tạo SL (STOP_MARKET reduce_only): {symbol} {close_side} {close_amount} @ stop={sl_price}", flush=True)
+                                    sl_order = order_helper.create_stop_market_order(
+                                        symbol=symbol, side=close_side, amount=close_amount,
+                                        stop_price=sl_price, reduce_only=True
+                                    )
+                                    order_logger.info(f"LỆNH SL (STOP_MARKET, reduceOnly) | {symbol} | {close_side} | Stop: {sl_price} | Amount: {close_amount} | Order ID: {sl_order.get('id', 'N/A')}")
+                                    printf(symbol, sl_order)
+                                    msg = f"🛑 <b>LỆNH SL (STOP_MARKET reduce_only)</b>\n\n<b>Mã:</b> {symbol}\n<b>Side:</b> {close_side.upper()}\n<b>Giá SL:</b> {sl_price}\n<b>Khối lượng:</b> {close_amount}"
+                                    telegram_factory.send_tele(msg, cst.chat_id, True, True)
+                                    print(f"✅ Đã tạo SL cho {symbol}", flush=True)
+                                except Exception as e:
+                                    print(f"❌ Lỗi tạo SL {symbol}: {e}", flush=True)
+                                    logger.error(f"Lỗi tạo SL {symbol}: {e}", exc_info=True)
+                else:
+                    logger.info(f"{symbol}: cột F (SL) rỗng → không đặt SL")
+
                 continue
 
             # ══════════════════════════════════════════════════════════════
