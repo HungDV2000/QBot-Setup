@@ -34,9 +34,28 @@ echo ""
 # Create logs directory if not exists
 mkdir -p logs
 
+# ============================================================
+# CHỌN BOT ĐẶT LỆNH VÀO (Module 1):
+#   trailing = hd_order.py        (Trailing Stop - bản cũ)
+#   limit    = hd_order_limit.py  (LIMIT + lệnh ngược - bản mới)
+# Đổi mặc định ở dòng dưới, hoặc chạy:
+#   ORDER_BOT_MODE=trailing ./start_all_bots.sh
+# ⚠️ CHỈ chạy 1 trong 2 - chạy cả hai sẽ đặt lệnh TRÙNG!
+# ============================================================
+ORDER_BOT_MODE="${ORDER_BOT_MODE:-limit}"
+
+if [ "$ORDER_BOT_MODE" = "trailing" ]; then
+    ORDER_BOT_FILE="hd_order.py"
+elif [ "$ORDER_BOT_MODE" = "limit" ]; then
+    ORDER_BOT_FILE="hd_order_limit.py"
+else
+    echo "❌ ORDER_BOT_MODE='$ORDER_BOT_MODE' không hợp lệ (chỉ 'trailing' hoặc 'limit')"
+    exit 1
+fi
+
 # Module 1: Order Handler (Lệnh 1) - CRITICAL
-echo "▶ Starting hd_order.py (Entry Orders)..."
-nohup python3 hd_order.py > logs/hd_order.log 2>> error.log &
+echo "▶ Starting $ORDER_BOT_FILE (Entry Orders - mode=$ORDER_BOT_MODE)..."
+nohup python3 "$ORDER_BOT_FILE" > "logs/${ORDER_BOT_FILE%.py}.log" 2>> error.log &
 echo "  PID: $!"
 sleep 1
 
@@ -96,7 +115,7 @@ echo "Check status:"
 echo "  ps aux | grep python | grep hd_"
 echo ""
 echo "View logs:"
-echo "  tail -f logs/hd_order.log       # Stdout của hd_order.py"
+echo "  tail -f logs/${ORDER_BOT_FILE%.py}.log   # Stdout của bot đặt lệnh ($ORDER_BOT_FILE)"
 echo "  tail -f error.log                # Tất cả lỗi (stderr)"
 echo ""
 echo "Stop all:"

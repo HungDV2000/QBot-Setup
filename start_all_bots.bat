@@ -31,9 +31,28 @@ if exist error.log del error.log
 echo Error log cleared. All errors will be logged to error.log
 echo.
 
+REM ============================================================
+REM CHON BOT DAT LENH VAO (Module 1):
+REM   trailing = hd_order.py        (Trailing Stop - ban cu)
+REM   limit    = hd_order_limit.py  (LIMIT + lenh nguoc - ban moi)
+REM Doi mac dinh o dong ORDER_BOT_MODE ben duoi.
+REM CHI chay 1 trong 2 - chay ca hai se dat lenh TRUNG!
+REM ============================================================
+set ORDER_BOT_MODE=limit
+
+if /i "%ORDER_BOT_MODE%"=="trailing" (
+    set ORDER_BOT_FILE=hd_order.py
+) else if /i "%ORDER_BOT_MODE%"=="limit" (
+    set ORDER_BOT_FILE=hd_order_limit.py
+) else (
+    echo Error: ORDER_BOT_MODE='%ORDER_BOT_MODE%' khong hop le ^(chi 'trailing' hoac 'limit'^)
+    pause
+    exit /b 1
+)
+
 REM Module 1: Order Handler (Critical)
-echo Starting hd_order.py...
-start "QBot - Order Handler" cmd /c "python hd_order.py 2>> error.log"
+echo Starting %ORDER_BOT_FILE% (mode=%ORDER_BOT_MODE%)...
+start "QBot - Order Handler" cmd /c "python %ORDER_BOT_FILE% 2>> error.log"
 timeout /t 2 >nul
 
 REM Module 2: Order 123 Handler (Critical)
