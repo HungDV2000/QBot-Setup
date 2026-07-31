@@ -414,6 +414,13 @@ STATE_LONG  = "LONG"
 STATE_CHO  = "CHỜ"
 LENH_CHO = "LỆNH CHỜ"
 
+# ===================================================================
+# CHẾ ĐỘ ĐẶT LỆNH NGƯỢC:
+#   Không dùng ô công tắc riêng. Cơ chế bật/tắt theo TỪNG DÒNG:
+#     - Cột G (TP) CÓ giá  → bot đặt lệnh ngược (chốt lời) cho dòng đó
+#     - Cột G (TP) TRỐNG   → bot chỉ đặt lệnh 1 (không đặt lệnh ngược)
+# ===================================================================
+
 def get_current_state():
   """
   Đọc trạng thái B2 hiện tại từ Google Sheet
@@ -551,7 +558,7 @@ def do_it():
   state_value, read_time = get_current_state()
   print(f"📌 Trạng thái: {state_value} (đọc lúc {read_time.strftime('%H:%M:%S')})", flush=True)
   logger.info(f"[SCAN START] Đọc trạng thái từ B2: {state_value} (timestamp: {read_time.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]})")
-  
+
   # Đọc cấu hình vốn từ D1, D2, E2
   d1_percent, d2_default, e2_total, has_error = get_capital_config()
   
@@ -717,12 +724,12 @@ def do_it():
         row_count += 1
         print(f"📝 Đang xử lý dòng {row_count}/{len(don_bay)}", flush=True)
         sys.stdout.flush()  # Đảm bảo flush ngay lập tức
-        # Cấu trúc CỐ ĐỊNH: A=Symbol, B=Leverage, D=Giá entry LIMIT, F=Giá lệnh ngược, H=Capital
-        # Loại lệnh: LIMIT. Lệnh 1 (entry) giá cột D; Lệnh ngược (reduce_only) giá cột F.
-        # Cột C=Callback KHÔNG còn dùng.
+        # Cấu trúc CỐ ĐỊNH: A=Symbol, B=Leverage, D=Giá entry LIMIT, G=Giá TP (lệnh ngược), H=Capital
+        # Loại lệnh: LIMIT. Lệnh 1 (entry) giá cột D; Lệnh ngược (reduce_only) giá cột G = TP.
+        # Cột C=Callback và F=SL KHÔNG dùng trong bot LIMIT.
         leverage_idx = 1    # Cột B
         activation_idx = 3  # Cột D (giá entry limit)
-        reverse_idx = 5     # Cột F (giá lệnh ngược - reduce only)
+        reverse_idx = 6     # Cột G (giá TP - lệnh ngược reduce only)
         capital_idx = 7     # Cột H
         
         # Validation: B ≠ "N" và B ≠ 0 và B là số hợp lệ
@@ -822,11 +829,11 @@ def do_it():
                     logger.error(f"Lỗi kiểm tra lệnh ngược {symbol}: {e}", exc_info=True)
                     continue
 
-                # Đọc giá lệnh ngược từ cột F
+                # Đọc giá lệnh ngược (TP) từ cột G. Trống → chỉ đặt lệnh 1, không đặt lệnh ngược
                 if len(d) <= reverse_idx or not d[reverse_idx] \
                         or not is_number(str(d[reverse_idx]).replace('%', '')):
-                    print(f"⏭️  {symbol}: Chưa có giá lệnh ngược (cột F) → bỏ qua", flush=True)
-                    logger.info(f"{symbol}: cột F rỗng/không hợp lệ → chưa đặt lệnh ngược")
+                    print(f"⏭️  {symbol}: Cột G (TP) trống → chỉ giữ lệnh 1, không đặt lệnh ngược", flush=True)
+                    logger.info(f"{symbol}: cột G (TP) rỗng/không hợp lệ → không đặt lệnh ngược")
                     continue
 
                 rv_price_raw = float(str(d[reverse_idx]).replace('%', ''))
@@ -861,9 +868,9 @@ def do_it():
                     reduce_only=True          # LỆNH NGƯỢC luôn reduce only
                 )
 
-                order_logger.info(f"LỆNH NGƯỢC (reduceOnly) | {symbol} | {rv_side} | Limit: {rv_price} | Amount: {rv_amount} | Order ID: {rv_order.get('id', 'N/A')}")
+                order_logger.info(f"LỆNH NGƯỢC (TP, reduceOnly) | {symbol} | {rv_side} | Limit: {rv_price} | Amount: {rv_amount} | Order ID: {rv_order.get('id', 'N/A')}")
                 printf(symbol, rv_order)
-                msg = f"🔁 <b>LỆNH NGƯỢC (LIMIT reduce_only)</b>\n\n<b>Mã:</b> {symbol}\n<b>Side:</b> {rv_side.upper()}\n<b>Giá:</b> {rv_price}\n<b>Khối lượng:</b> {rv_amount}"
+                msg = f"🔁 <b>LỆNH NGƯỢC (TP - LIMIT reduce_only)</b>\n\n<b>Mã:</b> {symbol}\n<b>Side:</b> {rv_side.upper()}\n<b>Giá TP:</b> {rv_price}\n<b>Khối lượng:</b> {rv_amount}"
                 telegram_factory.send_tele(msg, cst.chat_id, True, True)
                 print(f"✅ Đã tạo lệnh ngược cho {symbol}", flush=True)
                 logger.info(f"✅ Lệnh ngược đã tạo cho {symbol} (Order ID: {rv_order.get('id', 'N/A')})")
