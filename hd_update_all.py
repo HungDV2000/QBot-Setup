@@ -176,10 +176,15 @@ def log_symbol_column_audit_to_main_log(symbol: str, row: list) -> None:
 
 # ── Delist (cột AK) ─────────────────────────────────────────────────────────
 
-_BINANCE_CMS_LIST = "https://www.binance.com/bapi/apex/v1/public/apex/cms/article/list/query"
+# Binance CMS đã đổi sang POST (GET trả 400 từ ~2025). Thử 2 endpoint:
+_BINANCE_CMS_URLS = [
+    "https://www.binance.com/bapi/composite/v1/public/cms/article/list/query",
+    "https://www.binance.com/bapi/apex/v1/public/apex/cms/article/list/query",
+]
 _BINANCE_DELIST_CATALOG_ID = 161
 _CMS_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+    "Content-Type": "application/json",
     "lang": "en",
     "Accept-Language": "en",
     "clienttype": "web",
@@ -268,26 +273,38 @@ def _build_upcoming_delist_by_pair() -> dict:
     today_d = datetime.now().date()
     by_pair_venue: dict = {}
 
-    try:
-        r = requests.get(
-            _BINANCE_CMS_LIST,
-            params={"type": 1, "pageNo": 1, "pageSize": 200, "catalogId": _BINANCE_DELIST_CATALOG_ID},
-            headers=_CMS_HEADERS,
-            timeout=45,
-        )
-        r.raise_for_status()
-        data = r.json()
-        if data.get("code") not in (None, "000000", 0, "0"):
-            logger.warning(f"binance delist: API code={data.get('code')} msg={data.get('message')}")
-            return {}
-        arts = (data.get("data") or {}).get("catalogs")
-        if not arts:
-            logger.warning("binance delist: không có catalogs")
-            return {}
-        articles = arts[0].get("articles") or []
-        logger.info(f"binance delist: đọc được {len(articles)} bài catalog 161")
-    except Exception as e:
-        logger.warning(f"binance delist: không tải được CMS: {e}")
+    # Thử POST lần lượt qua các endpoint (Binance hay đổi)
+    articles = []
+    _cms_body = {"type": 1, "pageNo": 1, "pageSize": 200, "catalogId": _BINANCE_DELIST_CATALOG_ID}
+    for _cms_url in _BINANCE_CMS_URLS:
+        try:
+            r = requests.post(
+                _cms_url,
+                json=_cms_body,
+                headers=_CMS_HEADERS,
+                timeout=45,
+            )
+            if r.status_code in (403, 400):
+                logger.info(f"binance delist: {_cms_url} trả {r.status_code}, thử endpoint tiếp")
+                continue
+            r.raise_for_status()
+            data = r.json()
+            if data.get("code") not in (None, "000000", 0, "0"):
+                logger.warning(f"binance delist: API code={data.get('code')} msg={data.get('message')}")
+                continue
+            arts = (data.get("data") or {}).get("catalogs")
+            if not arts:
+                logger.warning(f"binance delist: không có catalogs từ {_cms_url}")
+                continue
+            articles = arts[0].get("articles") or []
+            logger.info(f"binance delist: đọc được {len(articles)} bài catalog 161 (từ {_cms_url})")
+            break  # Thành công → dừng
+        except Exception as e:
+            logger.warning(f"binance delist: lỗi {_cms_url}: {e}")
+            continue
+
+    if not articles:
+        logger.warning("binance delist: không tải được bài viết từ bất kỳ endpoint nào")
         return {}
 
     articles_matched = 0
@@ -387,6 +404,10 @@ def _load_future_delist_by_pair_from_api() -> dict:
     try:
         r = requests.get(_DELIST_API_URL, timeout=30)
         r.raise_for_status()
+        # n8n webhook có thể trả 200 nhưng body rỗng → r.json() crash
+        if not r.text or not r.text.strip():
+            logger.warning("Delist API trả body rỗng (200 nhưng không có dữ liệu)")
+            return {}
         payload = r.json()
     except Exception as e:
         logger.warning(f"Không tải được delist API: {e}")
