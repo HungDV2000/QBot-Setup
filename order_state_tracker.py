@@ -4,9 +4,16 @@ Cập nhật các cột C,D,E,F,G theo từng sự kiện khớp lệnh
 """
 
 import logging
+import time
 from datetime import datetime
 from typing import Optional, Dict
 import gg_sheet_factory
+import cst
+import rate_guard
+
+# CHỐNG 429: thời gian nhớ tạm cột mã (A). Danh sách mã hầu như không đổi nên
+# 60s là an toàn; các thao tác GHI vẫn luôn đọc lại thật (fresh=True).
+ROW_CACHE_TTL = rate_guard.read_ttl(cst.config, 'row_cache_ttl_sec', 60.0, max_ttl=300.0)
 
 logger = logging.getLogger(__name__)
 
@@ -16,8 +23,10 @@ class OrderStateTracker:
     
     def __init__(self, sheet_name: str):
         self.sheet_name = sheet_name
+        self._row_cache = {}   # {(dòng_đầu, dòng_cuối): (thời_điểm, dữ_liệu)}
     
-    def find_symbol_row(self, symbol: str, start_row: int = 4, end_row: int = 104) -> Optional[int]:
+    def find_symbol_row(self, symbol: str, start_row: int = 4, end_row: int = 104,
+                        fresh: bool = False) -> Optional[int]:
         """
         Tìm hàng của symbol trong sheet
         
@@ -30,7 +39,19 @@ class OrderStateTracker:
             Số hàng (1-indexed) hoặc None nếu không tìm thấy
         """
         try:
-            data = gg_sheet_factory.get_dat_lenh(f"A{start_row}:A{end_row}")
+            # CHỐNG 429: cột mã (A) hầu như không đổi, nên nhớ tạm vài chục giây.
+            # Trước đây mỗi lần tra 1 mã là 1 lượt gọi API — vòng lặp qua N vị thế
+            # tốn N lượt, cộng dồn 3 tài khoản là vượt hạn mức 60 lượt/phút.
+            # fresh=True (các hàm GHI dùng) luôn đọc lại thật để không ghi nhầm dòng.
+            ck = (start_row, end_row)
+            now = time.time()
+            hit = self._row_cache.get(ck)
+            if (not fresh) and hit and (now - hit[0]) < ROW_CACHE_TTL:
+                data = hit[1]
+            else:
+                data = gg_sheet_factory.get_dat_lenh(f"A{start_row}:A{end_row}")
+                self._row_cache[ck] = (now, data)
+
             for idx, row in enumerate(data):
                 if row and row[0] == symbol:
                     return start_row + idx
@@ -65,7 +86,7 @@ class OrderStateTracker:
         """
         try:
             # Tìm hàng của symbol
-            row_num = self.find_symbol_row(symbol, start_row, end_row)
+            row_num = self.find_symbol_row(symbol, start_row, end_row, fresh=True)
             if not row_num:
                 logger.warning(f"Không tìm thấy {symbol} trong sheet")
                 return False
@@ -113,7 +134,7 @@ class OrderStateTracker:
             True nếu update thành công
         """
         try:
-            row_num = self.find_symbol_row(symbol, start_row, end_row)
+            row_num = self.find_symbol_row(symbol, start_row, end_row, fresh=True)
             if not row_num:
                 logger.warning(f"Không tìm thấy {symbol} trong sheet")
                 return False
@@ -146,7 +167,7 @@ class OrderStateTracker:
             True nếu xóa thành công
         """
         try:
-            row_num = self.find_symbol_row(symbol, start_row, end_row)
+            row_num = self.find_symbol_row(symbol, start_row, end_row, fresh=True)
             if not row_num:
                 return False
             
@@ -208,7 +229,7 @@ class OrderStateTracker:
             True nếu update thành công
         """
         try:
-            row_num = self.find_symbol_row(symbol, start_row, end_row)
+            row_num = self.find_symbol_row(symbol, start_row, end_row, fresh=True)
             if not row_num:
                 return False
             

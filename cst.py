@@ -122,12 +122,21 @@ def _run_for_all_accounts(entry_file):
     print(f"  (Ctrl+C để dừng tất cả)", flush=True)
     print("=" * 62, flush=True)
 
+    # Giãn giờ khởi động: các tài khoản lệch pha nhau nên không cùng gọi
+    # Google Sheets / Binance trong một khoảnh khắc → tránh lỗi 429.
+    # Mặc định 20s; chỉnh bằng account_start_stagger_sec trong [global].
+    try:
+        stagger = config.getfloat('global', 'account_start_stagger_sec', fallback=20.0)
+    except Exception:
+        stagger = 20.0
+    if stagger < 0:
+        stagger = 0.0
+
     procs = {}
     for i, acc in enumerate(accounts):
-        # Stagger: account sau chờ 20s để phân tán tải API Binance (tránh 429)
-        if i > 0:
-            print(f"  ⏳ Chờ 20s trước khi khởi động [{acc}] (tránh rate limit)...", flush=True)
-            time.sleep(20)
+        if i > 0 and stagger > 0:
+            print(f"  ⏳ Chờ {stagger:.0f}s trước khi khởi động [{acc}] (tránh rate limit)...", flush=True)
+            time.sleep(stagger)
         env = dict(os.environ, QBOT_ACCOUNT=acc, QBOT_CONFIG=config_file)
         try:
             p = subprocess.Popen(

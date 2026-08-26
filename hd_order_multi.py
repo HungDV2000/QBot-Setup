@@ -441,9 +441,38 @@ LENH_CHO = "LỆNH CHỜ"
 #     - Cột G (TP) TRỐNG   → bot chỉ đặt lệnh 1 (không đặt lệnh ngược)
 # ===================================================================
 
-def get_current_state():
+# ══════════════════════════════════════════════════════════════════════════════
+# CACHE TRẠNG THÁI B2 — CHỐNG LỖI 429 (vượt hạn mức Google Sheets)
+#
+#   Google chỉ cho 60 lượt ĐỌC/phút, dùng CHUNG cho MỌI tài khoản.
+#   Trước đây mỗi dòng mã đều đọc lại B2 → 50 mã = 50 lượt/vòng/tài khoản,
+#   chạy 3 tài khoản là ~186 lượt/phút → vượt 3 lần → 429.
+#
+#   Nay B2 chỉ đọc thật mỗi `state_cache_ttl_sec` giây (mặc định 10s),
+#   trong khoảng đó các dòng dùng lại giá trị đã đọc.
+#   ⇒ Bấm DỪNG trên sheet vẫn có hiệu lực, chậm nhất sau 10 giây.
+# ══════════════════════════════════════════════════════════════════════════════
+import rate_guard
+STATE_CACHE_TTL = rate_guard.read_ttl(cst.config)
+_state_box = rate_guard.new_box()
+
+def invalidate_state_cache():
+  """Xoá cache để lần gọi sau đọc lại B2 thật."""
+  rate_guard.clear(_state_box)
+
+def get_current_state(force=False):
   """
-  Đọc trạng thái B2 hiện tại từ Google Sheet
+  Đọc trạng thái B2 — CÓ CACHE ngắn hạn để không vượt hạn mức Google Sheets.
+  force=True → bỏ qua cache, đọc thật (dùng cho mốc quan trọng: đầu/cuối vòng).
+  Returns: (state_value, timestamp)
+  """
+  return rate_guard.cached_state(_state_box, _fetch_current_state,
+                                 STATE_CACHE_TTL, force)
+
+def _fetch_current_state():
+  """
+  Đọc trạng thái B2 hiện tại từ Google Sheet (GỌI API THẬT — đừng gọi trực tiếp,
+  hãy dùng get_current_state() để được cache).
   Returns: (state_value, timestamp)
   """
   try:
@@ -1339,7 +1368,7 @@ def _do_entry_phase():
             continue
 
     # Kiểm tra lại B2 sau khi scan xong
-    final_state, final_time = get_current_state()
+    final_state, final_time = get_current_state(force=True)
     print(f"✅ Hoàn thành scan {state_value} - Đã xử lý {row_count}/{len(don_bay)} dòng", flush=True)
     logger.info(f"[SCAN END] Hoàn thành scan {state_value} - {row_count}/{len(don_bay)} dòng")
     if final_state != state_value:
@@ -1356,7 +1385,7 @@ def do_it():
       PHA B — SL/TP:    quét tab "Chờ và khớp" (vị thế thực tế đang mở).
               Bỏ qua khi B2 đang STOP/XÓA (lúc đó hệ thống đang dọn dẹp).
     """
-    state_value, _ = get_current_state()
+    state_value, _ = get_current_state(force=True)
 
     # PHA A
     _do_entry_phase()

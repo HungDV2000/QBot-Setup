@@ -71,6 +71,20 @@ tab_dat_lenh = ĐẶT LỆNH (100 MÃ)
 ; Chọn bot chạy bằng ORDER_BOT_MODE trong start_all_bots (limit / trailing).
 
 delay_vao_lenh = 60
+
+# ── CHỐNG LỖI 429 (vượt hạn mức Google Sheets) ────────────────────────────────
+# Google cho 60 lượt ĐỌC/phút, dùng CHUNG cho TẤT CẢ tài khoản.
+# Càng nhiều tài khoản càng dễ vượt → 2 tham số dưới đây để chia tải.
+
+# Trong 1 vòng quét, trạng thái ô B2 chỉ đọc thật mỗi ngần này giây
+# (các dòng còn lại dùng lại giá trị vừa đọc).
+#   Bấm DỪNG trên sheet vẫn ăn, chậm nhất sau đúng ngần này giây.
+#   Tăng lên (15-20) nếu vẫn bị 429; giảm xuống nếu muốn phản ứng nhanh hơn.
+state_cache_ttl_sec = 10
+
+# Khởi động các tài khoản LỆCH NHAU ngần này giây, để 3 bot không cùng
+# gọi API trong một khoảnh khắc. Nhiều tài khoản thì tăng lên.
+account_start_stagger_sec = 20
 delay_vao_lenh_123 = 300
 delay_cho_va_khop = 600
 delay_calert_possition_and_open_order = 120

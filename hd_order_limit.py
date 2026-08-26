@@ -441,7 +441,22 @@ LENH_CHO = "LỆNH CHỜ"
 #     - Cột G (TP) TRỐNG   → bot chỉ đặt lệnh 1 (không đặt lệnh ngược)
 # ===================================================================
 
-def get_current_state():
+# ── CHỐNG 429: cache trạng thái B2 (xem rate_guard.py) ───────────────────────
+import rate_guard
+STATE_CACHE_TTL = rate_guard.read_ttl(cst.config)
+
+_state_box = rate_guard.new_box()
+
+def get_current_state(force=False):
+  """Đọc trạng thái B2 — CÓ CACHE ngắn hạn để không vượt hạn mức Google Sheets.
+  force=True → bỏ qua cache, đọc thật (dùng ở đầu/cuối mỗi vòng quét)."""
+  return rate_guard.cached_state(_state_box, _fetch_current_state,
+                                 STATE_CACHE_TTL, force)
+
+def invalidate_state_cache():
+  rate_guard.clear(_state_box)
+
+def _fetch_current_state():
   """
   Đọc trạng thái B2 hiện tại từ Google Sheet
   Returns: (state_value, timestamp)
@@ -490,6 +505,7 @@ def get_current_state():
     logger.error(f"Lỗi không xác định khi đọc B2: {e}", exc_info=True)
     print(f"❌ Lỗi không xác định khi đọc B2: {e}", flush=True)
     return STATE_CHO, datetime.now()
+
 
 def get_capital_config():
   """
@@ -575,7 +591,7 @@ def do_it():
   logger.info(f"{datetime.now()}. Scan Vào Lệnh----------------------------------------------------")
 
   # Đọc trạng thái hệ thống từ B2 (theo quy trình thực tế)
-  state_value, read_time = get_current_state()
+  state_value, read_time = get_current_state(force=True)
   print(f"📌 Trạng thái: {state_value} (đọc lúc {read_time.strftime('%H:%M:%S')})", flush=True)
   logger.info(f"[SCAN START] Đọc trạng thái từ B2: {state_value} (timestamp: {read_time.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]})")
 
@@ -1157,7 +1173,7 @@ def do_it():
             continue
     
     # Kiểm tra lại B2 sau khi scan xong
-    final_state, final_time = get_current_state()
+    final_state, final_time = get_current_state(force=True)
     print(f"✅ Hoàn thành scan {state_value} - Đã xử lý {row_count}/{len(don_bay)} dòng", flush=True)
     logger.info(f"[SCAN END] Hoàn thành scan {state_value} - Đã xử lý {row_count}/{len(don_bay)} dòng")
     
