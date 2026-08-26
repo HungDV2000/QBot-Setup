@@ -40,13 +40,15 @@ def _http_get(base: str, path: str, params: Optional[dict] = None, timeout: int 
     for attempt in range(max_attempts):
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
-                return json.loads(resp.read().decode("utf-8"))
+                result = json.loads(resp.read().decode("utf-8"))
+                time.sleep(0.05)  # 50ms gap giữa các request, tránh burst rate limit
+                return result
         except urllib.error.HTTPError as e:
             last_err = e
             status = e.code
             if status == 429:
-                # Rate limit — backoff dài hơn
-                wait = 30 * (attempt + 1)
+                # Rate limit — exponential backoff (5s, 10s, 20s)
+                wait = 5 * (2 ** attempt)
                 logger.warning(f"Binance 429 rate limit {url}: chờ {wait}s (lần {attempt + 1})")
                 time.sleep(wait)
             elif status in (500, 502, 503, 504):

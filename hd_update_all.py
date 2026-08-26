@@ -571,9 +571,9 @@ def do_it():
         """Fetch nhiều symbol song song, giữ đúng thứ tự."""
         if not symbols:
             return []
-        # max_workers=5: đủ nhanh mà không bị Binance rate limit (mỗi symbol ~6 requests)
+        # max_workers=3: cân bằng tốc độ và rate limit (3 account × 3 workers × 8 req/mã = 72 burst)
         results: dict = {}
-        with ThreadPoolExecutor(max_workers=5) as pool:
+        with ThreadPoolExecutor(max_workers=3) as pool:
             future_map = {pool.submit(get_row_result, sym): (i, sym) for i, sym in enumerate(symbols)}
             done_count = 0
             for fut in as_completed(future_map):

@@ -123,7 +123,11 @@ def _run_for_all_accounts(entry_file):
     print("=" * 62, flush=True)
 
     procs = {}
-    for acc in accounts:
+    for i, acc in enumerate(accounts):
+        # Stagger: account sau chờ 20s để phân tán tải API Binance (tránh 429)
+        if i > 0:
+            print(f"  ⏳ Chờ 20s trước khi khởi động [{acc}] (tránh rate limit)...", flush=True)
+            time.sleep(20)
         env = dict(os.environ, QBOT_ACCOUNT=acc, QBOT_CONFIG=config_file)
         try:
             p = subprocess.Popen(
