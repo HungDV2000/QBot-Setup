@@ -18,7 +18,7 @@ file_name = os.path.basename(os.path.abspath(__file__))
 os.system(f"title {file_name} - {cst.key_name}")
 
 # Tạo thư mục logs/ nếu chưa có
-logs_dir = Path('logs')
+logs_dir = cst.account_dir('logs')  # [MULTI-ACC] tách theo tài khoản
 logs_dir.mkdir(exist_ok=True)
 
 # Tạo tên file log với timestamp: hd_alert_possition_and_open_order_dd_mm_yyyy_H_M_S.txt
@@ -251,8 +251,11 @@ def do_it():
                 tracker = get_tracker(side)
                 state = tracker.get_current_state(
                     symbol=symbol,
-                    start_row=55 if side == "LONG" else 4,
-                    end_row=104 if side == "LONG" else 53
+                    # Bố cục sheet: KHỐI TRÊN (4-53) = LONG, KHỐI DƯỚI (55-104) = SHORT.
+                    # Trước đây đảo ngược → tìm sai vùng, get_current_state luôn rỗng
+                    # nên nhánh cascade TP/SL không bao giờ chạy.
+                    start_row=4 if side == "LONG" else 55,
+                    end_row=53 if side == "LONG" else 104
                 )
                 
                 if state and state.get('order_code'):

@@ -19,7 +19,7 @@ else:
     print(f"\033]0;{file_name} - {cst.key_name}\007", end="", flush=True)
 
 # Tạo thư mục logs/ nếu chưa có
-logs_dir = Path("logs")
+logs_dir = cst.account_dir('logs')  # [MULTI-ACC] tách theo tài khoản
 logs_dir.mkdir(exist_ok=True)
 
 # Tạo tên file log với timestamp: hd_update_price_dd_mm_yyyy_H_M_S.txt

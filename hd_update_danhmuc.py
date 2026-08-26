@@ -14,7 +14,7 @@ file_name = os.path.basename(os.path.abspath(__file__))
 os.system(f"title {file_name} - {cst.key_name}")
 
 # Tạo thư mục logs/ nếu chưa có
-logs_dir = Path('logs')
+logs_dir = cst.account_dir('logs')  # [MULTI-ACC] tách theo tài khoản
 logs_dir.mkdir(exist_ok=True)
 
 # Tạo tên file log với timestamp: hd_update_danhmuc_dd_mm_yyyy_H_M_S.txt

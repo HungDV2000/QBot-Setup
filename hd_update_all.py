@@ -35,7 +35,7 @@ from binance_symbol_row import (
 file_name = os.path.basename(os.path.abspath(__file__))
 os.system(f"title {file_name} - {cst.key_name}")
 
-logs_dir = Path("logs")
+logs_dir = cst.account_dir('logs')  # [MULTI-ACC] tách theo tài khoản
 logs_dir.mkdir(exist_ok=True)
 log_timestamp = datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
 log_filename = logs_dir / f"hd_update_all_{log_timestamp}.txt"
@@ -543,7 +543,7 @@ def do_it():
     list_tang = sorted(tang_symbols, key=lambda x: tickers[x]["percentage"], reverse=True)[: cst.top_count]
 
     list_all = [title1, *list_giam, title2, *list_tang]
-    with open("list_all.json", "w", encoding="utf-8") as f:
+    with open(cst.account_dir("data") / "list_all.json", "w", encoding="utf-8") as f:  # [MULTI-ACC]
         json.dump(list_all, f)
 
     def _fetch_symbols_parallel(symbols: list, label: str) -> list:

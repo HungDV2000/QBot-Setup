@@ -17,7 +17,7 @@ file_name = os.path.basename(os.path.abspath(__file__))
 os.system(f"title {file_name} - {cst.key_name}")
 
 # Tạo thư mục logs/ nếu chưa có
-logs_dir = Path('logs')
+logs_dir = cst.account_dir('logs')  # [MULTI-ACC] tách theo tài khoản
 logs_dir.mkdir(exist_ok=True)
 
 # Tạo tên file log với timestamp: hd_cancel_dd_mm_yyyy_H_M_S.txt
@@ -136,6 +136,76 @@ def get_algo_orders_for_symbol(symbol):
         return []
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# BỘ LỌC AN TOÀN (mới)
+#
+# Trước đây bot này hủy TẤT CẢ lệnh của mọi mã trong tab "Chờ và khớp", mỗi
+# `cancel_orders_minutes` phút (mặc định 1 phút). Hệ quả:
+#   • SL/TP vừa đặt bị xoá ngay → vị thế KHÔNG được bảo vệ
+#   • Các lệnh rải (DCA) chưa kịp khớp cũng bị xoá → "3 lệnh chỉ vào 1"
+#
+# Nay mặc định:
+#   • KHÔNG đụng lệnh reduce_only (SL/TP) — chỉ hủy lệnh VÀO
+#   • Chỉ hủy lệnh đã treo quá `cancel_order_after_minutes` phút (mặc định 30)
+# Muốn quay lại hành vi cũ: đặt cancel_all_orders = true trong config.ini
+# ══════════════════════════════════════════════════════════════════════════════
+try:
+    CANCEL_ALL_ORDERS = cst.config.getboolean('global', 'cancel_all_orders', fallback=False)
+except Exception:
+    CANCEL_ALL_ORDERS = False
+try:
+    CANCEL_AFTER_MINUTES = cst.config.getint('global', 'cancel_order_after_minutes', fallback=30)
+except Exception:
+    CANCEL_AFTER_MINUTES = 30
+
+
+def _is_reduce_only(order):
+    """Lệnh đóng vị thế (SL/TP) — mặc định KHÔNG được hủy."""
+    info = order.get('info', {}) if isinstance(order.get('info'), dict) else {}
+    for src in (order, info):
+        v = src.get('reduceOnly', src.get('reduce_only'))
+        if v is True or str(v).strip().lower() == 'true':
+            return True
+    if str(info.get('closePosition', '')).strip().lower() == 'true':
+        return True
+    return False
+
+
+def _order_age_minutes(order):
+    """Tuổi lệnh (phút). None nếu không xác định được thời điểm tạo."""
+    ts = (order.get('timestamp')
+          or order.get('createTime')
+          or (order.get('info', {}) or {}).get('time')
+          or (order.get('info', {}) or {}).get('createTime')
+          or (order.get('info', {}) or {}).get('bookTime'))
+    try:
+        ts = float(ts)
+    except (TypeError, ValueError):
+        return None
+    if ts <= 0:
+        return None
+    return (time.time() * 1000 - ts) / 60000.0
+
+
+def _should_cancel(order, symbol, kind):
+    """
+    Quyết định có hủy lệnh này không.
+    Trả (True/False, lý_do).
+    """
+    if CANCEL_ALL_ORDERS:
+        return True, "cancel_all_orders=true"
+
+    if _is_reduce_only(order):
+        return False, "là lệnh SL/TP (reduce_only) — GIỮ để bảo vệ vị thế"
+
+    age = _order_age_minutes(order)
+    if age is None:
+        return False, "không xác định được tuổi lệnh — giữ cho an toàn"
+    if age < CANCEL_AFTER_MINUTES:
+        return False, f"mới treo {age:.1f} phút (< {CANCEL_AFTER_MINUTES}) — chờ khớp"
+    return True, f"lệnh VÀO treo {age:.1f} phút (>= {CANCEL_AFTER_MINUTES})"
+
+
 def cancel_all_open_orders(symbol):
     """
     Hủy TẤT CẢ orders (bao gồm cả TRAILING_STOP/Algo orders và open orders thông thường)
@@ -157,7 +227,12 @@ def cancel_all_open_orders(symbol):
                 for order in active_algo_orders:
                     algo_id = order.get('algoId')
                     algo_type = order.get('algoType', 'N/A')
-                    
+
+                    ok, ly_do = _should_cancel(order, symbol, 'algo')
+                    if not ok:
+                        logger.info(f"⏭️  Giữ algo {algo_id} [{algo_type}] {symbol}: {ly_do}")
+                        continue
+
                     if algo_id:
                         # Hủy algo order qua API trực tiếp
                         symbol_clean = symbol.replace('/', '').replace(':USDT', '')
@@ -191,6 +266,12 @@ def cancel_all_open_orders(symbol):
                 for order in open_orders:
                     try:
                         order_id = order.get('id')
+
+                        ok, ly_do = _should_cancel(order, symbol, 'open')
+                        if not ok:
+                            logger.info(f"⏭️  Giữ order {order_id} {symbol}: {ly_do}")
+                            continue
+
                         if order_id:
                             cancel_result = exchange.cancel_order(order_id, symbol)
                             total_open_cancelled += 1
@@ -281,6 +362,11 @@ def cancel_orders_scheduled():
 
 # Main loop
 print(f"🚀 Bot hủy lệnh theo lịch khởi động - Chạy mỗi {cst.cancel_orders_minutes} phút", flush=True)
+if CANCEL_ALL_ORDERS:
+    print("⚠️  CHẾ ĐỘ CŨ: hủy TẤT CẢ lệnh (kể cả SL/TP) — cancel_all_orders=true", flush=True)
+else:
+    print(f"🛡️  Chế độ an toàn: chỉ hủy lệnh VÀO treo quá {CANCEL_AFTER_MINUTES} phút; "
+          f"KHÔNG đụng SL/TP (reduce_only)", flush=True)
 logger.info(f"Khởi động cancel orders scheduler - chạy mỗi {cst.cancel_orders_minutes} phút")
 
 # Chạy ngay lần đầu

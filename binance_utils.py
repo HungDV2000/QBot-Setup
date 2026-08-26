@@ -36,5 +36,6 @@ def get_price_precision(sym):
     else:
         print(f"Cặp giao dịch {symbol} không tồn tại trên Binance futures.")
 
-pr = get_price_precision("PEOPLE/USDT")
-print(pr)
+# [ĐÃ XOÁ] Dòng gọi thử get_price_precision("PEOPLE/USDT") ở cấp module.
+# Nó khiến MỌI bot import binance_utils đều tạo exchange + load_markets khi khởi
+# động (chậm vài giây + tốn 1 lượt gọi API vô ích).

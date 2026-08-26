@@ -1,0 +1,152 @@
+[global]
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ĐA TÀI KHOẢN — chạy nhiều bộ (key/secret/sheetID) từ CÙNG 1 file config này
+# ══════════════════════════════════════════════════════════════════════════════
+# Danh sách tài khoản, mỗi tên ứng với 1 khối [ten] ở CUỐI file.
+# Bỏ tên khỏi dòng này = tạm ngưng tài khoản đó (khối bên dưới vẫn giữ nguyên).
+# Để TRỐNG = chế độ 1 tài khoản (dùng key khai thẳng ở [global]).
+accounts = q2pri, q2pub, q3trust
+
+# ── Telegram (DÙNG CHUNG — cả 3 bộ đang cùng bot & cùng nhóm) ────────────────
+bot_token = 8785044394:AAEtQt_9QYss0Bqmos8_WlNeMFHIIAgB7R8
+chat_id = -5263323417
+
+# ── Binance / Sheet mặc định: ĐỂ TRỐNG vì mỗi tài khoản tự khai bên dưới ─────
+key_name =
+key_binance =
+secret_binance =
+spreadsheet_id =
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CẤU HÌNH VẬN HÀNH — dùng chung cho MỌI tài khoản
+# ══════════════════════════════════════════════════════════════════════════════
+test_mode = false
+is_print_mode = false
+top_count = 50
+time_gap_do_it = 0
+tab_dat_lenh = ĐẶT LỆNH (100 MÃ)
+max_increase_decrease_4h_day_count = 60
+
+# ── Nhịp quét (giây) — phải là SỐ NGUYÊN DƯƠNG ──────────────────────────────
+delay_vao_lenh = 60
+delay_vao_lenh_123 = 300
+delay_cho_va_khop = 600
+delay_calert_possition_and_open_order = 120
+delay_update_price = 120
+delay_update_all = 120
+delay_track_30_prices = 60
+delay_periodic_report = 300
+
+# ── Bot hủy lệnh theo lịch (hd_cancel_orders_schedule.py) ───────────────────
+# Bao lâu quét 1 lần (phút)
+cancel_orders_minutes = 60
+# Chỉ hủy LỆNH VÀO treo quá số phút này (SL/TP không bao giờ bị đụng)
+cancel_order_after_minutes = 30
+# false = KHÔNG BAO GIỜ hủy SL/TP (an toàn). true = hủy tất (nguy hiểm)
+cancel_all_orders = false
+
+# ── Bot đặt lệnh đa kiểu (hd_order_multi.py) ────────────────────────────────
+# false = 1 mã vào 1 lần. Rải nhiều lệnh vẫn chạy được ở chế độ này
+# (các lệnh đặt cùng lúc ở vòng đầu, treo trên sàn chờ khớp dần).
+allow_dca = false
+
+# ── BẢO VỆ VỊ THẾ KHI RẢI LỆNH (vị thế tăng dần) ────────────────────────────
+# true : lệnh CẮT LỖ dùng cờ closePosition của Binance — tự đóng TOÀN BỘ vị thế
+#        khi chạm giá, không gắn khối lượng. Rải thêm lệnh làm vị thế tăng thì
+#        SL vẫn bảo vệ đủ, không cần đặt lại (KHÔNG có khoảng trống mất SL).
+#        ⚠️ Luôn đóng 100%, không đóng từng phần được.
+exit_sl_close_position = true
+
+# true : lệnh CHỐT LỜI (Limit) sẽ được HỦY & ĐẶT LẠI khi khối lượng vị thế đổi,
+#        để chốt đúng toàn bộ vị thế hiện có.
+exit_tp_resize = true
+
+# Khối lượng lệch quá bao nhiêu %% thì mới coi là cần đặt lại (tránh hủy/đặt liên tục).
+exit_resize_tolerance_pct = 1.0
+# Hai lệnh chênh giá dưới mức này (%) mới bị coi là trùng.
+dedup_price_tolerance_pct = 0.02
+
+# Leg 1 — LỆNH VÀO: tab "ĐẶT LỆNH", mã kiểu cột F, giá cột D, tham số phụ cột G
+multi_leg_count = 3
+leg1_role = entry
+leg1_source = dat_lenh
+leg1_type_col = F
+leg1_col = D
+leg1_aux = G
+
+# Leg 2 — CẮT LỖ: tab "Chờ và khớp", giá cột N
+leg2_role = exit
+leg2_source = cho_va_khop
+leg2_type = stop_market
+leg2_col = N
+
+# Leg 3 — CHỐT LỜI: tab "Chờ và khớp", giá cột O
+leg3_role = exit
+leg3_source = cho_va_khop
+leg3_type = limit
+leg3_col = O
+
+# ── Lệnh 2 & 3 kiểu cũ (hd_order_123.py — chỉ dùng khi KHÔNG chạy bot multi) ─
+lenh2_rate_long = 0.3
+lenh2_rate_short = 0.3
+lenh3_rate_long = 0.6
+lenh3_rate_short = 0.6
+lenh3_callback_rate = 1
+lenh3_o_empty_immediate = true
+
+# ── Giá trị mặc định ghi vào tab "Chờ và khớp" ──────────────────────────────
+fill_default_cho_va_khop = true
+default_ratio_layer_1 = 40
+default_ratio_layer_2 = 40
+default_ratio_layer_3 = 20
+default_sl_rate_layer_1 = 2
+default_sl_rate_layer_2 = 5
+default_sl_rate_layer_3 = 10
+default_tp_rate_layer_1 = 3
+default_tp_rate_layer_2 = 6
+default_tp_rate_layer_3 = 10
+default_allow_order = N
+
+# ── Gỡ lỗi / nhật ký ────────────────────────────────────────────────────────
+debug_column_audit_symbol = MLN/USDT:USDT
+profile_do_it = true
+
+# ── Telegram điều khiển từ xa (/stop, /long, /short…) ───────────────────────
+run_tele_command = false
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CÁC TÀI KHOẢN
+# ══════════════════════════════════════════════════════════════════════════════
+# CHỈ được khai thông tin NHẬN DẠNG:
+#     key_binance, secret_binance, spreadsheet_id,
+#     chat_id, bot_token, prefix_channel, key_name
+# ⛔ KHÔNG khai tham số vận hành (delay_*, legN_*, allow_dca…) ở đây —
+#    chúng phải nằm ở [global] để mọi tài khoản chạy đồng nhất.
+#
+# 3 dòng BẮT BUỘC: key_binance, secret_binance, spreadsheet_id
+# (thiếu 1 dòng bot sẽ dừng, tránh dùng nhầm key của tài khoản khác)
+#
+# ⚠️ Mọi sheet phải được share cho tài khoản Google đang dùng (credentials.json).
+
+[q2pri]
+key_binance    = 2M95a2C6qIRAS285Iq0ejsdtKsalNVQIZFuYq9BhPP4k147eFqw1ZZw7yQ9pNIan
+secret_binance = WYkZKbzENNt6Oln8SQ0sSn79RbzV2CNiRddXXdlV5nxyBes6RCxdCumtoWVET8ke
+spreadsheet_id = 1AL5IPYaggKo_soCfEtxHFZVl09RaIALWtSgpjmcY_zY
+key_name       = 180826Pri
+prefix_channel = '180826Pri'
+
+[q2pub]
+key_binance    = GUj5p5j8pkTsyHdOoZEV3L5tyJUMhHpmtRgbSNu2xm5xTvne7LUGK99Q2qNZhk6H
+secret_binance = 5HBnKPcjqhkOxkcii4nb8lfMFsUKZIZJvUOk5roTPUd0FaNL16guCf5AEvry51zO
+spreadsheet_id = 1JkGlcFekj0nqZRSVQWxmSXn720nlbTklRhWulNd5SdI
+key_name       = 090826Pub
+prefix_channel = '090826Pub'
+
+[q3trust]
+key_binance    = FDTcCeJrqywydZ8oVEfZdc40xp4GTyzzBIhn2xP4ekB0CGvZAEdgGUD3zc0xPe0E
+secret_binance = BFmYE3Ep2rF5wbaZRWDoVLNu2joXoVYtbVdmVIlOb5D7hbGQ3gkUjvlQSACnGpqt
+spreadsheet_id = 17aMwpYMMKxwFQL4E6ytPqyrXqrVb0cDELuHUB2Rsjtw
+key_name       = 170826SubTrust
+prefix_channel = '170826SubTrust'
+

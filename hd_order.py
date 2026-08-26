@@ -30,7 +30,7 @@ file_name = os.path.basename(os.path.abspath(__file__))
 os.system(f"title {file_name} - {cst.key_name}")
 
 # Tạo thư mục logs/ nếu chưa có
-logs_dir = Path('logs')
+logs_dir = cst.account_dir('logs')  # [MULTI-ACC] tách theo tài khoản
 logs_dir.mkdir(exist_ok=True)
 
 # Tạo tên file log với timestamp: hd_order_dd_mm_yyyy_H_M_S.txt
@@ -93,7 +93,7 @@ order_helper = BinanceOrderHelper(exchange)
 # ===================================================================
 _order_cache: dict = {}
 _cache_lock = threading.Lock()
-_CACHE_FILE = Path('data/order_cache.json')
+_CACHE_FILE = cst.account_dir('data') / 'order_cache.json'  # [MULTI-ACC]
 _CACHE_TTL_SECONDS = 86400  # 24 giờ - thời gian order còn có thể valid
 
 
@@ -1071,7 +1071,7 @@ def printf(name, data):
             order_id = datetime.now().strftime("%Y%m%d_%H%M%S")
             logger.warning(f"Không tìm thấy order ID trong response cho {name}, dùng timestamp: {order_id}")
         
-        filename = pathDir + "/order/" + str(name) + "/" + str(order_id) + ".txt"
+        filename = str(cst.account_dir("order") / str(name) / (str(order_id) + ".txt"))  # [MULTI-ACC]
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         
         # Ghi file với UTF-8 encoding

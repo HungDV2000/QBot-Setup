@@ -1,112 +1,91 @@
 @echo off
-REM QBot v2.0 - Start All Bots Script (Windows)
-REM Chạy tất cả 11 modules
+REM ==============================================================================
+REM QBot - Khoi dong bot (HO TRO DA TAI KHOAN)
+REM   start_all_bots.bat            -> chay TAT CA tai khoan trong config
+REM   start_all_bots.bat kh_a       -> chi chay tai khoan kh_a
+REM ==============================================================================
+setlocal enabledelayedexpansion
+cd /d "%~dp0"
+
+if "%QBOT_CONFIG%"=="" set QBOT_CONFIG=config.ini
 
 echo ========================================
-echo QBot v2.0 - Starting All Modules (Windows)
+echo QBot - Khoi dong
 echo ========================================
 
-REM Check if Python is available
 python --version >nul 2>&1
-if errorlevel 1 (
-    echo Error: Python not found!
-    echo Please install Python 3.9+
-    pause
-    exit /b 1
-)
+if errorlevel 1 ( echo Error: Khong tim thay Python! & pause & exit /b 1 )
+if not exist "%QBOT_CONFIG%" ( echo Error: Khong tim thay %QBOT_CONFIG% & pause & exit /b 1 )
 
-REM Check if in correct directory
-if not exist config.ini (
-    echo Error: config.ini not found!
-    echo Are you in the source04062025 directory?
-    pause
-    exit /b 1
-)
+REM ── Chon bot dat lenh: trailing / limit / multi ──────────────────────────────
+if "%ORDER_BOT_MODE%"=="" set ORDER_BOT_MODE=limit
+if /i "%ORDER_BOT_MODE%"=="trailing" ( set ORDER_BOT_FILE=hd_order.py
+) else if /i "%ORDER_BOT_MODE%"=="limit" ( set ORDER_BOT_FILE=hd_order_limit.py
+) else if /i "%ORDER_BOT_MODE%"=="multi" ( set ORDER_BOT_FILE=hd_order_multi.py
+) else ( echo Error: ORDER_BOT_MODE='%ORDER_BOT_MODE%' khong hop le & pause & exit /b 1 )
 
-echo Starting modules...
-echo.
-
-REM Clear old error log
-if exist error.log del error.log
-echo Error log cleared. All errors will be logged to error.log
-echo.
-
-REM ============================================================
-REM CHON BOT DAT LENH VAO (Module 1):
-REM   trailing = hd_order.py        (Trailing Stop - ban cu)
-REM   limit    = hd_order_limit.py  (LIMIT + lenh nguoc - ban moi)
-REM Doi mac dinh o dong ORDER_BOT_MODE ben duoi.
-REM CHI chay 1 trong 2 - chay ca hai se dat lenh TRUNG!
-REM ============================================================
-set ORDER_BOT_MODE=limit
-
-if /i "%ORDER_BOT_MODE%"=="trailing" (
-    set ORDER_BOT_FILE=hd_order.py
-) else if /i "%ORDER_BOT_MODE%"=="limit" (
-    set ORDER_BOT_FILE=hd_order_limit.py
+REM ── Danh sach tai khoan ─────────────────────────────────────────────────────
+if not "%~1"=="" (
+    set ACCOUNTS=%*
 ) else (
-    echo Error: ORDER_BOT_MODE='%ORDER_BOT_MODE%' khong hop le ^(chi 'trailing' hoac 'limit'^)
-    pause
-    exit /b 1
+    for /f "delims=" %%A in ('python -c "import configparser,os;c=configparser.ConfigParser();c.read(os.environ.get('QBOT_CONFIG','config.ini'),encoding='utf-8');print(' '.join(a.strip() for a in c.get('global','accounts',fallback='').split(',') if a.strip()))"') do set ACCOUNTS=%%A
 )
 
-REM Module 1: Order Handler (Critical)
-echo Starting %ORDER_BOT_FILE% (mode=%ORDER_BOT_MODE%)...
-start "QBot - Order Handler" cmd /c "python %ORDER_BOT_FILE% 2>> error.log"
-timeout /t 2 >nul
-
-REM Module 2: Order 123 Handler (Critical)
-echo Starting hd_order_123.py...
-start "QBot - SL/TP Handler" cmd /c "python hd_order_123.py 2>> error.log"
-timeout /t 2 >nul
-
-REM Module 3: Market Data Updater
-echo Starting hd_update_all.py...
-start "QBot - Market Data" cmd /c "python hd_update_all.py 2>> error.log"
-timeout /t 2 >nul
-
-REM Module 4: Price Updater
-echo Starting hd_update_price.py...
-start "QBot - Price Updater" cmd /c "python hd_update_price.py 2>> error.log"
-timeout /t 2 >nul
-
-REM Module 5: Status Updater
-echo Starting hd_update_cho_va_khop.py...
-start "QBot - Status Updater" cmd /c "python hd_update_cho_va_khop.py 2>> error.log"
-timeout /t 2 >nul
-
-REM Module 6: Alert Handler
-echo Starting hd_alert_possition_and_open_order.py...
-start "QBot - Alerts" cmd /c "python hd_alert_possition_and_open_order.py 2>> error.log"
-timeout /t 2 >nul
-
-REM Module 7: Cancel Scheduler
-echo Starting hd_cancel_orders_schedule.py...
-start "QBot - Cancel Scheduler" cmd /c "python hd_cancel_orders_schedule.py 2>> error.log"
-timeout /t 2 >nul
-
-REM Module 8: 30 Prices Tracker (NEW in v2.0)
-echo Starting hd_track_30_prices.py...
-start "QBot - 30 Prices Tracker" cmd /c "python hd_track_30_prices.py 2>> error.log"
-timeout /t 2 >nul
-
-REM Module 9: Periodic Report (NEW in v2.0)
-echo Starting hd_periodic_report.py...
-start "QBot - Periodic Report" cmd /c "python hd_periodic_report.py 2>> error.log"
+if "%ACCOUNTS%"=="" (
+    echo Config khong khai 'accounts' -^> che do 1 tai khoan
+    call :start_account ""
+) else (
+    echo Tai khoan se chay: %ACCOUNTS%
+    for %%A in (%ACCOUNTS%) do call :start_account "%%A"
+)
 
 echo.
 echo ========================================
-echo All 9 modules started!
+echo Da khoi dong xong
 echo ========================================
-echo.
-echo Check running processes in Task Manager
-echo Look for "python.exe" processes
-echo.
-echo View error log:
-echo   type error.log
-echo.
-echo To stop all: Close all CMD windows with "QBot" in title
-echo Or use: taskkill /F /FI "WINDOWTITLE eq QBot*"
+echo Xem log:  logs\^<tai_khoan^>\
+echo Dung:     dong cac cua so CMD co chu "QBot"
 echo ========================================
 pause
+exit /b 0
 
+REM ── Ham khoi dong 1 tai khoan ───────────────────────────────────────────────
+:start_account
+set ACC=%~1
+if "%ACC%"=="" (
+    set QBOT_ACCOUNT=
+    set LABEL=(1 tai khoan)
+) else (
+    set QBOT_ACCOUNT=%ACC%
+    set LABEL=[%ACC%]
+)
+echo.
+echo -------------------------------------
+echo Khoi dong %LABEL%  (mode=%ORDER_BOT_MODE%)
+echo -------------------------------------
+
+start "QBot %LABEL% - Dat lenh" cmd /c "set QBOT_ACCOUNT=%ACC%&& python %ORDER_BOT_FILE%"
+timeout /t 2 >nul
+
+if /i "%ORDER_BOT_MODE%"=="multi" (
+    echo   Bo qua hd_order_123.py ^(mode=multi da tu lo SL/TP^)
+) else (
+    start "QBot %LABEL% - SL/TP" cmd /c "set QBOT_ACCOUNT=%ACC%&& python hd_order_123.py"
+    timeout /t 2 >nul
+)
+
+start "QBot %LABEL% - Market Data" cmd /c "set QBOT_ACCOUNT=%ACC%&& python hd_update_all.py"
+timeout /t 2 >nul
+start "QBot %LABEL% - Price" cmd /c "set QBOT_ACCOUNT=%ACC%&& python hd_update_price.py"
+timeout /t 2 >nul
+start "QBot %LABEL% - Cho va khop" cmd /c "set QBOT_ACCOUNT=%ACC%&& python hd_update_cho_va_khop.py"
+timeout /t 2 >nul
+start "QBot %LABEL% - Alerts" cmd /c "set QBOT_ACCOUNT=%ACC%&& python hd_alert_possition_and_open_order.py"
+timeout /t 2 >nul
+start "QBot %LABEL% - Cancel" cmd /c "set QBOT_ACCOUNT=%ACC%&& python hd_cancel_orders_schedule.py"
+timeout /t 2 >nul
+start "QBot %LABEL% - 30 Prices" cmd /c "set QBOT_ACCOUNT=%ACC%&& python hd_track_30_prices.py"
+timeout /t 2 >nul
+start "QBot %LABEL% - Report" cmd /c "set QBOT_ACCOUNT=%ACC%&& python hd_periodic_report.py"
+timeout /t 2 >nul
+exit /b 0

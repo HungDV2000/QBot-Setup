@@ -3,7 +3,7 @@ Tracking 30 Price Levels - Module tracking 30 mức giá gần nhất (thực t�
 Chạy mỗi 1 phút để cập nhật giá cho các mã có Leverage ≠ 0 và ≠ N (sẽ được bot đặt lệnh)
 
 Logic:
-- Quét sheet "ĐẶT LỆNH (100 MÃ)" hàng 4-53 (SHORT) và 55-104 (LONG)
+- Quét sheet "ĐẶT LỆNH (100 MÃ)" hàng 4-53 (LONG) và 55-104 (SHORT)
 - Chỉ track mã có cột B (Leverage) ≠ 0, ≠ "N"
 - Lấy 19 mức giá gần nhất (nến 1m) từ Binance
 - Ghi vào cột I:Z (18 cột) của cùng hàng với mã đó (H là Capital, bỏ qua)
@@ -26,7 +26,7 @@ file_name = os.path.basename(os.path.abspath(__file__))
 os.system(f"title {file_name} - {cst.key_name}")
 
 # Tạo thư mục logs/ nếu chưa có
-logs_dir = Path('logs')
+logs_dir = cst.account_dir('logs')  # [MULTI-ACC] tách theo tài khoản
 logs_dir.mkdir(exist_ok=True)
 
 # Tạo tên file log với timestamp: hd_track_30_prices_dd_mm_yyyy_H_M_S.txt
@@ -83,10 +83,10 @@ class PriceTracker:
         result = []
         
         try:
-            # Đọc từ sheet Order (LONG section)
-            # Cấu trúc CŨ: A=Symbol, B=Leverage, C=Callback, D=Activation, H=Capital
-            long_data = gg_sheet_factory.get_dat_lenh("A55:H104")
-            for idx, row in enumerate(long_data):
+            # Khối DƯỚI = SHORT (dòng 55-104). A=Symbol, B=Leverage, D=Giá vào, H=Vốn
+            # (row_num tính từ 55 nên số dòng vẫn đúng — chỉ đổi tên biến cho khỏi nhầm)
+            short_block = gg_sheet_factory.get_dat_lenh("A55:H104")
+            for idx, row in enumerate(short_block):
                 if len(row) > 0 and row[0]:  # Có symbol
                     symbol = row[0]
                     leverage = row[1] if len(row) > 1 else ""  # Cột B: Leverage
@@ -108,9 +108,9 @@ class PriceTracker:
                             # Nếu leverage không phải số, bỏ qua
                             pass
             
-            # Đọc từ sheet Order (SHORT section)
-            short_data = gg_sheet_factory.get_dat_lenh("A4:H53")
-            for idx, row in enumerate(short_data):
+            # Khối TRÊN = LONG (dòng 4-53)
+            long_block = gg_sheet_factory.get_dat_lenh("A4:H53")
+            for idx, row in enumerate(long_block):
                 if len(row) > 0 and row[0]:
                     symbol = row[0]
                     leverage = row[1] if len(row) > 1 else ""

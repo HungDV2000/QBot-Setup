@@ -33,7 +33,7 @@ file_name = os.path.basename(os.path.abspath(__file__))
 os.system(f"title {file_name} - {cst.key_name}")
 
 # Tạo thư mục logs/ nếu chưa có
-logs_dir = Path('logs')
+logs_dir = cst.account_dir('logs')  # [MULTI-ACC] tách theo tài khoản
 logs_dir.mkdir(exist_ok=True)
 
 # Tạo tên file log với timestamp: hd_order_market_price_dd_mm_yyyy_H_M_S.txt
@@ -557,14 +557,17 @@ def do_it():
     logger.info("Trạng thái CHỜ - Không làm gì...")
   else:
     
+    # Bố cục sheet: KHỐI TRÊN (4-53) = LONG, KHỐI DƯỚI (55-104) = SHORT.
+    # Trước đây file này map NGƯỢC so với hd_order / hd_order_limit / hd_order_multi
+    # → nếu bật chạy sẽ đặt lệnh SAI CHIỀU. Đã sửa cho thống nhất.
     if state_value == STATE_LONG:
-      start_row = 55
-      end_row = 104
+      start_row = 4
+      end_row = 53
       type = "BUY"
 
     elif state_value == STATE_SHORT:
-      start_row = 4
-      end_row = 53
+      start_row = 55
+      end_row = 104
       type = "SHORT"
 
     don_bay = gg_sheet_factory.get_dat_lenh(f"A{start_row}:H{end_row}")  # Chỉ cần đọc A-H
@@ -870,7 +873,7 @@ def printf(name, data):
             order_id = datetime.now().strftime("%Y%m%d_%H%M%S")
             logger.warning(f"Không tìm thấy order ID trong response cho {name}, dùng timestamp: {order_id}")
         
-        filename = pathDir + "/order/" + str(name) + "/" + str(order_id) + ".txt"
+        filename = str(cst.account_dir("order") / str(name) / (str(order_id) + ".txt"))  # [MULTI-ACC]
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         
         # Ghi file với UTF-8 encoding

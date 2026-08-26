@@ -212,20 +212,30 @@ class BinanceOrderHelper:
         side: str,
         amount: float,
         stop_price: float,
-        reduce_only: bool = False
+        reduce_only: bool = False,
+        close_position: bool = False
     ) -> Dict:
         """
-        [BỔ SUNG] Tạo lệnh Stop Market (Cắt lỗ thị trường - Đảm bảo khớp)
+        Tạo lệnh Stop Market (cắt lỗ thị trường — đảm bảo khớp).
+
+        close_position=True: gửi cờ closePosition của Binance.
+          → Lệnh tự đóng TOÀN BỘ vị thế khi chạm giá, KHÔNG gắn khối lượng cố định.
+          → Vị thế tăng thêm (rải lệnh/DCA) vẫn được bảo vệ, không cần đặt lại SL.
+          Binance yêu cầu: khi closePosition=true thì KHÔNG gửi quantity/reduceOnly.
         """
-        logger.info(f"Tạo Stop Market: {symbol} {side} {amount} @ stop={stop_price}")
-        
+        logger.info(f"Tạo Stop Market: {symbol} {side} "
+                    f"{'TOÀN BỘ vị thế (closePosition)' if close_position else amount} @ stop={stop_price}")
+
         params = {
             'stopPrice': self._to_str(stop_price),
         }
-        
-        if reduce_only:
+
+        if close_position:
+            params['closePosition'] = 'true'      # không kèm quantity / reduceOnly
+            amount = None
+        elif reduce_only:
             params['reduceOnly'] = True
-        
+
         try:
             # Type 'STOP_MARKET' = Stop Market trên Futures
             order = self.exchange.create_order(

@@ -42,6 +42,24 @@ service = None
 spreadsheets_service = None  # Cache spreadsheets() resource
 _service_initialized = False  # Flag để tránh tạo service nhiều lần
 
+def _write_token_atomic(token_path, creds):
+  """
+  Ghi token.json AN TOÀN khi nhiều tiến trình cùng refresh (đa tài khoản × 9 bot).
+  Ghi ra file tạm rồi đổi tên — thao tác nguyên tử, không bao giờ để lại file hỏng.
+  """
+  import tempfile
+  d = os.path.dirname(os.path.abspath(token_path)) or "."
+  fd, tmp = tempfile.mkstemp(dir=d, prefix=".token_", suffix=".tmp")
+  try:
+    with os.fdopen(fd, "w") as f:
+      f.write(creds.to_json())
+    os.replace(tmp, token_path)          # nguyên tử trên cùng ổ đĩa
+  except Exception:
+    try: os.unlink(tmp)
+    except OSError: pass
+    raise
+
+
 def init_sheet_api():
   global creds, service, spreadsheets_service, _service_initialized
   
@@ -93,8 +111,7 @@ def init_sheet_api():
     logger.info("Đã tạo token mới thành công")
     
     # Lưu token mới
-    with open(token_path, "w") as token:
-      token.write(creds.to_json())
+    _write_token_atomic(token_path, creds)
     print(f"✅ Đã lưu token vào {token_path}", flush=True)
     logger.info(f"Đã lưu token vào {token_path}")
     
