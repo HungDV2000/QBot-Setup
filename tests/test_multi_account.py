@@ -226,6 +226,27 @@ def test_windows_cp1252_console_does_not_crash():
     assert "OK_KHOI_DONG" in r.stdout, f"Bot không khởi động được: {r.stdout}{r.stderr}"
 
 
+def test_parent_reads_child_output_as_utf8():
+    """
+    Tiến trình cha đọc màn hình của con: phải giải mã UTF-8.
+    Nếu để mặc định, trên Windows cha dùng cp1252 → chữ Việt hiện thành
+    "TÃ i khoáº£n" (mojibake).
+    """
+    bot = WORK / "hd_moji.py"
+    bot.write_text(
+        "import cst\n"
+        "print('Tài khoản: ' + cst.account_name + ' — Đặt lệnh ✅', flush=True)\n",
+        encoding="utf-8")
+    env = dict(os.environ, QBOT_CONFIG=str(CFG), PYTHONIOENCODING="cp1252")
+    env.pop("QBOT_ACCOUNT", None)          # không chọn → cha tự chạy cả 2 tài khoản
+    r = subprocess.run([sys.executable, str(bot)], cwd=WORK, env=env,
+                       capture_output=True, text=True, encoding="utf-8", timeout=60)
+    out = r.stdout + r.stderr
+    assert "Tài khoản" in out, f"Chữ Việt bị hỏng: {out[:300]}"
+    for xau in ("TÃ ", "khoáº£n", "ðŸ"):
+        assert xau not in out, f"Vẫn còn mojibake '{xau}': {out[:300]}"
+
+
 def test_ascii_console_does_not_crash():
     """Kể cả console chỉ hỗ trợ ASCII cũng không được làm bot chết."""
     r = _run_with_encoding("ascii")
