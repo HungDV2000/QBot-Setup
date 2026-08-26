@@ -38,6 +38,18 @@ from pathlib import Path
 # cst.py được nạp ĐẦU TIÊN bởi mọi bot, nên sửa ở đây là mọi bot đều an toàn.
 # errors='replace': ký tự nào không hiển thị được thì thay bằng '?' thay vì chết.
 # ══════════════════════════════════════════════════════════════════════════════
+# ── Ép Console Windows dùng codepage UTF-8 (65001) ──────────────────────────
+# Không có bước này, CMD vẫn dùng cp1252 → emoji/tiếng Việt hiện thành mojibake
+# (ví dụ: 👤 → ðŸ'¤, Tài khoản → TÃ i khoáº£n) dù Python stream đã reconfigure.
+import sys as _sys_platform_check
+if _sys_platform_check.platform == 'win32':
+    try:
+        import ctypes
+        ctypes.windll.kernel32.SetConsoleOutputCP(65001)
+        ctypes.windll.kernel32.SetConsoleCP(65001)
+    except Exception:
+        pass  # Không phải Windows hoặc không có quyền — bỏ qua
+
 for _stream_name in ('stdout', 'stderr'):
     _stream = getattr(sys, _stream_name, None)
     if _stream is None:
@@ -117,7 +129,10 @@ def _run_for_all_accounts(entry_file):
             p = subprocess.Popen(
                 [_sys_mod.executable, entry_file],
                 env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, bufsize=1,
+                # encoding='utf-8' BẮT BUỘC: tiến trình con ghi UTF-8, nếu để mặc
+                # định thì trên Windows cha giải mã bằng cp1252 → chữ Việt và emoji
+                # hiện thành "TÃ i khoáº£n" (mojibake).
+                text=True, encoding='utf-8', errors='replace', bufsize=1,
             )
         except Exception as e:
             print(f"  ❌ Không mở được tiến trình cho [{acc}]: {e}", flush=True)
