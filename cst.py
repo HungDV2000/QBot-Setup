@@ -86,6 +86,37 @@ def get_accounts():
 
 accounts = get_accounts()
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# KHỚP TÊN TÀI KHOẢN — BỎ QUA KHÁC BIỆT HOA/THƯỜNG
+#
+# configparser PHÂN BIỆT hoa/thường ở tên section: [q2Fu] và [q2fu] là HAI thứ
+# khác nhau. Rất dễ nhầm: khai `accounts = q2fu` nhưng section viết [q2Fu]
+# → bot báo "không tìm thấy section" dù nhìn bằng mắt thấy rõ nó nằm đó.
+# (Ngược lại, tên THAM SỐ bên trong thì configparser tự hạ về chữ thường,
+#  nên Key_Binance và key_binance là một.)
+#
+# Ở đây khớp bỏ qua hoa/thường cho dễ dùng, NHƯNG nếu có từ 2 section chỉ khác
+# hoa/thường thì DỪNG NGAY — không đoán bừa, vì đoán sai nghĩa là đặt lệnh
+# bằng API key của khách khác.
+# ══════════════════════════════════════════════════════════════════════════════
+def resolve_section(name):
+    """Trả về tên section thật khớp `name` (bỏ qua hoa/thường), hoặc None."""
+    if not name:
+        return None
+    if config.has_section(name):
+        return name
+    trung = [s for s in config.sections() if s.lower() == name.lower()]
+    if len(trung) == 1:
+        return trung[0]
+    if len(trung) > 1:
+        raise SystemExit(
+            f"❌ Có {len(trung)} section chỉ khác nhau chữ hoa/thường: "
+            f"{', '.join('[' + t + ']' for t in trung)}.\n"
+            f"   Không thể đoán bạn muốn dùng cái nào — hãy đổi tên cho khác hẳn."
+        )
+    return None
+
 # ══════════════════════════════════════════════════════════════════════════════
 # NHỮNG GÌ ĐƯỢC KHAI RIÊNG TRONG KHỐI [tên_tài_khoản]
 #   → Chỉ thông tin NHẬN DẠNG: tài khoản Binance, Google Sheet, Telegram.
@@ -116,6 +147,20 @@ def _run_for_all_accounts(entry_file):
     chuyển tiếp màn hình có gắn tên tài khoản, và dừng sạch khi Ctrl+C.
     Hàm này KHÔNG trả về — kết thúc bằng sys.exit().
     """
+    # Kiểm tra TRƯỚC khi mở tiến trình con: tài khoản nào khai mà không có
+    # section thì báo NGAY 1 lần, thay vì để từng con chết rải rác khó đọc.
+    _thieu = [a for a in accounts if resolve_section(a) is None]
+    if _thieu:
+        raise SystemExit(
+            "❌ Các tài khoản sau khai trong `accounts` nhưng KHÔNG có section "
+            f"tương ứng trong {config_file}:\n"
+            + "".join(f"     • [{a}]\n" for a in _thieu)
+            + f"   Các section đang có: {', '.join('[' + x + ']' for x in config.sections())}\n"
+            "   Hãy thêm section cho đủ, hoặc bỏ tên đó khỏi dòng `accounts`.\n"
+            "   (Không cho chạy tiếp vì tài khoản thiếu section sẽ dùng nhầm "
+            "key trong [global] — tức là key của khách khác.)"
+        )
+
     bot = entry_file[:-3]
     print("=" * 62, flush=True)
     print(f"  {bot} — chạy cho {len(accounts)} tài khoản: {', '.join(accounts)}", flush=True)
@@ -201,12 +246,20 @@ def _run_for_all_accounts(entry_file):
 account = os.environ.get('QBOT_ACCOUNT', '').strip()
 
 if account:
-    if not config.has_section(account):
+    _that = resolve_section(account)
+    if _that is None:
         raise SystemExit(
             f"❌ Không tìm thấy section [{account}] trong {config_file}.\n"
+            f"   Các section đang có: {', '.join('[' + s + ']' for s in config.sections())}\n"
             f"   Các tài khoản đang khai: {', '.join(accounts) if accounts else '(chưa khai accounts)'}"
         )
-    if accounts and account not in accounts:
+    if _that != account:
+        # Khác chữ hoa/thường — vẫn chạy, nhưng phải báo để đại ca sửa cho khớp
+        print(f"⚠️  Tên tài khoản '{account}' khác chữ hoa/thường với section "
+              f"[{_that}] trong {config_file} — đang dùng [{_that}]. "
+              f"Nên sửa lại cho khớp hẳn.", flush=True)
+        account = _that
+    if accounts and account.lower() not in {a.lower() for a in accounts}:
         raise SystemExit(
             f"❌ [{account}] chưa được khai trong `accounts` ở [global] của {config_file}.\n"
             f"   Đang khai: {', '.join(accounts)}"
@@ -379,6 +432,20 @@ def account_suffix() -> str:
 
 is_print_mode = config.getboolean('global', 'is_print_mode')
 top_count = config.getint('global', 'top_count')
+
+# ── Chọn mã lấy dữ liệu (xem symbol_filter.py) ──────────────────────────────
+#   symbol_mode = all   → top biến động như cũ (top_count)
+#   symbol_mode = list  → chỉ lấy các mã khai trong symbol_list
+import symbol_filter
+symbol_mode = symbol_filter.read_mode(config)
+symbol_list, _symbol_trung = symbol_filter.read_symbol_list(config)
+for _goc, _chuan in _symbol_trung:
+    print(f"⚠️  symbol_list: '{_goc}' trùng với mã đã khai ({_chuan}) — bỏ qua.", flush=True)
+
+# Cột ghi giá của hd_update_price. Mặc định C = "Giá trị hiện thời".
+# TRƯỚC ĐÂY ghi nhầm vào cột Y (= "% đến BB1h dưới" của hd_update_all),
+# khiến hai bot ghi đè lên nhau mỗi vòng.
+price_column = (config.get('global', 'price_column', fallback='C') or 'C').strip().upper()
 time_gap_do_it = config.getint('global', 'time_gap_do_it')
 bot_token = config.get('global', 'bot_token')
 chat_id = config.get('global', 'chat_id')
