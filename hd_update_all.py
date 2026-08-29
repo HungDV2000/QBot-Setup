@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, List
 
 import cst
+import symbol_filter
 import gg_sheet_factory
 import requests
 
@@ -487,18 +488,57 @@ def do_it():
         logger.warning(f"Whitelist: {e}")
         white_list = set()
 
-    if white_list:
-        futures_symbols = [s for s in all_futures_usdt if s in white_list]
-        if not futures_symbols:
-            futures_symbols = all_futures_usdt
-    else:
-        futures_symbols = all_futures_usdt
+    # ── CHẾ ĐỘ CHỌN MÃ (xem symbol_filter.py) ────────────────────────────────
+    che_do_list = (cst.symbol_mode == symbol_filter.MODE_LIST)
 
-    futures_symbols = [
-        s for s in futures_symbols
-        if (tickers[s].get("quoteVolume") or 0) >= 100_000
-        and (tickers[s].get("last") or 0) > 0
-    ]
+    if che_do_list:
+        # Chỉ lấy đúng các mã khai trong symbol_list.
+        # Mã dẫn đầu (BTCDOM, BTC) đã hiển thị riêng ở đầu sheet nên bỏ khỏi
+        # danh sách để không xuất hiện hai lần.
+        dung, thieu, trung_dan_dau = symbol_filter.loc_theo_danh_sach(
+            cst.symbol_list, set(all_futures_usdt), bo_qua=SHEET_LEADER_SYMBOLS)
+
+        print(f"🎯 symbol_mode=list — khai {len(cst.symbol_list)} mã, "
+              f"dùng được {len(dung)}", flush=True)
+        for m in trung_dan_dau:
+            print(f"   ℹ️  {m} đã có ở dòng dẫn đầu — bỏ khỏi danh sách (khỏi trùng)",
+                  flush=True)
+        for m in thieu:
+            print(f"   ⚠️  {m} KHÔNG có trên Binance Futures USDT — bỏ qua", flush=True)
+            logger.warning(f"symbol_list: {m} không có trên sàn")
+
+        if not dung:
+            # KHÔNG âm thầm quay về 100 mã: chạy nhầm 100 mã nguy hiểm hơn là dừng.
+            raise SystemExit(
+                "❌ symbol_mode = list nhưng KHÔNG mã nào trong symbol_list dùng được.\n"
+                f"   Đang khai: {', '.join(cst.symbol_list) or '(trống)'}\n"
+                "   Kiểm tra lại chính tả, hoặc đổi symbol_mode = all."
+            )
+
+        # Ở chế độ này người dùng đã CHỌN TAY từng mã → không lọc theo volume,
+        # nhưng vẫn cảnh báo nếu mã quá ít thanh khoản.
+        for m in dung:
+            vol = tickers[m].get("quoteVolume") or 0
+            if vol < 100_000:
+                print(f"   ⚠️  {m} thanh khoản thấp (24h: {vol:,.0f} USDT)", flush=True)
+        futures_symbols = [s for s in dung if (tickers[s].get("last") or 0) > 0]
+
+    else:
+        if white_list:
+            futures_symbols = [s for s in all_futures_usdt if s in white_list]
+            if not futures_symbols:
+                print("⚠️  Whitelist tab 'list' không khớp mã nào → dùng lại TOÀN BỘ mã.",
+                      flush=True)
+                logger.warning("Whitelist không khớp mã nào — quay về toàn bộ")
+                futures_symbols = all_futures_usdt
+        else:
+            futures_symbols = all_futures_usdt
+
+        futures_symbols = [
+            s for s in futures_symbols
+            if (tickers[s].get("quoteVolume") or 0) >= 100_000
+            and (tickers[s].get("last") or 0) > 0
+        ]
     futures_symbols = _dedupe_symbols_by_normalized_pair(futures_symbols, tickers)
     print(f"✅ Sau lọc: {len(futures_symbols)} mã", flush=True)
 
@@ -558,12 +598,20 @@ def do_it():
             tab_rows.append(empty_row)
 
     excluded = set(SHEET_LEADER_SYMBOLS)
-    giam_symbols = [s for s in futures_symbols if tickers[s]["percentage"] < 0 and s not in excluded]
-    tang_symbols = [s for s in futures_symbols if tickers[s]["percentage"] > 0 and s not in excluded]
-    list_giam = sorted(giam_symbols, key=lambda x: tickers[x]["percentage"])[: cst.top_count]
-    list_tang = sorted(tang_symbols, key=lambda x: tickers[x]["percentage"], reverse=True)[: cst.top_count]
 
-    list_all = [title1, *list_giam, title2, *list_tang]
+    if che_do_list:
+        # BỐ CỤC PHẲNG: không chia tăng/giảm, không dòng tiêu đề.
+        # Giữ ĐÚNG THỨ TỰ người dùng khai trong symbol_list.
+        list_all = list(futures_symbols)
+        print(f"📋 Bố cục phẳng — {len(list_all)} mã theo đúng thứ tự đã khai",
+              flush=True)
+    else:
+        giam_symbols = [s for s in futures_symbols if tickers[s]["percentage"] < 0 and s not in excluded]
+        tang_symbols = [s for s in futures_symbols if tickers[s]["percentage"] > 0 and s not in excluded]
+        list_giam = sorted(giam_symbols, key=lambda x: tickers[x]["percentage"])[: cst.top_count]
+        list_tang = sorted(tang_symbols, key=lambda x: tickers[x]["percentage"], reverse=True)[: cst.top_count]
+
+        list_all = [title1, *list_giam, title2, *list_tang]
     with open(cst.account_dir("data") / "list_all.json", "w", encoding="utf-8") as f:  # [MULTI-ACC]
         json.dump(list_all, f)
 
@@ -587,45 +635,73 @@ def do_it():
                     results[i] = empty_row
         return [results[i] for i in range(len(symbols))]
 
-    tab_rows.append([title1] + [""] * (SHEET_NUM_COLUMNS - 1))
     first_dynamic_symbol = None
     first_dynamic_row = None
 
-    _list_giam = list_giam[:1] if is_test_mode else list_giam
-    giam_data = _fetch_symbols_parallel(_list_giam, "📉")
-    if giam_data:
-        first_dynamic_symbol, first_dynamic_row = _list_giam[0], giam_data[0]
-    tab_rows.extend(giam_data)
-    for _ in range(max(0, cst.top_count - len(giam_data))):
-        tab_rows.append(empty_row)
+    if che_do_list:
+        # ══ BỐ CỤC PHẲNG (symbol_mode = list) ═══════════════════════════════
+        # Không dòng tiêu đề, không chia tăng/giảm, không chèn dòng trống cho
+        # đủ top_count. Các mã xếp ĐÚNG THỨ TỰ đã khai trong symbol_list.
+        flat_data = _fetch_symbols_parallel(list_all, "🎯")
+        if flat_data:
+            first_dynamic_symbol, first_dynamic_row = list_all[0], flat_data[0]
+        tab_rows.extend(flat_data)
+        giam_data, tang_data = [], flat_data     # cho dòng tổng kết bên dưới
+        print(f"✅ Đã xử lý xong {len(flat_data)} mã (bố cục phẳng)", flush=True)
 
-    # Refresh tickers trước khi xử lý danh sách tăng (giảm ~50% độ cũ của giá)
-    try:
-        tickers = fetch_all_tickers_24h()
-        print(f"🔄 Đã refresh tickers ({len(tickers)} symbols) trước danh sách tăng", flush=True)
-    except Exception as e:
-        logger.warning(f"Không refresh được tickers giữa chừng: {e}")
+    else:
+        # ══ BỐ CỤC HAI KHỐI như cũ (symbol_mode = all) ══════════════════════
+        tab_rows.append([title1] + [""] * (SHEET_NUM_COLUMNS - 1))
 
-    tab_rows.append([title2] + [""] * (SHEET_NUM_COLUMNS - 1))
-    _list_tang = [] if is_test_mode else list_tang
-    tang_data = _fetch_symbols_parallel(_list_tang, "📈")
-    if tang_data and first_dynamic_symbol is None:
-        first_dynamic_symbol, first_dynamic_row = _list_tang[0], tang_data[0]
-    tab_rows.extend(tang_data)
-    for _ in range(max(0, cst.top_count - len(tang_data))):
-        tab_rows.append(empty_row)
+        _list_giam = list_giam[:1] if is_test_mode else list_giam
+        giam_data = _fetch_symbols_parallel(_list_giam, "📉")
+        if giam_data:
+            first_dynamic_symbol, first_dynamic_row = _list_giam[0], giam_data[0]
+        tab_rows.extend(giam_data)
+        for _ in range(max(0, cst.top_count - len(giam_data))):
+            tab_rows.append(empty_row)
 
-    print(
-        f"✅ Đã xử lý xong {len(giam_data)} giảm + {len(tang_data)} tăng "
-        f"(tổng {len(tab_rows)} dòng nội dung)",
-        flush=True,
-    )
+        # Refresh tickers trước khi xử lý danh sách tăng (giảm ~50% độ cũ của giá)
+        try:
+            tickers = fetch_all_tickers_24h()
+            print(f"🔄 Đã refresh tickers ({len(tickers)} symbols) trước danh sách tăng", flush=True)
+        except Exception as e:
+            logger.warning(f"Không refresh được tickers giữa chừng: {e}")
+
+        tab_rows.append([title2] + [""] * (SHEET_NUM_COLUMNS - 1))
+        _list_tang = [] if is_test_mode else list_tang
+        tang_data = _fetch_symbols_parallel(_list_tang, "📈")
+        if tang_data and first_dynamic_symbol is None:
+            first_dynamic_symbol, first_dynamic_row = _list_tang[0], tang_data[0]
+        tab_rows.extend(tang_data)
+        for _ in range(max(0, cst.top_count - len(tang_data))):
+            tab_rows.append(empty_row)
+
+    if not che_do_list:
+        print(
+            f"✅ Đã xử lý xong {len(giam_data)} giảm + {len(tang_data)} tăng "
+            f"(tổng {len(tab_rows)} dòng nội dung)",
+            flush=True,
+        )
 
     sheet_data = (
         [HEADER_ROW]
         + [["Số dư margin/ví/pnl", total_margin, total_wallet, total_pnl]]
         + tab_rows
     )
+
+    # ⚠️ XOÁ DỮ LIỆU CŨ TRƯỚC KHI GHI
+    #
+    # Google Sheets values.update CHỈ ghi đè đúng số dòng gửi lên — dòng thừa
+    # bên dưới GIỮ NGUYÊN nội dung cũ → các mã của lần chạy trước vẫn nằm lại,
+    # nhìn sheet tưởng bot vẫn đang theo dõi chúng.
+    # Xoá ở CẢ HAI chế độ:
+    #   • list : chỉ ghi vài dòng → không xoá thì 90+ mã cũ nằm lại bên dưới
+    #   • all  : nếu đổi top_count (vd 50→20) thì phần dôi ra cũng nằm lại
+    # Tốn thêm 1 lượt gọi Google mỗi vòng (~0.5 lượt/phút/tài khoản) — không đáng kể.
+    print("🧹 Xoá dữ liệu cũ trên tab trước khi ghi danh sách mới...", flush=True)
+    gg_sheet_factory.clear_multi(
+        gg_sheet_factory.tab_list_all_ma, -1, "A", end_row=1000, end_column="ZZ")
 
     print(f"💾 Đang ghi {len(sheet_data)} dòng → Google Sheet (có thể mất 1–3 phút)...", flush=True)
     t_write = time.perf_counter()

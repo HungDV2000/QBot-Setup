@@ -46,6 +46,22 @@ cancel_all_orders = false
 
 is_print_mode = false
 top_count= 50
+
+# ── CHỌN MÃ LẤY DỮ LIỆU ───────────────────────────────────────────────────────
+# list = (MẶC ĐỊNH) CHỈ lấy đúng các mã khai ở symbol_list bên dưới
+# all  = lấy top mã biến động mạnh nhất 24h (theo top_count) — như bản cũ
+symbol_mode = list
+
+# Danh sách mã khi symbol_mode = list.
+#   • Không phân biệt hoa/thường: btc = BTC
+#   • Viết kiểu nào cũng được: BTC | BTCUSDT | BTC/USDT | BTC/USDT:USDT
+#   • Trùng nhau thì tự bỏ, giữ lần khai đầu tiên
+#   • Mã sai sẽ được BÁO RÕ TÊN, không bỏ im lặng
+symbol_list = BTC, ETH, SOL, XRP, BNB, DOGE
+
+# Cột mà hd_update_price ghi giá vào (tab "100 mã").
+# C = "Giá trị hiện thời". ĐỪNG để Y — cột đó là "% đến BB1h dưới".
+price_column = C
 time_gap_do_it = 0
 bot_token = 8431813976:AAHtvnWT3ZTLvtgqlaqYOgyQW-l0bVBwqbI
 chat_id =  -4654774917

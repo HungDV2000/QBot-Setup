@@ -63,17 +63,9 @@ exchange = exchange_class(
 exchange.setSandboxMode(False)
 
 
-def normalize_symbol(sym: str) -> str:
-    sym = str(sym).strip().upper()
-    if sym.endswith(":USDT"):
-        return sym
-    if sym.endswith("/USDT"):
-        return f"{sym}:USDT"
-    if "/" not in sym and sym.endswith("USDT"):
-        return f"{sym[:-4]}/USDT:USDT"
-    if "/" not in sym:
-        return f"{sym}/USDT:USDT"
-    return sym
+# Dùng chung bản chuẩn hoá tên mã với hd_update_all (xem symbol_filter.py),
+# để hai bot không hiểu tên mã khác nhau.
+from symbol_filter import normalize_symbol
 
 
 def is_title_row(raw_value: str) -> bool:
@@ -161,8 +153,12 @@ def do_it():
     if missing_symbols:
         logger.warning(f"Ví dụ mã không có trong tickers: {missing_symbols}")
 
-    logger.info(f"Đang update {len(output_rows)} dòng vào cột Y...")
-    gg_sheet_factory.update_multi(gg_sheet_factory.tab_list_all_ma, 1, output_rows, "Y")
+    # Ghi vào cột C ("Giá trị hiện thời") — đổi được bằng price_column.
+    # TRƯỚC ĐÂY ghi vào cột Y, mà cột Y là "% đến BB1h dưới" của hd_update_all
+    # → hai bot ghi đè lên nhau mỗi 120 giây, cột Y lật qua lật lại.
+    cot = cst.price_column
+    logger.info(f"Đang update {len(output_rows)} dòng vào cột {cot}...")
+    gg_sheet_factory.update_multi(gg_sheet_factory.tab_list_all_ma, 1, output_rows, cot)
 
     execution_time = time.time() - start_time
     logger.info(f"HOÀN TẤT UPDATE PRICE - thời gian: {execution_time:.2f}s")

@@ -41,7 +41,10 @@ key_name = Khach B
 
 
 CFG = _make_config()
-shutil.copy(QBOT / "cst.py", WORK / "cst.py")
+# cst.py phụ thuộc 2 module này — THIẾU LÀ MỌI BOT CHẾT LÚC KHỞI ĐỘNG,
+# nên khi deploy cũng phải copy đủ cả ba file.
+for _f in ("cst.py", "rate_guard.py", "symbol_filter.py"):
+    shutil.copy(QBOT / _f, WORK / _f)
 
 
 def _load(account=None, cfg=None):
