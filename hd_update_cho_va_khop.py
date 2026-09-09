@@ -482,6 +482,82 @@ def compute_default_sl_tp_prices(side, entry_price):
     return sl_prices, tp_prices
 
 
+def goi_y_sltp_cho_dong(row_ai):
+    """
+    Từ 1 dòng A–I, dựng gợi ý [giá SL, giá TP, cho-phép-đặt] cho cột N/O/P.
+
+    Chỉ gợi ý khi dòng đó ĐANG MỞ VỊ THẾ (cột D = 'Y') và có giá vào hợp lệ.
+    Dòng đã ĐÓNG hoặc chưa khớp thì trả về rỗng — không bịa số.
+
+    Dùng mức lớp 1 (`default_sl_rate_layer_1` / `default_tp_rate_layer_1`).
+    Sheet hiện chỉ có MỘT cột SL (N) và MỘT cột TP (O), không có chỗ cho 3 lớp.
+    """
+    try:
+        side = str(row_ai[1]).strip() if len(row_ai) > 1 else ""
+        status_d = str(row_ai[3]).strip().upper() if len(row_ai) > 3 else ""
+        entry = float(row_ai[4]) if len(row_ai) > 4 and row_ai[4] else 0
+    except (ValueError, TypeError, IndexError):
+        return ["", "", ""]
+
+    if status_d != "Y" or entry <= 0:
+        return ["", "", ""]
+
+    sl_list, tp_list = compute_default_sl_tp_prices(side, entry)
+    sl = sl_list[0] if sl_list and sl_list[0] else ""
+    tp = tp_list[0] if tp_list and tp_list[0] else ""
+    return [sl, tp, cst.default_allow_order]
+
+
+def ghi_goi_y_sltp(tab_sltp):
+    """
+    Ghi gợi ý vào cột N/O/P — CHỈ điền ô ĐANG TRỐNG, không đè số người dùng sửa.
+
+    Vì sao cần: hd_order_multi chỉ đặt SL/TP khi cột D='Y' VÀ cột P='Y' VÀ
+    N/O có giá. Trước đây KHÔNG BOT NÀO điền N/O/P nên chúng luôn trống
+    → bot bỏ qua mọi dòng → vị thế mở mà không có cắt lỗ.
+
+    (compute_default_sl_tp_prices đã có sẵn trong file này từ lâu nhưng
+     không ai gọi — đây là chỗ nối nó vào luồng chạy.)
+    """
+    if not tab_sltp:
+        return
+    if not cst.fill_default_cho_va_khop:
+        print("  ⏭️  fill_default_cho_va_khop = false → không điền N/O/P", flush=True)
+        return
+
+    # Đọc giá trị hiện có để GIỮ NGUYÊN những ô người dùng đã sửa
+    try:
+        dang_co = gg_sheet_factory.get_cho_va_khop("N4:P1000") or []
+    except Exception as e:
+        logger.warning(f"Không đọc được N4:P1000, bỏ qua bước điền gợi ý: {e}")
+        print(f"  ⚠️  Không đọc được N/O/P — bỏ qua để tránh ghi đè: {e}", flush=True)
+        return
+
+    def cu(i, j):
+        if i < len(dang_co) and j < len(dang_co[i]):
+            v = str(dang_co[i][j]).strip()
+            return v if v else None
+        return None
+
+    khoi, so_dien, so_giu = [], 0, 0
+    for i, goi_y in enumerate(tab_sltp):
+        dong = []
+        for j in range(3):
+            san_co = cu(i, j)
+            if san_co is not None:
+                dong.append(san_co); so_giu += 1
+            else:
+                dong.append(goi_y[j])
+                if goi_y[j] != "":
+                    so_dien += 1
+        khoi.append(dong)
+
+    gg_sheet_factory.update_multi(gg_sheet_factory.tab_cho_va_khop, 2, khoi, "N")
+    print(f"  ✍️  Cột N/O/P: điền mới {so_dien} ô, giữ nguyên {so_giu} ô người dùng đã sửa",
+          flush=True)
+    logger.info(f"N/O/P: điền {so_dien}, giữ {so_giu}")
+
+
 def build_cho_va_khop_row(
     symbol_formatted, side, status_d, entry_price, leverage, has_sl, has_tp, order_count
 ):
@@ -736,6 +812,7 @@ def do_it():
 
     tab_100_ma_2d_arr = []
     tab_q_prices: list = []
+    tab_sltp: list = []     # gợi ý [SL, TP, cho-phép] cho cột N/O/P
 
     print("📡 Lấy giá hiện tại toàn sàn (REST ticker 24h)...", flush=True)
     try:
@@ -749,6 +826,8 @@ def do_it():
     def _append_row(row_ai, symbol_fmt):
         tab_100_ma_2d_arr.append(row_ai)
         tab_q_prices.append([get_sheet_col_c_price(tickers_24h, symbol_fmt)])
+        # row_ai: A=mã, B=side, C=chờ khớp, D=trạng thái, E=giá vào, F=đòn bẩy...
+        tab_sltp.append(goi_y_sltp_cho_dong(row_ai))
 
     # BƯỚC 1: Lấy positions đang mở
     print("📊 BƯỚC 1: Lấy positions đang mở từ Binance...", flush=True)
@@ -1014,6 +1093,11 @@ def do_it():
         if tab_q_prices:
             print(f"  ✍️  Ghi cột Q (giá hiện tại = cột C bot 100 mã) — {len(tab_q_prices)} dòng...", flush=True)
             gg_sheet_factory.update_multi(gg_sheet_factory.tab_cho_va_khop, 2, tab_q_prices, "Q")
+
+        # Gợi ý SL/TP vào N/O/P — chỉ điền ô trống, không đè số người dùng sửa.
+        # Không có bước này thì N/O/P luôn trống → hd_order_multi bỏ qua mọi
+        # dòng → vị thế mở mà KHÔNG CÓ CẮT LỖ.
+        ghi_goi_y_sltp(tab_sltp)
 
         print(f"✅ Hoàn thành! Đã cập nhật {len(tab_100_ma_2d_arr)} dòng (A–I + cột Q)", flush=True)
         logger.info(f"✅ Hoàn thành cập nhật sheet: {len(tab_100_ma_2d_arr)} dòng (A–I + Q)")
