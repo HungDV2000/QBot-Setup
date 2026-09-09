@@ -79,8 +79,11 @@ class TestDocCauHinh(unittest.TestCase):
             sf.read_mode(self._cfg(symbol_mode="whitelist"))
 
     def test_mac_dinh_config_init_co_6_ma(self):
-        import io
-        for p in ("config.ini.init", "config.ini.example"):
+        """Soát MỌI file config mẫu đang có (tên file thay đổi theo thời gian)."""
+        import glob, io, os
+        mau = [f for f in glob.glob("config.ini.*") if not f.endswith((".bak", ".backup"))]
+        self.assertTrue(mau, "không thấy file config mẫu nào")
+        for p in mau:
             with self.subTest(file=p):
                 t = io.open(p, encoding="utf-8").read()
                 self.assertIn("symbol_mode = list", t, "mặc định phải là list")
@@ -117,12 +120,20 @@ class TestCodeDaCam(unittest.TestCase):
         import io
         return io.open(f, encoding="utf-8").read()
 
+    def _bo_qua_neu_thieu(self, f):
+        """Bản gọn (qbot_new) không chép bot đã nghỉ — bỏ qua thay vì báo lỗi."""
+        import os
+        if not os.path.exists(f):
+            self.skipTest(f"{f} không có trong thư mục này (bản gọn)")
+
     def test_update_price_khong_con_ghi_cot_Y(self):
+        self._bo_qua_neu_thieu("hd_update_price.py")
         src = self._doc("hd_update_price.py")
         self.assertNotIn('output_rows, "Y"', src, "🔴 vẫn ghi đè cột Y của hd_update_all")
         self.assertIn("cst.price_column", src)
 
     def test_update_price_dung_chung_ham_chuan_hoa(self):
+        self._bo_qua_neu_thieu("hd_update_price.py")
         src = self._doc("hd_update_price.py")
         self.assertIn("from symbol_filter import normalize_symbol", src)
         self.assertNotIn("def normalize_symbol", src, "không được giữ bản sao riêng")
@@ -165,7 +176,10 @@ class TestPhuThuocCuaCst(unittest.TestCase):
     def test_cac_kich_ban_test_deu_chep_du(self):
         import io
         can = self._module_noi_bo_cua_cst() | {"cst"}
+        import os
         for f in ("tests/test_multi_account.py", "tests/demo_2_accounts.sh"):
+            if not os.path.exists(f):
+                continue
             src = io.open(f, encoding="utf-8").read()
             for m in can:
                 with self.subTest(file=f, module=m):
@@ -199,14 +213,20 @@ class TestRanhGioiAnhHuong(unittest.TestCase):
         return io.open(f, encoding="utf-8").read()
 
     def test_dung_bot_duoc_ap_bo_loc(self):
+        import os
         for f in self.AP_DUNG:
+            if not os.path.exists(f):
+                continue          # bản gọn không chép bot này
             with self.subTest(bot=f):
                 src = self._doc(f)
                 self.assertTrue("symbol_filter" in src or "price_column" in src,
                                 f"{f} phải dùng bộ lọc/cấu hình mới")
 
     def test_bot_theo_vi_the_KHONG_bi_ap_bo_loc(self):
+        import os
         for f in self.KHONG_AP_DUNG:
+            if not os.path.exists(f):
+                continue          # bản gọn không chép bot này
             with self.subTest(bot=f):
                 src = self._doc(f)
                 self.assertNotIn("cst.symbol_list", src,

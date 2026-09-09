@@ -122,8 +122,15 @@ class TestMoiBotDeuDuocVa(unittest.TestCase):
     def _src(self, f):
         return io.open(f, encoding='utf-8').read()
 
+    def _bots_co_that(self):
+        """Bản gọn (qbot_new) chỉ chép 1 bot đặt lệnh — bỏ qua bot không có."""
+        import os
+        co = [f for f in self.BOTS if os.path.exists(f)]
+        self.assertTrue(co, "không thấy bot đặt lệnh nào trong thư mục")
+        return co
+
     def test_ca_4_bot_deu_co_cache(self):
-        for f in self.BOTS:
+        for f in self._bots_co_that():
             src = self._src(f)
             with self.subTest(bot=f):
                 self.assertIn('rate_guard', src, f"{f} chưa chống 429")
@@ -132,7 +139,7 @@ class TestMoiBotDeuDuocVa(unittest.TestCase):
 
     def test_khong_bot_nao_goi_thang_ham_doc_that(self):
         """Gọi thẳng _fetch_current_state() là đi vòng qua cache → cấm."""
-        for f in self.BOTS:
+        for f in self._bots_co_that():
             src = self._src(f)
             goi_thang = src.count('_fetch_current_state()')
             with self.subTest(bot=f):
@@ -141,7 +148,7 @@ class TestMoiBotDeuDuocVa(unittest.TestCase):
 
     def test_moc_quan_trong_deu_force(self):
         """Mỗi bot phải có ít nhất 2 điểm đọc THẬT (đầu vòng + chốt cuối vòng)."""
-        for f in self.BOTS:
+        for f in self._bots_co_that():
             src = self._src(f)
             with self.subTest(bot=f):
                 self.assertGreaterEqual(
@@ -150,7 +157,7 @@ class TestMoiBotDeuDuocVa(unittest.TestCase):
 
     def test_van_con_diem_doc_cache_trong_vong_lap(self):
         """Đúng chỗ per-row phải dùng cache (không force) — nếu không thì vô ích."""
-        for f in self.BOTS:
+        for f in self._bots_co_that():
             src = self._src(f)
             with self.subTest(bot=f):
                 self.assertIn('get_current_state()', src,

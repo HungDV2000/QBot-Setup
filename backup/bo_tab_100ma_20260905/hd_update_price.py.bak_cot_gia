@@ -175,34 +175,6 @@ logger.info("Khởi động hd_update_price")
 logger.info(f"Log file: {log_filename}")
 logger.info(f"Delay giữa các lần chạy: {cst.delay_update_price} giây")
 
-# ══════════════════════════════════════════════════════════════════════════════
-# BOT NÀY ĐÃ NGHỈ khi không còn dùng tab "100 mã"
-#
-# Việc duy nhất của nó là ghi giá vào tab "100 mã". Nếu hd_update_all chạy ở
-# chế độ balance_only (mặc định) thì tab đó không còn được dùng — và có thể đã
-# bị xoá khỏi sheet. Chạy tiếp chỉ tạo ra lỗi "không phân giải được vùng"
-# mỗi vòng, nên dừng hẳn kèm lời giải thích rõ ràng.
-#
-# Muốn dùng lại: đặt update_all_mode = full trong [global] và tạo lại tab.
-# ══════════════════════════════════════════════════════════════════════════════
-_che_do = (cst.config.get('global', 'update_all_mode',
-                          fallback='balance_only') or 'balance_only').strip().lower()
-if _che_do != 'full':
-    print("", flush=True)
-    print("=" * 74, flush=True)
-    print("ℹ️  hd_update_price ĐÃ NGHỈ — không còn việc để làm.", flush=True)
-    print("", flush=True)
-    print("   Bot này chỉ ghi giá vào tab \"100 mã\". Hệ thống đang chạy ở chế độ", flush=True)
-    print(f"   update_all_mode = {_che_do} nên tab đó không còn được dùng.", flush=True)
-    print("   Giá hiện thời nay do sàn cung cấp trực tiếp cho bot đặt lệnh.", flush=True)
-    print("", flush=True)
-    print("   → Bỏ bot này khỏi danh sách chạy để tiết kiệm bộ nhớ.", flush=True)
-    print("   → Muốn dùng lại: đặt update_all_mode = full và tạo lại tab.", flush=True)
-    print("=" * 74, flush=True)
-    logger.info(f"hd_update_price nghỉ vì update_all_mode={_che_do}")
-    raise SystemExit(0)
-
-
 while True:
     try:
         do_it()

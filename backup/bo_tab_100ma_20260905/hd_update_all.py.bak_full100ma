@@ -463,75 +463,12 @@ def _merge_delist_warn_api_and_cms(api_map: dict, cms_map: dict) -> dict:
     return merged
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# HAI CHẾ ĐỘ CHẠY — khai bằng `update_all_mode` trong [global]
-#
-#   balance_only (MẶC ĐỊNH) : chỉ lấy SỐ DƯ, ghi vào J1:M2 tab ĐẶT LỆNH.
-#                             1 lượt gọi Binance + 1 lượt ghi Google. ~1 giây.
-#                             KHÔNG đụng tới tab "100 mã" → xoá tab đó cũng
-#                             không sao.
-#
-#   full                    : hành vi CŨ — dựng cả bảng 100 mã (58 cột: Bollinger,
-#                             Stoch, khối lượng, cảnh báo delist...).
-#                             8 lượt gọi Binance MỖI MÃ, mất 1–3 phút, tốn RAM.
-#                             ⚠️ Chỉ bật khi tab "100 mã" VẪN CÒN trên sheet.
-#
-# `symbol_mode` / `symbol_list` CHỈ có tác dụng ở chế độ full.
-# ══════════════════════════════════════════════════════════════════════════════
-UPDATE_ALL_MODE = (cst.config.get('global', 'update_all_mode',
-                                  fallback='balance_only') or 'balance_only').strip().lower()
-if UPDATE_ALL_MODE not in ('balance_only', 'full'):
-    raise SystemExit(
-        f"❌ update_all_mode = '{UPDATE_ALL_MODE}' không hợp lệ. "
-        f"Chỉ nhận: balance_only hoặc full."
-    )
-
-# Vùng ghi số dư trên tab ĐẶT LỆNH: J1:M2 (2 dòng × 4 cột)
-BALANCE_ANCHOR_COL = (cst.config.get('global', 'balance_cell',
-                                     fallback='J') or 'J').strip().upper()
-BALANCE_HEADER = ["Số dư ví", "Ký quỹ", "Lãi/lỗ mở", "Cập nhật lúc"]
-
-
-def _ghi_so_du(total_margin, total_wallet, total_pnl):
-    """
-    Ghi số dư + thời điểm cập nhật vào J1:M2 của tab ĐẶT LỆNH.
-
-        J            K         L          M
-    1   Số dư ví     Ký quỹ    Lãi/lỗ mở  Cập nhật lúc
-    2   12345.67     2000.00   -50.25     05/09/2026 14:30:00
-
-    Vùng J1:M2 đã kiểm chứng là TRỐNG: dòng 1-2 của tab ĐẶT LỆNH hiện chỉ dùng
-    B2 (trạng thái) và D1:E2 (cấu hình vốn); hd_track_30_prices ghi cột I:Z
-    nhưng chỉ ở dòng 4-53 và 55-104.
-    """
-    ts = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-    khoi = [BALANCE_HEADER, [total_wallet, total_margin, total_pnl, ts]]
-    # array_index = -1 → ghi từ dòng 1
-    gg_sheet_factory.update_multi(
-        gg_sheet_factory.tab_dat_lenh, -1, khoi, BALANCE_ANCHOR_COL)
-    print(f"   └─ ví={total_wallet} ký quỹ={total_margin} pnl={total_pnl} lúc {ts}",
-          flush=True)
-
-
 def do_it():
-    start_time = time.time()
-
-    if UPDATE_ALL_MODE == 'balance_only':
-        print(f"\n{'='*80}", flush=True)
-        print(f"💰 CẬP NHẬT SỐ DƯ → {gg_sheet_factory.tab_dat_lenh} "
-              f"{BALANCE_ANCHOR_COL}1:M2 - {datetime.now():%Y-%m-%d %H:%M:%S}", flush=True)
-        print(f"{'='*80}\n", flush=True)
-        logger.info("BẮT ĐẦU CẬP NHẬT SỐ DƯ (chế độ balance_only)")
-        total_margin, total_wallet, total_pnl = _fetch_account_balances()
-        _ghi_so_du(total_margin, total_wallet, total_pnl)
-        print(f"✅ Xong sau {time.time() - start_time:.1f}s", flush=True)
-        logger.info(f"Cập nhật số dư xong sau {time.time() - start_time:.1f}s")
-        return
-
     print(f"\n{'='*80}", flush=True)
     print(f"🚀 BẮT ĐẦU CẬP NHẬT SHEET 100 MÃ - {datetime.now():%Y-%m-%d %H:%M:%S}", flush=True)
     print(f"{'='*80}\n", flush=True)
     logger.info("BẮT ĐẦU CẬP NHẬT DỮ LIỆU SHEET 100 MÃ")
+    start_time = time.time()
 
     total_margin, total_wallet, total_pnl = _fetch_account_balances()
 

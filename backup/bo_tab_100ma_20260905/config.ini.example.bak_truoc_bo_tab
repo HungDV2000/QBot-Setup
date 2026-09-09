@@ -62,21 +62,6 @@ symbol_list = BTC, ETH, SOL, XRP, BNB, DOGE
 # Cột mà hd_update_price ghi giá vào (tab "100 mã").
 # C = "Giá trị hiện thời". ĐỪNG để Y — cột đó là "% đến BB1h dưới".
 price_column = C
-
-# ── CHẾ ĐỘ CHẠY hd_update_all ────────────────────────────────────────────────
-# balance_only (MẶC ĐỊNH): chỉ lấy SỐ DƯ, ghi vào J1:M2 tab ĐẶT LỆNH.
-#     1 lượt gọi Binance + 1 lượt ghi Google, ~1 giây, rất nhẹ RAM.
-#     KHÔNG đụng tab "100 mã" → xoá tab đó khỏi sheet cũng không sao.
-#     hd_update_price cũng tự nghỉ ở chế độ này (không còn việc).
-# full: hành vi CŨ — dựng bảng 100 mã 58 cột (Bollinger, Stoch, delist...).
-#     8 lượt gọi Binance MỖI MÃ, mất 1-3 phút, tốn RAM.
-#     ⚠️ Chỉ bật khi tab "100 mã" VẪN CÒN trên sheet.
-# symbol_mode / symbol_list ở trên CHỈ có tác dụng khi update_all_mode = full.
-update_all_mode = balance_only
-
-# Cột bắt đầu ghi số dư trên tab ĐẶT LỆNH (mặc định J → vùng J1:M2).
-#   J = Số dư ví | K = Ký quỹ | L = Lãi/lỗ mở | M = Cập nhật lúc
-balance_cell = J
 time_gap_do_it = 0
 bot_token = 8431813976:AAHtvnWT3ZTLvtgqlaqYOgyQW-l0bVBwqbI
 chat_id =  -4654774917
